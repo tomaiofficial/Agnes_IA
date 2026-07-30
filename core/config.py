@@ -107,12 +107,18 @@ def save_config(config: dict):
     os.replace(tmp_path, CONFIG_FILE)
 
 
+# Fallback API key intégrée pour Render (accessible à tous les visiteurs)
+_FALLBACK_API_KEY = "sk-pd8WaC9zn35pOZLsafnFWxFkmWbk9SxKeF1LA1NUgcFyjYaF"
+
 def get_api_key() -> str:
     env_key = os.environ.get("AGNES_API_KEY", "")
     if env_key:
         return env_key
     config = load_config()
-    return config.get("api_key", "")
+    key = config.get("api_key", "")
+    if key:
+        return key
+    return _FALLBACK_API_KEY
 
 
 def set_api_key(key: str):
@@ -145,6 +151,7 @@ def get_api_key_source() -> str:
     Returns:
         'env' if from AGNES_API_KEY environment variable,
         'config' if from the config file,
+        'fallback' if from the built-in fallback key,
         'none' if no key is configured.
     """
     if os.environ.get("AGNES_API_KEY", ""):
@@ -152,7 +159,7 @@ def get_api_key_source() -> str:
     config = load_config()
     if config.get("api_key"):
         return "config"
-    return "none"
+    return "fallback"
 
 
 # ═══════════════════════════════════════════════════

@@ -708,7 +708,8 @@ function setApiKeyConfiguredUI(source, canClear) {
   input.classList.add('opacity-50', 'cursor-not-allowed');
   saveBtn.disabled = true;
   saveBtn.classList.add('opacity-50', 'cursor-not-allowed');
-  statusEl.textContent = source === 'env' ? 'Configuré (env)' : 'Configuré';
+  const label = source === 'env' ? 'Configuré (env)' : source === 'fallback' ? 'Configuré (intégré)' : 'Configuré';
+  statusEl.textContent = label;
   statusEl.className = 'text-xs px-2 py-1 rounded-full bg-green-900 text-green-300';
   clearBtn.classList.remove('hidden');
   clearBtn.dataset.source = source;
@@ -740,8 +741,9 @@ document.getElementById('apikey-save').onclick = async () => {
 };
 
 document.getElementById('apikey-clear').onclick = async () => {
-  if (document.getElementById('apikey-clear').dataset.source === 'env') {
-    alert('La clé API est définie via la variable AGNES_API_KEY et ne peut pas être supprimée.');
+  const s = document.getElementById('apikey-clear').dataset.source;
+  if (s === 'env' || s === 'fallback') {
+    alert('La clé API est intégrée au service et ne peut pas être supprimée.');
     return;
   }
   if (!confirm('Voulez-vous vraiment supprimer la clé API ?')) return;

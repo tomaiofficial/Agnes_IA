@@ -2123,8 +2123,10 @@ def _extract_duration(state):
 
 
 @app.post("/api/tasks/{task_id}/publish")
-async def publish_video(task_id: str, body: dict = None):
-    if body is None:
+async def publish_video(task_id: str, request: Request):
+    try:
+        body = await request.json()
+    except Exception:
         body = {}
     author = body.get("author", "Anonyme")
     dir_name = _find_dir_name(task_id)

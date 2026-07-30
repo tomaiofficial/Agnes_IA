@@ -283,6 +283,25 @@ app = FastAPI(title="Agnes Video Generator", lifespan=lifespan)
 
 
 # ═══════════════════════════════════════════════════
+# CORS — autorise les requêtes depuis GitHub Pages
+# ═══════════════════════════════════════════════════
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://tomaiofficial.github.io",
+        "https://agnes-ia.onrender.com",
+        "http://localhost:8765",
+        "http://127.0.0.1:8765",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ═══════════════════════════════════════════════════
 # v4.0: 音色试听缓存
 # ═══════════════════════════════════════════════════
 

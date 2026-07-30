@@ -643,7 +643,7 @@
 // Configuration — URL de l'API backend
 // En production (GitHub Pages), l'API est sur Render
 // ═══════════════════════════════════════════════════
-const API_BASE = window.location.origin === 'https://tomaiofficial.github.io'
+const API_BASE = window.location.hostname.endsWith('github.io')
   ? 'https://agnes-ia.onrender.com'
   : '';
 

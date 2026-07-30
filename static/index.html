@@ -799,7 +799,6 @@ function setRunning(taskId) {
 
 function clearRunning() {
   isTaskRunning = false;
-  currentTaskId = null;
   stopPolling();
   // Uncollapse form
   document.querySelectorAll('.sora-form-collapse').forEach(el => el.classList.remove('collapsed'));

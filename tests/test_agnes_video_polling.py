@@ -243,6 +243,10 @@ async def test_wait_for_video_auto_resubmit_when_video_lost(api, monkeypatch):
         return "task_resubmitted_xyz"
 
     monkeypatch.setattr(api, "_submit_with_retry", fake_submit)
+    # Éviter le HEAD request réel sur l'URL factice
+    async def _fake_verify(url, timeout=10):
+        return True
+    monkeypatch.setattr(api, "_verify_video_url", _fake_verify)
     import itertools
     it = itertools.chain(iter([lost] * 15), itertools.repeat(FakeResponse(payload=COMPLETED)))
     monkeypatch.setattr(av.requests, "get", lambda *a, **k: next(it))

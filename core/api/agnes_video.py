@@ -469,14 +469,15 @@ class AgnesVideoAPI:
                         return video_id
 
                 if resp.status_code == 429:
-                    delay = self.retry_base_delay * (attempt + 1)
-                    # Respecter l'en-tête Retry-After du fournisseur s'il est fourni
+                    # v8.0: backoff exponentiel + Retry-After via le rate limiter
+                    retry_after = 0
                     try:
                         ra = resp.headers.get("Retry-After")
                         if ra and str(ra).isdigit():
-                            delay = max(float(ra), 5.0)
+                            retry_after = float(ra)
                     except Exception:
                         pass
+                    delay = get_rate_limiter().handle_429(retry_after if retry_after > 0 else None)
                     logger.warning(
                         f"[AgnesVideo] 429 rate limit on {mode_desc}, "
                         f"retry {attempt + 1}/{self.max_retries} in {delay:.0f}s..."
@@ -489,7 +490,7 @@ class AgnesVideoAPI:
                         status_code=429,
                         response_body=resp.text,
                         retry_count=attempt + 1,
-                        extra={"mode": mode_desc},
+                        extra={"mode": mode_desc, "delay_s": delay},
                     )
                     await _notify(attempt + 1, delay, "429 rate limit")
                     await asyncio.sleep(delay)
@@ -722,5 +723,51 @@ class AgnesVideoAPI:
             if not video_url:
                 raise RuntimeError(f"Agnes video: no URL in completed task: {final}")
 
+        # v8.0: vérifier que l'URL est accessible avant de la renvoyer
+        if not await self._verify_video_url(video_url):
+            logger.warning(
+                f"[AgnesVideo] Video URL not accessible: {video_url[:80]}... "
+                f"Attempting auto-relance..."
+            )
+            if getattr(self, "_last_payload", None):
+                video_id = await self._submit_with_retry(
+                    self._last_payload, self._last_mode_desc
+                )
+                final = await self._poll_task(
+                    video_id,
+                    progress_callback=progress_callback,
+                    max_poll_duration=max_poll_duration,
+                )
+                video_url = (
+                    final.get("video_url")
+                    or final.get("url")
+                    or final.get("remixed_from_video_id")
+                )
+                if not video_url:
+                    raise RuntimeError(f"Agnes video: no URL after auto-relance: {final}")
+
         logger.info(f"[AgnesVideo] Done: {video_url[:80]}...")
         return VideoOutput(fmt="url", ext="mp4", data=video_url)
+
+    async def _verify_video_url(self, url: str, timeout: int = 10) -> bool:
+        """Vérifie qu'une URL de vidéo est accessible (HEAD request).
+
+        v8.0 : évite de renvoyer une URL morte à la chaîne de traitement.
+        """
+        if not url or not url.startswith(("http://", "https://")):
+            return True  # URL locale ou non-HTTP : on ne peut pas vérifier
+        try:
+            resp = await asyncio.wait_for(
+                asyncio.to_thread(
+                    requests.head,
+                    url,
+                    headers=self.headers,
+                    timeout=timeout,
+                    allow_redirects=True,
+                ),
+                timeout=timeout + 5,
+            )
+            return resp.status_code < 400
+        except Exception as e:
+            logger.debug(f"[AgnesVideo] URL verification failed: {e}")
+            return False

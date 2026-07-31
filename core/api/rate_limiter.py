@@ -24,6 +24,7 @@ import logging
 import os
 import threading
 import time
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,8 @@ class AgnesRateLimiter:
 
     在多线程 / asyncio.to_thread / 纯同步场景下均可安全使用。
     当令牌不足时，``acquire()`` 会阻塞当前线程直到令牌可用。
+
+    v8.0 : ajoute le backoff exponentiel et le Retry-After pour les réponses 429.
 
     Attributes:
         max_tokens: 桶容量（突发上限）。
@@ -60,6 +63,9 @@ class AgnesRateLimiter:
         self._lock = threading.Lock()
         self._total_waits = 0
         self._total_wait_seconds = 0.0
+        # v8.0: backoff exponentiel pour les 429
+        self._consecutive_429 = 0
+        self._last_429_time = 0.0
 
     def acquire(self) -> None:
         """阻塞式获取一个令牌。
@@ -97,6 +103,42 @@ class AgnesRateLimiter:
             )
             time.sleep(wait_time)
 
+    def handle_429(self, retry_after: Optional[float] = None) -> float:
+        """Gère une réponse 429 en appliquant un backoff exponentiel.
+
+        v8.0 : appelée quand l'API renvoie 429 pour ajuster dynamiquement
+        le délai d'attente avant la prochaine tentative.
+
+        Args:
+            retry_after: Valeur du header Retry-After (secondes), si disponible.
+
+        Returns:
+            Le délai d'attente recommandé (secondes).
+        """
+        with self._lock:
+            self._consecutive_429 += 1
+            self._last_429_time = time.monotonic()
+
+            # Backoff exponentiel : 2^n secondes, plafonné à 60s
+            base_delay = min(2 ** self._consecutive_429, 60)
+
+            # Respecter Retry-After si fourni (priorité absolue)
+            if retry_after and retry_after > 0:
+                delay = max(float(retry_after), 5.0)
+            else:
+                delay = max(base_delay, 5.0)
+
+            logger.warning(
+                f"[RateLimiter] 429 received (consecutive={self._consecutive_429}), "
+                f"backoff delay={delay:.1f}s"
+            )
+            return delay
+
+    def reset_429_counter(self) -> None:
+        """Réinitialise le compteur de 429 consécutifs (après un succès)."""
+        with self._lock:
+            self._consecutive_429 = 0
+
     async def acquire_async(self) -> None:
         """异步获取令牌（内部使用 ``asyncio.to_thread``）。"""
         await asyncio.to_thread(self.acquire)
@@ -109,6 +151,7 @@ class AgnesRateLimiter:
             "total_wait_seconds": round(self._total_wait_seconds, 1),
             "effective_rate_per_min": round(_EFFECTIVE_RATE, 1),
             "max_burst": self.max_tokens,
+            "consecutive_429": self._consecutive_429,
         }
 
 

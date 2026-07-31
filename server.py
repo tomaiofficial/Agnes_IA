@@ -69,6 +69,16 @@ from core.storage import (
     storage_mode,
 )
 from core.task_manager import TaskManager
+from core.video import (
+    VideoPostProcessor,
+    PostProcessConfig,
+    PromptOptimizer,
+    VideoQueue,
+    TaskPriority,
+    VideoMonitor,
+    AIVideoPipeline,
+    PipelineConfig,
+)
 from models.task import (
     AnchorVideoTask,
     AudioConfig,
@@ -177,6 +187,10 @@ active_pipelines: Dict[str, BasePipeline] = {}
 _pipeline_locks: Dict[str, asyncio.Lock] = {}
 background_tasks: set = set()
 shutdown_event = asyncio.Event()
+
+# v8.0: File d'attente globale avec priorités + monitoring
+_video_queue: Optional[VideoQueue] = None
+_video_monitor: Optional[VideoMonitor] = None
 
 
 def _get_pipeline_lock(task_id: str) -> asyncio.Lock:
@@ -379,7 +393,18 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"[Startup] Storage init failed ({e}); continuing")
 
+    # v8.0: Initialiser la file d'attente globale et le monitoring
+    global _video_queue, _video_monitor
+    _video_queue = VideoQueue(max_concurrent=2, max_queue_size=100)
+    _video_monitor = VideoMonitor()
+    await _video_queue.start()
+    logger.info("[Startup] Video queue + monitor initialized (v8.0)")
+
     yield
+
+    # Cleanup à l'arrêt
+    if _video_queue:
+        await _video_queue.stop()
 
 
 app = FastAPI(title="Agnes Video Generator", lifespan=lifespan)
@@ -1611,6 +1636,191 @@ async def create_simple_task(
     tm.create(state)
     _launch_background_task(_run_pipeline_with_concurrency(pipeline, state, tm))
     logger.info(f"[Simple] Task created: {task_id}, mode={mode}, duration={duration}s (queued)")
+    return {"ok": True, "task_id": task_id, "dir_name": dir_name}
+
+
+@app.post("/api/tasks/advanced")
+async def create_advanced_task(
+    prompt: str = Form(...),
+    user_id: str = Header(default="", alias="X-User-Id"),
+    duration: int = Form(5),
+    video_width: int = Form(1152),
+    video_height: int = Form(768),
+    seed: Optional[int] = Form(None),
+    negative_prompt: Optional[str] = Form(None),
+    reference_image: UploadFile = File(None),
+    # v8.0: paramètres de qualité avancée
+    quality: str = Form("full_hd"),           # standard | hd | full_hd | 2k | 4k
+    style: str = Form("ultra_realistic"),     # ultra_realistic | cinema | anime | photorealistic | hyper_realistic
+    denoise: bool = Form(True),
+    face_enhance: bool = Form(True),
+    motion_enhance: bool = Form(False),
+    hdr: bool = Form(False),
+    color_correct: bool = Form(True),
+    compress: bool = Form(True),
+    # Audio
+    audio_enabled: bool = Form(True),
+    audio_voice: str = Form("fr-FR-DeniseNeural"),
+    audio_rate: str = Form("+0%"),
+    # Prompt optimization
+    optimize_prompt: bool = Form(True),
+    # Priorité
+    priority: str = Form("free"),             # admin | premium | free
+):
+    """Crée une tâche vidéo avancée (v8.0) avec pipeline IA complet.
+
+    Pipeline : Prompt → Analyse IA → Optimisation → Génération → Upscaling →
+    Amélioration visage → Amélioration mouvement → Audio → Compression → Livraison
+
+    Contrairement à /api/tasks/simple, cette route utilise le pipeline IA complet
+    avec upscaling, débruitage, amélioration des visages, HDR et optimisation
+    audio avancée.
+    """
+    api_key = get_api_key()
+    if not api_key:
+        raise HTTPException(status_code=400, detail="请先配置 API Key")
+
+    # Validation des paramètres
+    _VALID_QUALITIES = {"standard", "hd", "full_hd", "2k", "4k"}
+    if quality not in _VALID_QUALITIES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"quality must be one of {_VALID_QUALITIES}, got: {quality}",
+        )
+    _VALID_STYLES = {"ultra_realistic", "cinema", "anime", "photorealistic", "hyper_realistic"}
+    if style not in _VALID_STYLES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"style must be one of {_VALID_STYLES}, got: {style}",
+        )
+    _VALID_PRIORITIES = {"admin", "premium", "free"}
+    if priority not in _VALID_PRIORITIES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"priority must be one of {_VALID_PRIORITIES}, got: {priority}",
+        )
+    if duration not in DURATION_FRAME_MAP:
+        raise HTTPException(
+            status_code=422,
+            detail=f"duration must be one of {sorted(DURATION_FRAME_MAP.keys())}, got: {duration}",
+        )
+    if len(prompt) > 5000:
+        raise HTTPException(status_code=422, detail="prompt最多5000字符")
+
+    task_id = uuid.uuid4().hex[:12]
+    dir_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{task_id}"
+
+    # Mapping priorité
+    priority_map = {
+        "admin": TaskPriority.ADMIN,
+        "premium": TaskPriority.PREMIUM,
+        "free": TaskPriority.FREE,
+    }
+
+    # Configuration du pipeline
+    config = PipelineConfig(
+        quality=quality,
+        style=style,
+        denoise=denoise,
+        face_enhance=face_enhance,
+        motion_enhance=motion_enhance,
+        hdr=hdr,
+        color_correct=color_correct,
+        compress=compress,
+        audio_enabled=audio_enabled,
+        audio_voice=audio_voice,
+        audio_rate=audio_rate,
+        priority=priority_map[priority],
+        optimize_prompt=optimize_prompt,
+    )
+
+    # Traitement de l'image de référence
+    ref_paths = []
+    if reference_image and reference_image.filename:
+        ext = os.path.splitext(reference_image.filename)[1] or ".png"
+        os.makedirs(get_upload_dir(), exist_ok=True)
+        upload_path = os.path.join(get_upload_dir(), f"{task_id}_ref{ext}")
+        with open(upload_path, "wb") as f:
+            f.write(await reference_image.read())
+        ref_paths.append(upload_path)
+
+    # Créer l'état de tâche (réutilise SimpleVideoTask pour compatibilité)
+    state = SimpleVideoTask(
+        task_id=task_id,
+        dir_name=dir_name,
+        task_type=TaskType.SIMPLE,
+        creative_name=f"advanced_{task_id}",
+        user_id=user_id,
+        prompt=prompt,
+        mode=VideoMode.T2V,
+        duration=duration,
+        video_width=video_width,
+        video_height=video_height,
+        seed=seed,
+        negative_prompt=negative_prompt,
+        audio_enabled=audio_enabled,
+        audio_voice=audio_voice,
+        audio_rate=audio_rate,
+        quality_boost=True,  # toujours activé pour advanced
+    )
+
+    # Lancer le pipeline avancé en arrière-plan
+    async def _run_advanced():
+        try:
+            pipeline = AIVideoPipeline(
+                api_key=api_key,
+                config=config,
+                queue=_video_queue,
+                monitor=_video_monitor,
+            )
+            pipeline.video_api.shutdown_event = shutdown_event
+
+            # Émettre le statut initial
+            state.status = StepStatus.QUEUED
+            tm = TaskManager(task_id, dir_name=dir_name)
+            tm.create(state)
+            tm.update_state(
+                current_step="init", current_status="running",
+                current_message="En file d'attente (priorité " + priority + ")...",
+                current_progress=0.0,
+            )
+
+            # Générer la vidéo
+            result = await pipeline.generate(
+                prompt=prompt,
+                duration=duration,
+                width=video_width,
+                height=video_height,
+                reference_image_paths=ref_paths,
+                seed=seed,
+                negative_prompt=negative_prompt,
+                working_dir=os.path.join(get_working_dir(), dir_name),
+            )
+
+            # Mettre à jour l'état
+            state.status = StepStatus.COMPLETED
+            state.final_video_file = result.video_path
+            tm.update_state(
+                status=StepStatus.COMPLETED,
+                final_video_file=result.video_path,
+                current_step="done",
+                current_status="completed",
+                current_message="Vidéo générée avec succès !",
+                current_progress=1.0,
+            )
+            logger.info(f"[Advanced] Task {task_id} completed: {result.video_path}")
+
+        except Exception as e:
+            logger.error(f"[Advanced] Task {task_id} failed: {e}", exc_info=True)
+            state.status = StepStatus.FAILED
+            tm = TaskManager(task_id, dir_name=dir_name)
+            tm.update_state(
+                status=StepStatus.FAILED,
+                current_message=f"Erreur: {str(e)[:200]}",
+            )
+
+    _launch_background_task(_run_advanced())
+    logger.info(f"[Advanced] Task created: {task_id}, quality={quality}, style={style}, priority={priority}")
     return {"ok": True, "task_id": task_id, "dir_name": dir_name}
 
 

@@ -536,12 +536,73 @@
               </label>
               <span class="text-[11px] sm:text-xs text-gray-400">✨ Amélioration qualité HD (1080p + audio)</span>
             </div>
-          </div>
-        </details>
-      </div>
-      <button id="btn-simple" onclick="submitSimple()" class="w-full py-4 sm:py-3.5 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 rounded-xl text-base font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed glow-btn min-h-[50px]">
-        🎬 Générer la vidéo
-      </button>
+           </div>
+         </details>
+
+         <!-- v8.0: Mode avancé -->
+         <div class="border-t border-white/5 pt-3 mt-3">
+           <div class="flex items-center gap-2 min-h-[44px]">
+             <label class="relative inline-flex items-center cursor-pointer">
+               <input id="s_advanced_mode" type="checkbox" class="sr-only peer">
+               <div class="w-10 sm:w-9 h-6 sm:h-5 bg-gray-700 rounded-full peer peer-checked:bg-purple-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-1 after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+             </label>
+             <span class="text-[11px] sm:text-xs text-gray-400">🚀 Mode avancé (pipeline IA complet : upscaling, débruitage, amélioration visage, HDR)</span>
+           </div>
+           <div id="s_advanced_options" class="hidden mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+             <div>
+               <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Qualité</label>
+               <select id="s_quality" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+                 <option value="standard">Standard (480p)</option>
+                 <option value="hd">HD (720p)</option>
+                 <option value="full_hd" selected>Full HD (1080p)</option>
+                 <option value="2k">2K (1440p)</option>
+                 <option value="4k">4K Ultra (2160p)</option>
+               </select>
+             </div>
+             <div>
+               <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Style</label>
+               <select id="s_style" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+                 <option value="ultra_realistic" selected>Ultra Realistic</option>
+                 <option value="cinema">Cinema</option>
+                 <option value="anime">Anime</option>
+                 <option value="photorealistic">Photorealistic</option>
+                 <option value="hyper_realistic">Hyper Realistic</option>
+               </select>
+             </div>
+             <div>
+               <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Débruitage</label>
+               <select id="s_denoise" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+                 <option value="true" selected>Oui</option>
+                 <option value="false">Non</option>
+               </select>
+             </div>
+             <div>
+               <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Amélioration visage</label>
+               <select id="s_face_enhance" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+                 <option value="true" selected>Oui</option>
+                 <option value="false">Non</option>
+               </select>
+             </div>
+             <div>
+               <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">HDR</label>
+               <select id="s_hdr" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+                 <option value="false" selected>Non</option>
+                 <option value="true">Oui</option>
+               </select>
+             </div>
+             <div>
+               <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Optimisation prompt IA</label>
+               <select id="s_optimize_prompt" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+                 <option value="true" selected>Oui</option>
+                 <option value="false">Non</option>
+               </select>
+             </div>
+           </div>
+         </div>
+       </div>
+       <button id="btn-simple" onclick="submitSimple()" class="w-full py-4 sm:py-3.5 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 rounded-xl text-base font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed glow-btn min-h-[50px]">
+         🎬 Générer la vidéo
+       </button>
     </div>
 
     <!-- Image Form -->
@@ -812,6 +873,19 @@ const STEPS = {
     { key: 'subtitle', label: 'Sous-titres' },
     { key: 'concatenate', label: 'Concaténation' },
   ],
+  advanced: [
+    { key: 'submit', label: 'Soumettre' },
+    { key: 'prompt_analysis', label: 'Analyse IA' },
+    { key: 'prompt_optimization', label: 'Optimisation prompt' },
+    { key: 'video_gen', label: 'Génération vidéo' },
+    { key: 'upscaling', label: 'Upscaling IA' },
+    { key: 'face_enhance', label: 'Amélioration visage' },
+    { key: 'motion_enhance', label: 'Amélioration mouvement' },
+    { key: 'hdr', label: 'Correction HDR' },
+    { key: 'audio', label: 'Audio' },
+    { key: 'compression', label: 'Compression' },
+    { key: 'done', label: 'Terminé' },
+  ],
 };
 
 // ═══════════════════════════════════════════════════
@@ -965,8 +1039,24 @@ async function submitSimple() {
   // v7.0: Quality boost
   form.append('quality_boost', document.getElementById('s_quality_boost').checked ? 'true' : 'false');
 
+  // v8.0: Mode avancé — envoie vers /api/tasks/advanced avec paramètres IA
+  const advancedMode = document.getElementById('s_advanced_mode') && document.getElementById('s_advanced_mode').checked;
+  const endpoint = advancedMode ? '/api/tasks/advanced' : '/api/tasks/simple';
+
+  if (advancedMode) {
+    form.append('quality', document.getElementById('s_quality').value);
+    form.append('style', document.getElementById('s_style').value);
+    form.append('denoise', document.getElementById('s_denoise').value);
+    form.append('face_enhance', document.getElementById('s_face_enhance').value);
+    form.append('hdr', document.getElementById('s_hdr').value);
+    form.append('color_correct', 'true');
+    form.append('compress', 'true');
+    form.append('optimize_prompt', document.getElementById('s_optimize_prompt').value);
+    form.append('priority', 'free');
+  }
+
   try {
-    const r = await fetchWithAuth(API_BASE + '/api/tasks/simple', { method: 'POST', body: form });
+    const r = await fetchWithAuth(API_BASE + endpoint, { method: 'POST', body: form });
     const d = await r.json();
     if (!d.ok) throw new Error(d.detail || 'Échec de la création');
     setRunning(d.task_id);
@@ -1078,6 +1168,15 @@ function isStepDoneInState(state, stepKey) {
     subtitle: 'step_subtitle', concatenate: 'step_concatenation',
     split_text: 'step_split', scene_prompts: 'step_scene_prompts',
     submit: 'step_submit',
+    // v8.0: pipeline avancé
+    prompt_analysis: 'step_prompt_analysis',
+    prompt_optimization: 'step_prompt_optimization',
+    upscaling: 'step_upscaling',
+    face_enhance: 'step_face_enhance',
+    motion_enhance: 'step_motion_enhance',
+    hdr: 'step_hdr',
+    compression: 'step_compression',
+    done: 'step_done',
   };
   const field = stepMap[stepKey];
   return field && state[field] === 'completed';
@@ -1887,6 +1986,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('s_resolution').addEventListener('change', updateDurationNote);
   document.getElementById('s_duration').addEventListener('change', updateDurationNote);
   syncResolutionToBoost();
+
+  // v8.0: Mode avancé — affiche/masque les options avancées
+  const advancedToggle = document.getElementById('s_advanced_mode');
+  const advancedOptions = document.getElementById('s_advanced_options');
+  if (advancedToggle && advancedOptions) {
+    advancedToggle.addEventListener('change', () => {
+      advancedOptions.classList.toggle('hidden', !advancedToggle.checked);
+    });
+  }
 });
 
 // ═══════════════════════════════════════════════════

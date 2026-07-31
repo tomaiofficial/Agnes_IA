@@ -2379,6 +2379,20 @@ async def publish_video(task_id: str, request: Request, user_id: str = Header(de
     tm = TaskManager(task_id, dir_name=dir_name)
     state = tm.load()
     if not state:
+        # Fichiers locaux perdus (redéploiement, FS éphémère) : si la vidéo a
+        # déjà été publiée en galerie, on la renvoie telle quelle (idempotent).
+        meta = get_task_store().get_meta(task_id)
+        if meta and meta.get("user_id") and meta.get("user_id") != user_id:
+            raise HTTPException(status_code=403, detail="Accès refusé : cette tâche appartient à un autre utilisateur")
+        existing = _get_published_video(task_id)
+        if existing:
+            logger.info(f"[Community] Tâche {task_id}: déjà publiée ({existing['video_id']}), fichiers locaux absents")
+            return {
+                "ok": True,
+                "video_id": existing["video_id"],
+                "video_url": existing["video_url"],
+                "already_published": True,
+            }
         raise HTTPException(status_code=404, detail="Task not found")
     if state.user_id and state.user_id != user_id:
         raise HTTPException(status_code=403, detail="Accès refusé : cette tâche appartient à un autre utilisateur")

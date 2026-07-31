@@ -1492,8 +1492,37 @@ async function publishVideo() {
 let feedObserver = null;
 let feedVideos = [];         // dernière liste de vidéos chargée
 let feedCommentsOpen = null; // video_id du panneau commentaires ouvert
+let feedUserInteracted = false; // le navigateur autorise le son (interaction requise)
+
+// Active la lecture d'une vidéo avec le son. Le navigateur bloque l'autoplay
+// audio sans interaction récente : on tente le son, et si refusé on joue quand
+// même en muet (le son reprend au prochain clic/tap).
+function feedActivateVideo(video) {
+  if (!video) return;
+  if (feedUserInteracted) {
+    video.muted = false;
+    video.play().catch(() => {
+      video.muted = true;
+      video.play().catch(() => {});
+    });
+  } else {
+    video.muted = true;
+    video.play().catch(() => {});
+  }
+}
+
+// Dès la première interaction (clic/tap n'importe où), activer le son de la
+// vidéo en cours (elle a pu démarrer en repli muet avant l'autorisation).
+document.addEventListener('pointerdown', () => {
+  if (!feedUserInteracted) {
+    feedUserInteracted = true;
+    const active = Array.from(document.querySelectorAll('.feed-video')).find(v => !v.paused && !v.ended);
+    if (active && active.muted) { active.muted = false; active.play().catch(() => {}); }
+  }
+}, { passive: true });
 
 function openGalleryFeed() {
+  feedUserInteracted = true; // l'ouverture se fait par un clic sur « Galerie » → son autorisé
   const panel = document.getElementById('panel-gallery');
   panel.classList.remove('hidden');
   panel.style.display = 'block';
@@ -1601,7 +1630,7 @@ function buildFeedSlide(v) {
   // Tap = lecture / pause ; actions = stopPropagation
   slide.addEventListener('click', (e) => {
     if (e.target.closest('.feed-actions')) return;
-    if (video.paused) { video.play().catch(() => {}); } else { video.pause(); }
+    if (video.paused) { feedActivateVideo(video); } else { video.pause(); }
   });
   video.addEventListener('play', () => { const b = playBadge.querySelector('.feed-play-badge'); if (b) b.classList.add('hidden'); });
   video.addEventListener('pause', () => { const b = playBadge.querySelector('.feed-play-badge'); if (b) b.classList.remove('hidden'); });
@@ -1618,9 +1647,10 @@ function setupFeedObserver() {
       const video = entry.target.querySelector('.feed-video');
       if (!video) return;
       if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
-        video.play().catch(() => {});
+        feedActivateVideo(video);
       } else {
         video.pause();
+        video.muted = true;
       }
     });
   }, { threshold: 0.55 });

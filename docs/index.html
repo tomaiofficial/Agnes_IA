@@ -310,6 +310,13 @@
     pointer-events: none;
     z-index: 5;
   }
+  .feed-prompt {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.35;
+  }
   .feed-actions {
     position: absolute;
     right: 10px;
@@ -1583,7 +1590,7 @@ function buildFeedSlide(v) {
   const info = document.createElement('div');
   info.className = 'absolute bottom-0 left-0 right-0 p-4 pb-6 z-10';
   info.innerHTML = '<div class="flex items-center gap-2 mb-1.5"><span class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-xs text-white font-bold flex-shrink-0">' + escapeHtml((v.author || 'A').charAt(0).toUpperCase()) + '</span><span class="text-sm font-semibold text-white drop-shadow">' + escapeHtml(v.author || 'Anonyme') + '</span><span class="text-[10px] text-gray-400 ml-1">' + timeAgo(v.published_at) + '</span></div>' +
-    (v.prompt ? '<p class="text-xs text-gray-200/90 max-w-[70%] drop-shadow">' + escapeHtml(v.prompt) + '</p>' : '');
+    (v.prompt ? '<p class="feed-prompt text-[11px] text-gray-200/90 max-w-[60%] drop-shadow" title="' + escapeHtml(v.prompt) + '">' + escapeHtml(v.prompt) + '</p>' : '');
   slide.appendChild(info);
 
   // Barre d'actions droite (side rail, comme Reels/TikTok)

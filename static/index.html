@@ -648,6 +648,54 @@ const API_BASE = window.location.hostname.endsWith('github.io')
   : '';
 
 // ═══════════════════════════════════════════════════
+// Confidentialité — session utilisateur (header X-User-Id)
+// ID opaque généré une fois et stocké dans localStorage.
+// Chaque visiteur ne voit / ne contrôle que ses propres tâches.
+// ═══════════════════════════════════════════════════
+let agnesUserId = '';
+
+function initUserSession() {
+  let uid = localStorage.getItem('agnes_user_id');
+  if (!uid) {
+    uid = crypto.randomUUID
+      ? crypto.randomUUID()
+      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+        });
+    localStorage.setItem('agnes_user_id', uid);
+  }
+  agnesUserId = uid;
+}
+
+async function fetchWithAuth(url, opts = {}) {
+  const headers = new Headers(opts.headers || {});
+  headers.set('X-User-Id', agnesUserId);
+  return fetch(url, Object.assign({}, opts, { headers }));
+}
+
+// Les balises <video>/<img> ne peuvent pas envoyer de header : on charge le
+// fichier via fetchWithAuth puis on l'expose en URL blob.
+async function setMediaSrc(elId, url) {
+  try {
+    const res = await fetchWithAuth(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = await res.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const el = document.getElementById(elId);
+    if (el) {
+      if (el.dataset.blobUrl) URL.revokeObjectURL(el.dataset.blobUrl);
+      el.dataset.blobUrl = objUrl;
+      el.src = objUrl;
+    }
+  } catch (e) {
+    console.warn('Média inaccessible:', url, e);
+  }
+}
+
+initUserSession();
+
+// ═══════════════════════════════════════════════════
 // State
 // ═══════════════════════════════════════════════════
 let currentTaskId = null;
@@ -771,7 +819,7 @@ document.getElementById('apikey-save').onclick = async () => {
   if (!key) return alert('Veuillez entrer votre clé API');
   const form = new FormData();
   form.append('api_key', key);
-  const r = await fetch(API_BASE + '/api/config', { method: 'POST', body: form });
+  const r = await fetchWithAuth(API_BASE + '/api/config', { method: 'POST', body: form });
   if (r.ok) setApiKeyConfiguredUI('config', true);
 };
 
@@ -783,7 +831,7 @@ document.getElementById('apikey-clear').onclick = async () => {
   }
   if (!confirm('Voulez-vous vraiment supprimer la clé API ?')) return;
   try {
-    const r = await fetch(API_BASE + '/api/config', { method: 'DELETE' });
+    const r = await fetchWithAuth(API_BASE + '/api/config', { method: 'DELETE' });
     if (r.ok) resetApiKeyUI();
     else { const d = await r.json(); alert(d.detail || 'Erreur'); }
   } catch(e) { alert('Erreur réseau'); }
@@ -846,7 +894,7 @@ async function submitSimple() {
   form.append('quality_boost', document.getElementById('s_quality_boost').checked ? 'true' : 'false');
 
   try {
-    const r = await fetch(API_BASE + '/api/tasks/simple', { method: 'POST', body: form });
+    const r = await fetchWithAuth(API_BASE + '/api/tasks/simple', { method: 'POST', body: form });
     const d = await r.json();
     if (!d.ok) throw new Error(d.detail || 'Échec de la création');
     setRunning(d.task_id);
@@ -874,10 +922,10 @@ async function submitImage() {
   if (refFile) form.append('reference_image', refFile);
 
   try {
-    const r = await fetch(API_BASE + '/api/image/generate', { method: 'POST', body: form });
+    const r = await fetchWithAuth(API_BASE + '/api/image/generate', { method: 'POST', body: form });
     const d = await r.json();
     if (!d.ok) throw new Error(d.detail || 'Échec');
-    document.getElementById('result-image').src = API_BASE + '/api/image/' + d.task_id;
+    setMediaSrc('result-image', API_BASE + '/api/image/' + d.task_id);
     document.getElementById('image-result').classList.remove('hidden');
     showToast('Image générée !', 5000);
   } catch(e) {
@@ -908,7 +956,7 @@ async function showProgress(taskId, dirName) {
 
   let state = null;
   try {
-    const r = await fetch(API_BASE + '/api/tasks/' + taskId);
+    const r = await fetchWithAuth(API_BASE + '/api/tasks/' + taskId);
     state = await r.json();
   } catch(e) {}
 
@@ -1005,7 +1053,7 @@ function stopPolling() {
 async function pollTaskProgress(taskId) {
   if (!isTaskRunning || !taskId) return;
   try {
-    const r = await fetch(API_BASE + '/api/tasks/' + taskId);
+    const r = await fetchWithAuth(API_BASE + '/api/tasks/' + taskId);
     const state = await r.json();
     const pct = Math.round((state.current_progress || 0) * 100);
     document.getElementById('progress-bar').style.width = pct + '%';
@@ -1094,7 +1142,7 @@ function showResult(videoPath) {
   document.getElementById('progress-pct').textContent = '100%';
   document.getElementById('progress-remaining').textContent = 'Terminé ✓';
   if (videoPath && currentTaskId) {
-    document.getElementById('result-video').src = API_BASE + '/api/video/' + currentTaskId;
+    setMediaSrc('result-video', API_BASE + '/api/video/' + currentTaskId);
   }
   // Show publish button
   document.getElementById('btn-publish').classList.remove('hidden');
@@ -1120,7 +1168,7 @@ async function loadArtifacts() {
   const area = document.getElementById('artifacts-area');
   const container = document.getElementById('artifacts-container');
   try {
-    const resp = await fetch(API_BASE + '/api/tasks/' + taskId + '/artifacts');
+    const resp = await fetchWithAuth(API_BASE + '/api/tasks/' + taskId + '/artifacts');
     const data = await resp.json();
     if (!data.ok) throw new Error(data.detail);
     const existing = (data.artifacts || []).filter(a => a.exists);
@@ -1153,7 +1201,7 @@ async function loadArtifacts() {
 async function loadTaskList() {
   const container = document.getElementById('task-list-container');
   try {
-    const r = await fetch(API_BASE + '/api/tasks');
+    const r = await fetchWithAuth(API_BASE + '/api/tasks');
     const d = await r.json();
     const tasks = d.tasks || [];
     if (!tasks.length) { container.innerHTML = '<p class="text-gray-500 text-sm">Aucune tâche</p>'; return; }
@@ -1181,7 +1229,7 @@ async function loadTaskList() {
 
 async function viewTask(taskId) {
   try {
-    const r = await fetch(API_BASE + '/api/tasks/' + taskId);
+    const r = await fetchWithAuth(API_BASE + '/api/tasks/' + taskId);
     const state = await r.json();
     showTaskDetail(taskId, state);
   } catch(e) { alert('Erreur : ' + e.message); }
@@ -1196,7 +1244,7 @@ async function viewRunningTask(taskId) {
 
 async function restoreProgressFromTask(taskId) {
   try {
-    const r = await fetch(API_BASE + '/api/tasks/' + taskId);
+    const r = await fetchWithAuth(API_BASE + '/api/tasks/' + taskId);
     const state = await r.json();
     if (state.status === 'completed') {
       document.getElementById('progress-bar').style.width = '100%';
@@ -1229,7 +1277,7 @@ function showTaskDetail(taskId, state) {
     </div>`;
   if (state.final_video_file) {
     document.getElementById('result-area').classList.remove('hidden');
-    document.getElementById('result-video').src = API_BASE + '/api/video/' + taskId;
+    setMediaSrc('result-video', API_BASE + '/api/video/' + taskId);
   }
   currentArtifactsTaskId = taskId;
   loadArtifacts();
@@ -1244,7 +1292,7 @@ async function stopTask() {
   const btn = document.getElementById('btn-stop');
   btn.disabled = true; btn.textContent = 'Arrêt...';
   try {
-    const r = await fetch(API_BASE + '/api/tasks/' + currentTaskId + '/stop', { method: 'POST' });
+    const r = await fetchWithAuth(API_BASE + '/api/tasks/' + currentTaskId + '/stop', { method: 'POST' });
     const d = await r.json();
     if (!d.ok) throw new Error(d.detail || 'Erreur');
     showToast('Tâche arrêtée', 4000);
@@ -1256,7 +1304,7 @@ async function stopTask() {
 // ═══════════════════════════════════════════════════
 async function autoReconnectRunningTask() {
   try {
-    const r = await fetch(API_BASE + '/api/tasks');
+    const r = await fetchWithAuth(API_BASE + '/api/tasks');
     const d = await r.json();
     const running = (d.tasks || []).find(t => t.status === 'running' || t.status === 'queued');
     if (running) {
@@ -1339,7 +1387,7 @@ async function publishVideo() {
   btn.disabled = true;
   btn.textContent = 'Publication en cours...';
   try {
-    const r = await fetch(API_BASE + '/api/tasks/' + currentTaskId + '/publish', {
+    const r = await fetchWithAuth(API_BASE + '/api/tasks/' + currentTaskId + '/publish', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({author: getPseudo()})
@@ -1363,7 +1411,7 @@ async function loadGallery() {
   const container = document.getElementById('gallery-container');
   container.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Chargement...</p>';
   try {
-    const r = await fetch(API_BASE + '/api/community/videos?per_page=50');
+    const r = await fetchWithAuth(API_BASE + '/api/community/videos?per_page=50');
     const d = await r.json();
     if (!d.videos || d.videos.length === 0) {
       container.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Aucune vidéo publiée pour le moment.<br>Soyez le premier à partager votre création !</p>';
@@ -1482,7 +1530,7 @@ async function loadLightboxComments(videoId) {
   const list = document.getElementById('lb-comments-list');
   list.innerHTML = '<div class="text-center py-3"><div class="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin mx-auto"></div></div>';
   try {
-    const r = await fetch(API_BASE + '/api/community/videos/' + videoId + '/comments');
+    const r = await fetchWithAuth(API_BASE + '/api/community/videos/' + videoId + '/comments');
     const d = await r.json();
     if (!d.comments || d.comments.length === 0) {
       list.innerHTML = '<p class="text-xs text-gray-600 text-center py-2">Aucun commentaire pour le moment.</p>';
@@ -1510,7 +1558,7 @@ async function addGalleryComment(videoId) {
   btn.disabled = true;
   btn.textContent = '...';
   try {
-    const r = await fetch(API_BASE + '/api/community/videos/' + videoId + '/comments', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({author: getPseudo(), text: text}) });
+    const r = await fetchWithAuth(API_BASE + '/api/community/videos/' + videoId + '/comments', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({author: getPseudo(), text: text}) });
     const d = await r.json();
     if (d.ok) {
       input.value = '';
@@ -1527,7 +1575,7 @@ async function addGalleryComment(videoId) {
 
 async function toggleLike(videoId) {
   try {
-    const r = await fetch(API_BASE + '/api/community/videos/' + videoId + '/like', {method: 'POST'});
+    const r = await fetchWithAuth(API_BASE + '/api/community/videos/' + videoId + '/like', {method: 'POST'});
     const d = await r.json();
     if (!d.ok) throw new Error(d.detail || 'Échec');
     // Update card button (if visible)
@@ -1559,7 +1607,7 @@ async function toggleComments(videoId) {
 async function loadComments(videoId) {
   const div = document.getElementById('comments-' + videoId);
   try {
-    const r = await fetch(API_BASE + '/api/community/videos/' + videoId + '/comments');
+    const r = await fetchWithAuth(API_BASE + '/api/community/videos/' + videoId + '/comments');
     const d = await r.json();
     if (!d.comments) throw new Error('Réponse invalide');
 
@@ -1596,7 +1644,7 @@ async function addComment(videoId) {
   if (!text) return;
   input.disabled = true;
   try {
-    const r = await fetch(API_BASE + '/api/community/videos/' + videoId + '/comments', {
+    const r = await fetchWithAuth(API_BASE + '/api/community/videos/' + videoId + '/comments', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({author: getPseudo(), text: text})
@@ -1632,7 +1680,7 @@ function timeAgo(ts) {
 async function deleteGalleryVideo(videoId) {
   if (!confirm('Supprimer cette vidéo de la galerie ?')) return;
   try {
-    const r = await fetch(API_BASE + '/api/community/videos/' + videoId, {method: 'DELETE'});
+    const r = await fetchWithAuth(API_BASE + '/api/community/videos/' + videoId, {method: 'DELETE'});
     const d = await r.json();
     if (!d.ok) throw new Error(d.detail || 'Échec');
     showToast('🗑️ Vidéo supprimée de la galerie', 3000);
@@ -1661,7 +1709,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ═══════════════════════════════════════════════════
 (async function init() {
   try {
-    const r = await fetch(API_BASE + '/api/config');
+    const r = await fetchWithAuth(API_BASE + '/api/config');
     const d = await r.json();
     if (d.api_key) setApiKeyConfiguredUI(d.source, d.can_clear);
   } catch(e) {}

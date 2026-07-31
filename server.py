@@ -31,7 +31,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Dict, List, Optional, Union
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
@@ -205,6 +205,44 @@ def _find_dir_name(task_id: str) -> str:
     if meta and meta.get("dir_name"):
         return meta["dir_name"]
     return task_id
+
+
+def _get_task_owner(task_id: str) -> Optional[str]:
+    """user_id du propriétaire d'une tâche.
+
+    "" = tâche héritée (créée avant l'isolation) → publique, comme avant.
+    None = tâche inconnue.
+    """
+    dir_name = _find_dir_name(task_id)
+    tm = TaskManager(task_id, dir_name=dir_name)
+    state = tm.load()
+    if state:
+        return getattr(state, "user_id", "") or ""
+    try:
+        meta = get_task_store().get_meta(task_id)
+    except Exception as e:
+        logger.warning(f"[Privacy] Lecture métadonnées {task_id} impossible: {e}")
+        return None
+    if meta:
+        return meta.get("user_id", "") or ""
+    return None
+
+
+def _require_task_access(task_id: str, user_id: str) -> None:
+    """Vérifie que l'utilisateur peut accéder/contrôler la tâche (header X-User-Id).
+
+    - tâche inconnue → 404
+    - tâche héritée (user_id vide) → accès public (comportement historique)
+    - tâche avec propriétaire → seul ce propriétaire y accède (403 sinon)
+    """
+    owner = _get_task_owner(task_id)
+    if owner is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if owner and owner != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Accès refusé : cette tâche appartient à un autre utilisateur",
+        )
 
 
 # ═══════════════════════════════════════════════════
@@ -746,6 +784,7 @@ async def voice_compat(voice: str, target_lang: str):
 @app.post("/api/image/generate")
 async def generate_image(
     prompt: str = Form(...),
+    user_id: str = Header(default="", alias="X-User-Id"),
     size: str = Form("1024x1024"),
     negative_prompt: Optional[str] = Form(None),
     system_prompt: str = Form(""),
@@ -771,6 +810,7 @@ async def generate_image(
 
     state = SimpleImageTask(
         task_id=task_id,
+        user_id=user_id,
         creative_name=name,
         prompt=prompt.strip(),
         size=size,
@@ -830,13 +870,15 @@ async def generate_image(
 
 
 @app.get("/api/image/{task_id}")
-async def serve_image(task_id: str):
+async def serve_image(task_id: str, user_id: str = Header(default="", alias="X-User-Id")):
     """返回已生成的图片文件。"""
     dir_name = _find_dir_name(task_id)
     tm = TaskManager(task_id, dir_name=dir_name)
     state = tm.load()
     if not state or not state.final_video_file:
         raise HTTPException(status_code=404, detail="Image not found")
+    if state.user_id and state.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Accès refusé : cette tâche appartient à un autre utilisateur")
     if not os.path.exists(state.final_video_file):
         raise HTTPException(status_code=404, detail="Image file not found")
     return FileResponse(state.final_video_file)
@@ -848,13 +890,14 @@ async def serve_image(task_id: str):
 
 
 @app.get("/api/tasks")
-async def list_tasks():
+async def list_tasks(user_id: str = Header(default="", alias="X-User-Id")):
     tm = TaskManager("_")
     tasks = tm.list_tasks()
     for t in tasks:
         task_tm = TaskManager(t["task_id"], dir_name=t.get("dir_name"))
         state = task_tm.load()
         if state:
+            t["user_id"] = state.user_id
             t["final_video_file"] = state.final_video_file
             t["task_type"] = state.task_type
             # 创意视频特有字段
@@ -902,6 +945,7 @@ async def list_tasks():
                     "dir_name": row.get("dir_name", ""),
                     "task_type": row.get("task_type", ""),
                     "creative_name": row.get("creative_name", ""),
+                    "user_id": row.get("user_id", ""),
                     "status": row.get("status", "failed"),
                     "prompt": row.get("prompt", ""),
                     "current_message": row.get("current_message", ""),
@@ -912,12 +956,15 @@ async def list_tasks():
                 tasks.append(restored)
     except Exception as e:
         logger.warning(f"[Tasks] Merge des métadonnées persistées impossible: {e}")
+    # Confidentialité : chaque utilisateur ne voit que ses tâches, plus les
+    # tâches héritées (user_id vide, créées avant l'isolation).
+    tasks = [t for t in tasks if not t.get("user_id") or t.get("user_id") == user_id]
     tasks.sort(key=lambda t: t.get("dir_name", ""), reverse=True)
     return {"tasks": tasks}
 
 
 @app.get("/api/tasks/{task_id}")
-async def get_task(task_id: str):
+async def get_task(task_id: str, user_id: str = Header(default="", alias="X-User-Id")):
     dir_name = _find_dir_name(task_id)
     tm = TaskManager(task_id, dir_name=dir_name)
     state = tm.load()
@@ -927,18 +974,23 @@ async def get_task(task_id: str):
         meta = get_task_store().get_meta(task_id)
         if not meta:
             raise HTTPException(status_code=404, detail="Task not found")
+        if meta.get("user_id") and meta.get("user_id") != user_id:
+            raise HTTPException(status_code=403, detail="Accès refusé : cette tâche appartient à un autre utilisateur")
         data = dict(meta)
         data["dir_name"] = meta.get("dir_name", "") or dir_name
         data["restored_from_db"] = True
         data["current_progress"] = 1.0 if data.get("status") == "completed" else 0.0
         return data
+    if state.user_id and state.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Accès refusé : cette tâche appartient à un autre utilisateur")
     data = state.model_dump()
     data["dir_name"] = dir_name
     return data
 
 
 @app.get("/api/video/{task_id}")
-async def serve_video(task_id: str):
+async def serve_video(task_id: str, user_id: str = Header(default="", alias="X-User-Id")):
+    _require_task_access(task_id, user_id)
     dir_name = _find_dir_name(task_id)
     try:
         task_dir = safe_join(get_working_dir(), dir_name)
@@ -967,13 +1019,15 @@ _ARTIFACT_MEDIA_TYPES = {
 
 
 @app.get("/api/tasks/{task_id}/artifacts")
-async def list_task_artifacts(task_id: str):
+async def list_task_artifacts(task_id: str, user_id: str = Header(default="", alias="X-User-Id")):
     """列举任务的所有中间产物（含存在性检测）。"""
     dir_name = _find_dir_name(task_id)
     tm = TaskManager(task_id, dir_name=dir_name)
     state = tm.load()
     if not state:
         raise HTTPException(status_code=404, detail="Task not found")
+    if state.user_id and state.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Accès refusé : cette tâche appartient à un autre utilisateur")
 
     artifacts = list_artifacts(state, tm.task_dir)
     return {
@@ -998,13 +1052,15 @@ async def list_task_artifacts(task_id: str):
 
 
 @app.get("/api/tasks/{task_id}/artifacts/{artifact_id}/file")
-async def serve_artifact_file(task_id: str, artifact_id: str):
+async def serve_artifact_file(task_id: str, artifact_id: str, user_id: str = Header(default="", alias="X-User-Id")):
     """安全地服务中间产物文件。"""
     dir_name = _find_dir_name(task_id)
     tm = TaskManager(task_id, dir_name=dir_name)
     state = tm.load()
     if not state:
         raise HTTPException(status_code=404, detail="Task not found")
+    if state.user_id and state.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Accès refusé : cette tâche appartient à un autre utilisateur")
 
     artifact = resolve_artifact(artifact_id, state, tm.task_dir)
     if not artifact or not artifact.file_relpath:
@@ -1024,13 +1080,15 @@ async def serve_artifact_file(task_id: str, artifact_id: str):
 
 
 @app.get("/api/tasks/{task_id}/artifacts/{artifact_id}/cascade-preview")
-async def preview_artifact_cascade(task_id: str, artifact_id: str):
+async def preview_artifact_cascade(task_id: str, artifact_id: str, user_id: str = Header(default="", alias="X-User-Id")):
     """预览删除产物的级联计划（不执行删除）。"""
     dir_name = _find_dir_name(task_id)
     tm = TaskManager(task_id, dir_name=dir_name)
     state = tm.load()
     if not state:
         raise HTTPException(status_code=404, detail="Task not found")
+    if state.user_id and state.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Accès refusé : cette tâche appartient à un autre utilisateur")
 
     artifact = resolve_artifact(artifact_id, state, tm.task_dir)
     if not artifact:
@@ -1056,7 +1114,7 @@ async def preview_artifact_cascade(task_id: str, artifact_id: str):
 
 
 @app.delete("/api/tasks/{task_id}/artifacts/{artifact_id}")
-async def delete_task_artifact(task_id: str, artifact_id: str):
+async def delete_task_artifact(task_id: str, artifact_id: str, user_id: str = Header(default="", alias="X-User-Id")):
     """删除指定中间产物（含级联删除后续产物 + 状态回退）。"""
     # 运行中任务保护（已停止的 pipeline 允许删除产物）
     if task_id in active_pipelines:
@@ -1069,6 +1127,8 @@ async def delete_task_artifact(task_id: str, artifact_id: str):
     state = tm.load()
     if not state:
         raise HTTPException(status_code=404, detail="Task not found")
+    if state.user_id and state.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Accès refusé : cette tâche appartient à un autre utilisateur")
 
     artifact = resolve_artifact(artifact_id, state, tm.task_dir)
     if not artifact:
@@ -1347,6 +1407,7 @@ def _launch_background_task(coro):
 @app.post("/api/tasks/simple")
 async def create_simple_task(
     prompt: str = Form(...),
+    user_id: str = Header(default="", alias="X-User-Id"),
     mode: str = Form("t2v"),
     duration: int = Form(5),
     video_width: int = Form(768),
@@ -1407,6 +1468,7 @@ async def create_simple_task(
 
     state = SimpleVideoTask(
         task_id=task_id,
+        user_id=user_id,
         creative_name=f"simple_{task_id}",
         prompt=prompt,
         mode=video_mode,
@@ -1452,6 +1514,7 @@ async def create_simple_task(
 @app.post("/api/tasks/creative")
 async def create_creative_task(
     idea: str = Form(...),
+    user_id: str = Header(default="", alias="X-User-Id"),
     creative_name: str = Form(""),
     style: str = Form("电影质感写实风格"),
     chaining_mode: str = Form("keyframes"),
@@ -1543,6 +1606,7 @@ async def create_creative_task(
 
     state = CreativeVideoTask(
         task_id=task_id,
+        user_id=user_id,
         creative_name=name,
         idea=idea,
         style=style,
@@ -1601,6 +1665,7 @@ async def create_creative_task(
 @app.post("/api/tasks/manuscript")
 async def create_manuscript_task(
     manuscript_text: str = Form(...),
+    user_id: str = Header(default="", alias="X-User-Id"),
     creative_name: str = Form(""),
     video_width: int = Form(768),
     video_height: int = Form(1152),
@@ -1666,6 +1731,7 @@ async def create_manuscript_task(
 
     state = ManuscriptVideoTask(
         task_id=task_id,
+        user_id=user_id,
         creative_name=name,
         manuscript_text=manuscript_text.strip(),
         video_width=video_width,
@@ -1688,6 +1754,7 @@ async def create_manuscript_task(
 @app.post("/api/tasks/poetry")
 async def create_poetry_task(
     poem_text: str = Form(...),
+    user_id: str = Header(default="", alias="X-User-Id"),
     creative_name: str = Form(""),
     user_scene_prompts_json: str = Form("[]"),
     style: str = Form("电影质感写实风格"),
@@ -1766,6 +1833,7 @@ async def create_poetry_task(
 
     state = PoetryVideoTask(
         task_id=task_id,
+        user_id=user_id,
         creative_name=name,
         poem_text=poem_text.strip(),
         user_scene_prompts=user_scene_prompts,
@@ -1794,6 +1862,7 @@ async def create_poetry_task(
 @app.post("/api/tasks/anchor")
 async def create_anchor_task(
     anchor_prompt: str = Form(""),
+    user_id: str = Header(default="", alias="X-User-Id"),
     anchor_reference_image: str = Form(""),
     script_text: str = Form(...),
     audio_source: str = Form("post_stitch"),
@@ -1857,6 +1926,7 @@ async def create_anchor_task(
 
     state = AnchorVideoTask(
         task_id=task_id,
+        user_id=user_id,
         creative_name=name,
         anchor_prompt=anchor_prompt,
         anchor_reference_image=anchor_reference_image,
@@ -1886,6 +1956,7 @@ async def create_anchor_task(
 @app.post("/api/tasks")
 async def create_task_legacy(
     idea: str = Form(...),
+    user_id: str = Header(default="", alias="X-User-Id"),
     creative_name: str = Form(""),
     user_requirement: str = Form("3个场景，每个场景10秒，电影质感"),
     style: str = Form("电影质感写实风格"),
@@ -1900,6 +1971,7 @@ async def create_task_legacy(
     """向后兼容旧端点，映射到 create_creative_task。"""
     return await create_creative_task(
         idea=idea,
+        user_id=user_id,
         creative_name=creative_name,
         user_requirement=user_requirement,
         style=style,
@@ -1961,7 +2033,7 @@ async def poetry_scene_prompt(
 
 
 @app.post("/api/tasks/{task_id}/resume")
-async def resume_task(task_id: str):
+async def resume_task(task_id: str, user_id: str = Header(default="", alias="X-User-Id")):
     api_key = get_api_key()
     if not api_key:
         raise HTTPException(status_code=400, detail="请先配置 API Key")
@@ -1984,6 +2056,9 @@ async def resume_task(task_id: str):
         if not state:
             raise HTTPException(status_code=404, detail="Task not found")
 
+        if state.user_id and state.user_id != user_id:
+            raise HTTPException(status_code=403, detail="Accès refusé : cette tâche appartient à un autre utilisateur")
+
         if state.status == StepStatus.COMPLETED:
             raise HTTPException(status_code=400, detail="Task is already completed")
 
@@ -1998,9 +2073,12 @@ async def resume_task(task_id: str):
 
 
 @app.post("/api/tasks/{task_id}/stop")
-async def stop_task(task_id: str):
+async def stop_task(task_id: str, user_id: str = Header(default="", alias="X-User-Id")):
     if task_id not in active_pipelines and task_id not in _queued_tasks:
         raise HTTPException(status_code=400, detail="Task is not running")
+
+    # Confidentialité : on ne peut stopper que ses propres tâches
+    _require_task_access(task_id, user_id)
 
     # 停止运行中的 pipeline
     if task_id in active_pipelines:
@@ -2188,7 +2266,7 @@ def _community_error(e: Exception, fallback_detail: str) -> HTTPException:
 
 
 @app.post("/api/tasks/{task_id}/publish")
-async def publish_video(task_id: str, request: Request):
+async def publish_video(task_id: str, request: Request, user_id: str = Header(default="", alias="X-User-Id")):
     try:
         body = await request.json()
     except Exception:
@@ -2199,6 +2277,8 @@ async def publish_video(task_id: str, request: Request):
     state = tm.load()
     if not state:
         raise HTTPException(status_code=404, detail="Task not found")
+    if state.user_id and state.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Accès refusé : cette tâche appartient à un autre utilisateur")
     if not state.final_video_file or not os.path.exists(state.final_video_file):
         raise HTTPException(status_code=400, detail="Task has no final video file")
     prompt = _extract_display_prompt(state)

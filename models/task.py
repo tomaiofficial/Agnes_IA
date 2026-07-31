@@ -150,6 +150,9 @@ class BaseTaskState(BaseModel):
     """所有任务共享的基础字段（抽象父类）"""
 
     task_id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
+    # Confidentialité : identifiant de session du propriétaire (header X-User-Id).
+    # "" = tâche héritée (créée avant l'isolation) → visible par tous, comme avant.
+    user_id: str = ""
     creative_name: str = ""
     task_type: TaskType
     status: StepStatus = StepStatus.PENDING

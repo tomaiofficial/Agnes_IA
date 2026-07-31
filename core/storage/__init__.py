@@ -105,6 +105,7 @@ def export_meta(state, dir_name: str) -> dict:
         "dir_name": dir_name or "",
         "task_type": task_type.value if hasattr(task_type, "value") else str(task_type or ""),
         "creative_name": getattr(state, "creative_name", "") or "",
+        "user_id": getattr(state, "user_id", "") or "",
         "status": status.value if hasattr(status, "value") else str(status or "pending"),
         "prompt": (prompt or "")[:500],
         "current_message": getattr(state, "current_message", "") or "",

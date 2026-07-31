@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     dir_name         TEXT NOT NULL DEFAULT '',
     task_type        TEXT NOT NULL DEFAULT '',
     creative_name    TEXT NOT NULL DEFAULT '',
+    user_id          TEXT NOT NULL DEFAULT '',
     status           TEXT NOT NULL DEFAULT 'pending',
     prompt           TEXT NOT NULL DEFAULT '',
     current_message  TEXT NOT NULL DEFAULT '',
@@ -76,6 +77,9 @@ CREATE TABLE IF NOT EXISTS tasks (
     created_at       DOUBLE PRECISION,
     updated_at       DOUBLE PRECISION
 );
+
+-- Migration idempotente (table déjà créée avant l'ajout de user_id) :
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT '';
 
 -- Configuration applicative (clé API, filigrane, modèles, domaine, workspaces…)
 -- : survit aux redéploiements Render (miroir + restauration au démarrage)
@@ -88,6 +92,7 @@ CREATE TABLE IF NOT EXISTS app_config (
 CREATE INDEX IF NOT EXISTS idx_community_likes_video   ON community_likes(video_id);
 CREATE INDEX IF NOT EXISTS idx_community_comments_video ON community_comments(video_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_updated           ON tasks(updated_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_user             ON tasks(user_id);
 
 -- RLS activé sur toutes les tables (idempotent) : seules les clés de rôle
 -- service/postgres y accèdent (l'application n'utilise jamais la clé anon).
@@ -478,6 +483,7 @@ class _CoalescingWriter:
             "dir_name": meta.get("dir_name", ""),
             "task_type": meta.get("task_type", ""),
             "creative_name": meta.get("creative_name", ""),
+            "user_id": meta.get("user_id", ""),
             "status": meta.get("status", "pending"),
             "prompt": meta.get("prompt", ""),
             "current_message": meta.get("current_message", ""),

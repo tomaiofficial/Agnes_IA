@@ -1,10 +1,11 @@
 """Tests pour core/video/queue.py"""
 import asyncio
 import pytest
+import pytest_asyncio
 from core.video.queue import VideoQueue, TaskPriority, QueuedTask
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def queue():
     """Crée une file d'attente pour les tests (démarrée et arrêtée automatiquement)."""
     q = VideoQueue(max_concurrent=2, max_queue_size=10)

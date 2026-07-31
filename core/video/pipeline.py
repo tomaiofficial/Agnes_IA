@@ -277,9 +277,9 @@ class AIVideoPipeline:
         return result
 
     async def _enhance_audio(self, video_path: str, prompt: str) -> str:
-        """Améliore l'audio de la vidéo (TTS + mixage)."""
-        # Utiliser le TTS existant du pipeline simple
+        """Améliore l'audio de la vidéo (TTS + débruitage + normalisation + spatialisation)."""
         from core.audio.tts import EdgeTTSEngine
+        from core.audio.enhancer import AudioEnhancer, AudioEnhanceConfig
 
         audio_path = video_path + ".narration.wav"
         tts = EdgeTTSEngine()
@@ -290,12 +290,25 @@ class AIVideoPipeline:
             rate=self.config.audio_rate,
         )
 
-        # Overlay audio avec ffmpeg
+        # v8.0: Amélioration audio avancée (débruitage, normalisation, spatialisation)
+        enhancer = AudioEnhancer(
+            config=AudioEnhanceConfig(
+                denoise=True,
+                normalize=True,
+                reduce_breath=True,
+                spatialize=False,
+                eq_preset="vocal",
+                remove_clicks=True,
+            )
+        )
+        enhanced_audio = await enhancer.enhance(audio_path, audio_path + ".enhanced.wav")
+
+        # Overlay audio amélioré avec ffmpeg
         output_path = video_path + ".audio.mp4"
         cmd = [
             "ffmpeg", "-y",
             "-i", video_path,
-            "-i", audio_path,
+            "-i", enhanced_audio,
             "-c:v", "copy",
             "-c:a", "aac",
             "-b:a", "192k",
@@ -311,6 +324,11 @@ class AIVideoPipeline:
             )
             await asyncio.wait_for(proc.communicate(), timeout=120)
             if proc.returncode == 0 and os.path.exists(output_path):
+                # Nettoyer le fichier audio temporaire
+                if os.path.exists(audio_path):
+                    os.remove(audio_path)
+                if os.path.exists(enhanced_audio):
+                    os.remove(enhanced_audio)
                 return output_path
         except Exception as e:
             logger.warning(f"[AIVideoPipeline] Audio enhancement failed: {e}")

@@ -41,6 +41,15 @@ from core.video.security import (
 from core.video.persistent_storage import (
     PersistentStorage,
 )
+from core.video.gpu_optimizer import (
+    GPUOptimizer,
+    GPUInfo,
+)
+from core.video.api_monitor import (
+    APIMonitor,
+    APICallMetrics,
+    GenerationMetrics,
+)
 
 __all__ = [
     "VideoPostProcessor",
@@ -61,4 +70,9 @@ __all__ = [
     "SecurityValidator",
     "ValidationResult",
     "PersistentStorage",
+    "GPUOptimizer",
+    "GPUInfo",
+    "APIMonitor",
+    "APICallMetrics",
+    "GenerationMetrics",
 ]

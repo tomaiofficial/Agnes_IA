@@ -34,6 +34,13 @@ from core.video.pipeline import (
     PipelineConfig,
     GenerationResult,
 )
+from core.video.security import (
+    SecurityValidator,
+    ValidationResult,
+)
+from core.video.persistent_storage import (
+    PersistentStorage,
+)
 
 __all__ = [
     "VideoPostProcessor",
@@ -51,4 +58,7 @@ __all__ = [
     "AIVideoPipeline",
     "PipelineConfig",
     "GenerationResult",
+    "SecurityValidator",
+    "ValidationResult",
+    "PersistentStorage",
 ]

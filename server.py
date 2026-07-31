@@ -78,6 +78,7 @@ from core.video import (
     VideoMonitor,
     AIVideoPipeline,
     PipelineConfig,
+    SecurityValidator,
 )
 from models.task import (
     AnchorVideoTask,
@@ -191,6 +192,7 @@ shutdown_event = asyncio.Event()
 # v8.0: File d'attente globale avec priorités + monitoring
 _video_queue: Optional[VideoQueue] = None
 _video_monitor: Optional[VideoMonitor] = None
+_security_validator: Optional[SecurityValidator] = None
 
 
 def _get_pipeline_lock(task_id: str) -> asyncio.Lock:
@@ -393,12 +395,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"[Startup] Storage init failed ({e}); continuing")
 
-    # v8.0: Initialiser la file d'attente globale et le monitoring
-    global _video_queue, _video_monitor
+    # v8.0: Initialiser la file d'attente globale, le monitoring et le validateur de sécurité
+    global _video_queue, _video_monitor, _security_validator
     _video_queue = VideoQueue(max_concurrent=2, max_queue_size=100)
     _video_monitor = VideoMonitor()
+    _security_validator = SecurityValidator()
     await _video_queue.start()
-    logger.info("[Startup] Video queue + monitor initialized (v8.0)")
+    logger.info("[Startup] Video queue + monitor + security validator initialized (v8.0)")
 
     yield
 
@@ -1573,6 +1576,25 @@ async def create_simple_task(
         )
     if len(prompt) > 5000:
         raise HTTPException(status_code=422, detail="prompt 最多 5000 字符")
+
+    # v8.0: Validation de sécurité (prompt + rate limit IP)
+    if _security_validator:
+        # Rate limit par IP (protection DDoS)
+        client_ip = request.client.host if request else ""
+        if not _security_validator.check_ip_rate_limit(client_ip):
+            _security_validator.log_security_event("rate_limit_exceeded", ip=client_ip)
+            raise HTTPException(status_code=429, detail="Trop de requêtes, veuillez patienter")
+
+        # Validation du prompt
+        result = _security_validator.validate_prompt(prompt)
+        if not result.valid:
+            _security_validator.log_security_event(
+                "blocked_prompt", ip=client_ip, user_id=user_id,
+                details={"error": result.error}
+            )
+            raise HTTPException(status_code=400, detail=result.error or "Prompt invalide")
+        if result.sanitized:
+            prompt = result.sanitized
 
     # v7.0: 画质增强 — 强制使用更高参数
     if quality_boost:

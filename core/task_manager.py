@@ -142,6 +142,15 @@ class TaskManager:
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
                 raise
+            # Miroir des métadonnées vers le stockage persistant (Supabase) :
+            # les erreurs ne remontent jamais dans le pipeline de génération.
+            try:
+                from core.storage import export_meta, get_task_store
+
+                dir_name = os.path.basename(self.task_dir) if self.task_dir else self.dir_name
+                get_task_store().upsert_meta(export_meta(self._state, dir_name))
+            except Exception as e:
+                logger.debug(f"[TaskManager] Meta mirroring failed for {self.task_id}: {e}")
 
     def update_step(self, step_name: str, status: StepStatus):
         """更新某个步骤的状态并持久化。"""

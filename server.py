@@ -33,7 +33,7 @@ from typing import Dict, List, Optional, Union
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from core.config import get_api_key, set_api_key, delete_api_key, get_api_key_source, get_working_dir, DURATION_FRAME_MAP, get_workspaces, add_workspace, remove_workspace, set_active_workspace, get_active_workspace, REGRESSION_WORKING_DIR_ENV, get_watermark_config, set_watermark_config, WATERMARK_PROMO_TEXT_ZH, WATERMARK_PROMO_TEXT_EN, get_selected_models, set_selected_models, get_agnes_domain, set_agnes_domain, AGNES_DOMAIN_MAP, get_agnes_api_root
 from core.path_security import safe_join, safe_workspace_path, UnsafePathError
@@ -62,6 +62,12 @@ from core.api.agnes_image import AgnesImageAPI
 from core.api.agnes_models import fetch_available_models
 from core.api.error_collector import set_workspace_root
 from core.artifacts import list_artifacts, resolve_artifact, get_cascade_plan, apply_cascade_plan
+from core.storage import (
+    get_community_store,
+    get_task_store,
+    init_persistent_storage,
+    storage_mode,
+)
 from core.task_manager import TaskManager
 from models.task import (
     AnchorVideoTask,
@@ -194,6 +200,10 @@ def _find_dir_name(task_id: str) -> str:
     for t in tm.list_tasks():
         if t["task_id"] == task_id:
             return t.get("dir_name", task_id)
+    # Tâche restaurée depuis la base persistante (après redéploiement Render)
+    meta = get_task_store().get_meta(task_id)
+    if meta and meta.get("dir_name"):
+        return meta["dir_name"]
     return task_id
 
 
@@ -275,6 +285,13 @@ async def lifespan(app: FastAPI):
         logger.info("[Startup] Voice catalog loaded")
     except Exception as e:
         logger.warning(f"[Startup] Voice catalog load failed ({e}); will use fallback")
+
+    # Stockage persistant (Supabase) : schéma + bucket + tâches interrompues
+    try:
+        init_persistent_storage()
+        logger.info(f"[Startup] Storage mode: {storage_mode()}")
+    except Exception as e:
+        logger.warning(f"[Startup] Storage init failed ({e}); continuing")
 
     yield
 
@@ -864,6 +881,38 @@ async def list_tasks():
             elif isinstance(state, SimpleImageTask):
                 t["prompt"] = state.prompt[:100] if state.prompt else ""
                 t["size"] = state.size
+    # Fusion avec les métadonnées persistées (survit aux redéploiements Render) :
+    # - tâches dont le fichier local a disparu → restaurées depuis la base
+    # - tâches locales → champs manquants complétés depuis la base
+    try:
+        meta_rows = get_task_store().list_meta()
+        by_id = {t["task_id"]: t for t in tasks}
+        for row in meta_rows:
+            tid = row.get("task_id")
+            if not tid:
+                continue
+            if tid in by_id:
+                for k, v in row.items():
+                    if k in ("task_id", "dir_name") or v in (None, ""):
+                        continue
+                    by_id[tid].setdefault(k, v)
+            else:
+                restored = {
+                    "task_id": tid,
+                    "dir_name": row.get("dir_name", ""),
+                    "task_type": row.get("task_type", ""),
+                    "creative_name": row.get("creative_name", ""),
+                    "status": row.get("status", "failed"),
+                    "prompt": row.get("prompt", ""),
+                    "current_message": row.get("current_message", ""),
+                    "final_video_file": row.get("final_video_file", ""),
+                    "updated_at": row.get("updated_at"),
+                    "restored_from_db": True,
+                }
+                tasks.append(restored)
+    except Exception as e:
+        logger.warning(f"[Tasks] Merge des métadonnées persistées impossible: {e}")
+    tasks.sort(key=lambda t: t.get("dir_name", ""), reverse=True)
     return {"tasks": tasks}
 
 
@@ -873,7 +922,16 @@ async def get_task(task_id: str):
     tm = TaskManager(task_id, dir_name=dir_name)
     state = tm.load()
     if not state:
-        raise HTTPException(status_code=404, detail="Task not found")
+        # Tâche restaurée depuis la base persistante (fichier local effacé par
+        # le redéploiement Render) : on renvoie les métadonnées enregistrées.
+        meta = get_task_store().get_meta(task_id)
+        if not meta:
+            raise HTTPException(status_code=404, detail="Task not found")
+        data = dict(meta)
+        data["dir_name"] = meta.get("dir_name", "") or dir_name
+        data["restored_from_db"] = True
+        data["current_progress"] = 1.0 if data.get("status") == "completed" else 0.0
+        return data
     data = state.model_dump()
     data["dir_name"] = dir_name
     return data
@@ -2099,26 +2157,6 @@ async def cleanup_regression():
 # ═══════════════════════════════════════════════════
 
 
-def _get_community_dir():
-    d = os.path.join(get_working_dir(), "community")
-    os.makedirs(d, exist_ok=True)
-    return d
-
-
-def _load_community_index():
-    path = os.path.join(_get_community_dir(), "index.json")
-    if not os.path.exists(path):
-        return {"videos": {}}
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def _save_community_index(index):
-    path = os.path.join(_get_community_dir(), "index.json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(index, f, ensure_ascii=False, indent=2)
-
-
 def _extract_display_prompt(state):
     if isinstance(state, SimpleVideoTask) or isinstance(state, SimpleImageTask):
         return state.prompt
@@ -2141,13 +2179,21 @@ def _extract_duration(state):
     return 0
 
 
+def _community_error(e: Exception, fallback_detail: str) -> HTTPException:
+    """Convertit les erreurs de la couche de stockage en HTTPException propres."""
+    if isinstance(e, KeyError):
+        return HTTPException(status_code=404, detail="Video not found")
+    logger.exception(f"[Community] {fallback_detail}: {e}")
+    return HTTPException(status_code=500, detail=fallback_detail)
+
+
 @app.post("/api/tasks/{task_id}/publish")
 async def publish_video(task_id: str, request: Request):
     try:
         body = await request.json()
     except Exception:
         body = {}
-    author = body.get("author", "Anonyme")
+    author = (body.get("author") or "Anonyme").strip() or "Anonyme"
     dir_name = _find_dir_name(task_id)
     tm = TaskManager(task_id, dir_name=dir_name)
     state = tm.load()
@@ -2155,56 +2201,41 @@ async def publish_video(task_id: str, request: Request):
         raise HTTPException(status_code=404, detail="Task not found")
     if not state.final_video_file or not os.path.exists(state.final_video_file):
         raise HTTPException(status_code=400, detail="Task has no final video file")
-    video_id = uuid.uuid4().hex[:12]
-    dest = os.path.join(_get_community_dir(), f"{video_id}.mp4")
-    shutil.copy2(state.final_video_file, dest)
     prompt = _extract_display_prompt(state)
     duration = _extract_duration(state)
     resolution = f"{state.video_width}x{state.video_height}"
-    index = _load_community_index()
-    index["videos"][video_id] = {
-        "task_id": task_id,
-        "author": author,
-        "prompt": prompt,
-        "duration": duration,
-        "resolution": resolution,
-        "published_at": time.time(),
-        "likes": [],
-        "comments": [],
-    }
-    _save_community_index(index)
+    try:
+        result = get_community_store().publish(
+            task_id=task_id,
+            author=author,
+            prompt=prompt,
+            duration=duration,
+            resolution=resolution,
+            video_path=state.final_video_file,
+        )
+    except Exception as e:
+        raise _community_error(e, "Publication impossible")
+    logger.info(
+        f"[Community] Published video {result['video_id']} (storage={storage_mode()}, "
+        f"author={author!r}, prompt={prompt[:60]!r})"
+    )
     return {
         "ok": True,
-        "video_id": video_id,
-        "video_url": f"/api/community/videos/{video_id}/video",
+        "video_id": result["video_id"],
+        "video_url": result["video_url"],
     }
 
 
 @app.get("/api/community/videos")
 async def list_community_videos(page: int = 1, per_page: int = 20):
-    index = _load_community_index()
-    videos = []
-    for vid, meta in index["videos"].items():
-        videos.append({
-            "id": vid,
-            "title": meta["prompt"][:80] if meta["prompt"] else "Untitled",
-            "author": meta["author"],
-            "prompt": meta["prompt"],
-            "duration": meta["duration"],
-            "resolution": meta["resolution"],
-            "published_at": meta["published_at"],
-            "likes": len(meta["likes"]),
-            "comments_count": len(meta["comments"]),
-            "video_url": f"/api/community/videos/{vid}/video",
-            "thumbnail": f"/api/community/videos/{vid}/video",
-        })
-    videos.sort(key=lambda v: v["published_at"], reverse=True)
-    start = (page - 1) * per_page
-    end = start + per_page
+    try:
+        result = get_community_store().list_videos(page=page, per_page=per_page)
+    except Exception as e:
+        raise _community_error(e, "Chargement de la galerie impossible")
     return {
         "ok": True,
-        "videos": videos[start:end],
-        "total": len(videos),
+        "videos": result["videos"],
+        "total": result["total"],
         "page": page,
         "per_page": per_page,
     }
@@ -2212,77 +2243,64 @@ async def list_community_videos(page: int = 1, per_page: int = 20):
 
 @app.post("/api/community/videos/{video_id}/like")
 async def toggle_like(video_id: str, request: Request):
-    index = _load_community_index()
-    if video_id not in index["videos"]:
-        raise HTTPException(status_code=404, detail="Video not found")
     client_host = request.client.host if request.client else "unknown"
     visitor_hash = hashlib.sha256(
         (client_host + ":" + video_id).encode("utf-8")
     ).hexdigest()[:16]
-    likes = index["videos"][video_id]["likes"]
-    already_liked = visitor_hash in likes
-    if already_liked:
-        likes.remove(visitor_hash)
-    else:
-        likes.append(visitor_hash)
-    _save_community_index(index)
-    return {
-        "ok": True,
-        "likes": len(likes),
-        "liked": not already_liked,
-    }
+    try:
+        return get_community_store().toggle_like(video_id, visitor_hash)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Video not found")
+    except Exception as e:
+        raise _community_error(e, "Like impossible")
 
 
 @app.get("/api/community/videos/{video_id}/comments")
 async def get_comments(video_id: str):
-    index = _load_community_index()
-    if video_id not in index["videos"]:
+    try:
+        return {"comments": get_community_store().get_comments(video_id)}
+    except KeyError:
         raise HTTPException(status_code=404, detail="Video not found")
-    return {"comments": index["videos"][video_id]["comments"]}
+    except Exception as e:
+        raise _community_error(e, "Chargement des commentaires impossible")
 
 
 @app.post("/api/community/videos/{video_id}/comments")
 async def add_comment(video_id: str, body: dict):
-    index = _load_community_index()
-    if video_id not in index["videos"]:
-        raise HTTPException(status_code=404, detail="Video not found")
-    text = (body.get("text") or "").strip()
+    # Compatibilité : l'ancien frontend envoyait parfois `content` au lieu de `text`
+    text = (body.get("text") or body.get("content") or "").strip()
     if not text:
         raise HTTPException(status_code=422, detail="Comment text cannot be empty")
-    author = (body.get("author") or "Anonyme").strip()
-    comment = {
-        "id": uuid.uuid4().hex[:8],
-        "author": author or "Anonyme",
-        "text": text,
-        "created_at": time.time(),
-    }
-    index["videos"][video_id]["comments"].append(comment)
-    _save_community_index(index)
-    return {"ok": True, "comment": comment}
+    author = (body.get("author") or "Anonyme").strip() or "Anonyme"
+    try:
+        return get_community_store().add_comment(video_id, author, text)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Video not found")
+    except Exception as e:
+        raise _community_error(e, "Ajout du commentaire impossible")
 
 
 @app.get("/api/community/videos/{video_id}/video")
 async def serve_community_video(video_id: str):
-    video_path = os.path.join(_get_community_dir(), f"{video_id}.mp4")
-    if not os.path.exists(video_path):
+    target = get_community_store().get_video(video_id)
+    if not target:
         raise HTTPException(status_code=404, detail="Video not found")
-    return FileResponse(video_path, media_type="video/mp4")
+    if target.startswith("http://") or target.startswith("https://"):
+        # Mode persistant : redirection vers l'URL publique du stockage Supabase
+        return RedirectResponse(target, status_code=307)
+    return FileResponse(target, media_type="video/mp4")
 
 
 @app.delete("/api/community/videos/{video_id}")
 async def delete_community_video(video_id: str):
-    """Supprimer une vidéo publiée de la galerie."""
-    index = _load_community_index()
-    if video_id not in index["videos"]:
+    """Supprimer une vidéo publiée de la galerie (fichier + métadonnées + likes + commentaires)."""
+    try:
+        get_community_store().delete(video_id)
+    except KeyError:
         raise HTTPException(status_code=404, detail="Video not found in gallery")
-    # Supprimer le fichier vidéo
-    video_path = os.path.join(_get_community_dir(), f"{video_id}.mp4")
-    if os.path.exists(video_path):
-        os.remove(video_path)
-    # Supprimer de l'index
-    del index["videos"][video_id]
-    _save_community_index(index)
-    logger.info(f"[Community] Video {video_id} deleted")
+    except Exception as e:
+        raise _community_error(e, "Suppression impossible")
+    logger.info(f"[Community] Video {video_id} deleted (storage={storage_mode()})")
     return {"ok": True}
 
 

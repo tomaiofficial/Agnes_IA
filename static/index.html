@@ -1493,7 +1493,7 @@ async function loadLightboxComments(videoId) {
       const div = document.createElement('div');
       div.className = 'flex gap-2 items-start';
       div.innerHTML = '<span class="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-[9px] text-white font-bold flex-shrink-0 mt-0.5">' + (c.author || 'A').charAt(0).toUpperCase() + '</span>' +
-        '<div><p class="text-xs text-gray-300"><strong>' + escapeHtml(c.author || 'Anonyme') + '</strong> <span class="text-gray-600">· ' + timeAgo(c.created_at || 0) + '</span></p><p class="text-xs text-gray-400">' + escapeHtml(c.content) + '</p></div>';
+        '<div><p class="text-xs text-gray-300"><strong>' + escapeHtml(c.author || 'Anonyme') + '</strong> <span class="text-gray-600">· ' + timeAgo(c.created_at || 0) + '</span></p><p class="text-xs text-gray-400">' + escapeHtml(c.text || c.content || '') + '</p></div>';
       list.appendChild(div);
     });
   } catch(e) {
@@ -1510,7 +1510,7 @@ async function addGalleryComment(videoId) {
   btn.disabled = true;
   btn.textContent = '...';
   try {
-    const r = await fetch(API_BASE + '/api/community/videos/' + videoId + '/comments', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({author: getPseudo(), content: text}) });
+    const r = await fetch(API_BASE + '/api/community/videos/' + videoId + '/comments', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({author: getPseudo(), text: text}) });
     const d = await r.json();
     if (d.ok) {
       input.value = '';
@@ -1605,15 +1605,9 @@ async function addComment(videoId) {
     if (!d.ok) throw new Error(d.detail || 'Échec');
     input.value = '';
     await loadComments(videoId);
-    // Update comment count in toggle link
+    // Update comment count in toggle link (le backend renvoie comments_count)
     const link = document.getElementById('toggle-comments-' + videoId);
-    const countEl = document.querySelector('#comments-' + videoId + ' .comment-count') || link;
-    const r2 = await fetch(API_BASE + '/api/community/videos?per_page=1');
-    const d2 = await r2.json();
-    if (d2.videos) {
-      const v = d2.videos.find(x => x.id === videoId);
-      if (v) link.textContent = '💬 ' + (v.comments_count || 0) + ' commentaire(s)';
-    }
+    if (link) link.textContent = '💬 ' + (d.comments_count || 0) + ' commentaire(s)';
   } catch(e) {
     showToast('Erreur commentaire: ' + e.message, 3000);
   }

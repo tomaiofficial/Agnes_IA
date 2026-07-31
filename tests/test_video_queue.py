@@ -5,9 +5,12 @@ from core.video.queue import VideoQueue, TaskPriority, QueuedTask
 
 
 @pytest.fixture
-def queue():
-    """Crée une file d'attente pour les tests."""
-    return VideoQueue(max_concurrent=2, max_queue_size=10)
+async def queue():
+    """Crée une file d'attente pour les tests (démarrée et arrêtée automatiquement)."""
+    q = VideoQueue(max_concurrent=2, max_queue_size=10)
+    await q.start()
+    yield q
+    await q.stop()
 
 
 def test_task_priority_values():
@@ -27,8 +30,6 @@ def test_queue_stats(queue):
 
 async def test_queue_enqueue_dequeue(queue):
     """Test basique d'enqueue/dequeue."""
-    await queue.start()
-
     result = []
     async def task_fn():
         result.append("done")
@@ -42,13 +43,9 @@ async def test_queue_enqueue_dequeue(queue):
     assert res == "result"
     assert result == ["done"]
 
-    await queue.stop()
-
 
 async def test_queue_priority_order(queue):
     """Vérifie que les tâches sont exécutées par priorité."""
-    await queue.start()
-
     results = []
     async def task_fn(name):
         results.append(name)
@@ -65,13 +62,9 @@ async def test_queue_priority_order(queue):
     # La tâche admin devrait être exécutée en premier
     assert results[0] == "high1"
 
-    await queue.stop()
-
 
 async def test_queue_cancel(queue):
     """Test d'annulation d'une tâche en attente."""
-    await queue.start()
-
     # Utiliser un événement pour bloquer l'exécution
     block_event = asyncio.Event()
     async def blocking_task():
@@ -94,13 +87,9 @@ async def test_queue_cancel(queue):
     block_event.set()
     await asyncio.sleep(0.5)
 
-    await queue.stop()
-
 
 async def test_queue_full(queue):
     """Vérifie qu'une file pleine lève une erreur."""
-    await queue.start()
-
     async def quick_task():
         return "done"
 
@@ -112,13 +101,9 @@ async def test_queue_full(queue):
     with pytest.raises(RuntimeError, match="Queue full"):
         await queue.enqueue("overflow", TaskPriority.FREE, quick_task)
 
-    await queue.stop()
-
 
 async def test_queue_get_status(queue):
     """Vérifie la récupération du statut d'une tâche."""
-    await queue.start()
-
     async def task_fn():
         return "done"
 
@@ -130,5 +115,3 @@ async def test_queue_get_status(queue):
     await queue.wait("task1", timeout=5)
     status = queue.get_status("task1")
     assert status.status == "completed"
-
-    await queue.stop()

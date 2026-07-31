@@ -108,9 +108,19 @@ class MockAgnesVideoAPI:
         ts = int(time.time() * 1000)
         return f"mock_video_{ts}_{self._submit_count}_{random.randint(1000, 9999)}"
 
-    async def wait_for_video(self, video_id: str, progress_callback=None) -> VideoOutput:
-        """返回预制测试视频（二进制模式，不发起 HTTP 请求）。"""
+    async def wait_for_video(self, video_id: str, progress_callback=None,
+                             max_poll_duration=None) -> VideoOutput:
+        """返回预制测试视频（二进制模式，不发起 HTTP 请求）。
+
+        与真实 AgnesVideoAPI.wait_for_video 签名一致（含 max_poll_duration）。
+        若提供了 progress_callback，模拟一次「已完成」进度回调，
+        以覆盖 SimpleVideo._api_progress 的时间蠕变归一化逻辑。
+        """
         await asyncio.sleep(0.2)
+        if progress_callback is not None:
+            cb = progress_callback("completed", 100, None)
+            if asyncio.iscoroutine(cb):
+                await cb
         return VideoOutput(fmt="file", ext="mp4", data=self._test_video_bytes)
 
     async def generate_single_video(self, prompt: str, reference_image_paths: List[str] = None,

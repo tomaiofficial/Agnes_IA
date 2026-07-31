@@ -245,6 +245,54 @@ def _require_task_access(task_id: str, user_id: str) -> None:
         )
 
 
+# Une tâche running/queued dont le miroir persistant n'a pas bougé depuis
+# plus longtemps que ce seuil est orpheline : le process qui la faisait
+# tourner a été tué (redéploiement Render, stockage éphémère) et personne
+# ne la marquera jamais échouée → l'UI reste bloquée sur « Génération vidéo ».
+_STALE_RUNNING_THRESHOLD_S = 300  # 5 min ; les polls mettent à jour ~toutes les 3 s
+
+
+def _reconcile_stale_task(meta: dict) -> dict:
+    """Réconciliation paresseuse d'une tâche restaurée depuis la base.
+
+    Si la tâche est running/queued, qu'elle n'est pas dans les registres du
+    process courant (active_pipelines / _queued_tasks) et que son miroir
+    n'a pas été mis à jour depuis longtemps, on la marque échouée pour
+    débloquer l'interface. Ne touche jamais aux tâches vivantes.
+    """
+    try:
+        tid = meta.get("task_id")
+        if not tid:
+            return meta
+        if meta.get("status") not in ("running", "queued"):
+            return meta
+        if tid in active_pipelines or tid in _queued_tasks:
+            return meta  # pipeline encore vivant dans ce process
+        updated = meta.get("updated_at") or 0
+        try:
+            age = time.time() - float(updated)
+        except (TypeError, ValueError):
+            return meta
+        if age <= _STALE_RUNNING_THRESHOLD_S:
+            return meta
+        meta["status"] = "failed"
+        meta["current_message"] = (
+            "Interrompu: le serveur a redémarré pendant la génération. "
+            "Relancez la tâche pour la reprendre."
+        )
+        try:
+            get_task_store().upsert_meta(meta)
+            logger.warning(
+                f"[StaleTask] {tid} marquée échouée "
+                f"(dernière mise à jour il y a {age:.0f}s)"
+            )
+        except Exception as e:
+            logger.warning(f"[StaleTask] Persistance impossible pour {tid}: {e}")
+    except Exception:
+        pass
+    return meta
+
+
 # ═══════════════════════════════════════════════════
 # Lifespan
 # ═══════════════════════════════════════════════════
@@ -940,6 +988,9 @@ async def list_tasks(user_id: str = Header(default="", alias="X-User-Id")):
                         continue
                     by_id[tid].setdefault(k, v)
             else:
+                # Tâche restaurée depuis la base (fichier local effacé par un
+                # redéploiement) : réconcilier les orphelines pour débloquer l'UI
+                row = _reconcile_stale_task(row)
                 restored = {
                     "task_id": tid,
                     "dir_name": row.get("dir_name", ""),
@@ -976,6 +1027,8 @@ async def get_task(task_id: str, user_id: str = Header(default="", alias="X-User
             raise HTTPException(status_code=404, detail="Task not found")
         if meta.get("user_id") and meta.get("user_id") != user_id:
             raise HTTPException(status_code=403, detail="Accès refusé : cette tâche appartient à un autre utilisateur")
+        # Tâche orpheline (redéploiement) → la marquer échouée pour débloquer l'UI
+        meta = _reconcile_stale_task(meta)
         data = dict(meta)
         data["dir_name"] = meta.get("dir_name", "") or dir_name
         data["restored_from_db"] = True

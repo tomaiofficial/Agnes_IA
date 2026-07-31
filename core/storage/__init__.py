@@ -55,6 +55,12 @@ def init_persistent_storage() -> None:
             logger.info(f"[Storage] {n} tâche(s) marquée(s) interrompue(s).")
     except Exception as e:
         logger.warning(f"[Storage] Marquage des tâches interrompues impossible: {e}")
+    try:
+        from core.config import restore_config_from_storage
+
+        restore_config_from_storage()
+    except Exception as e:
+        logger.warning(f"[Storage] Restauration de la configuration impossible: {e}")
 
 
 def get_community_store() -> CommunityStore:

@@ -105,6 +105,44 @@ def save_config(config: dict):
     except OSError:
         pass
     os.replace(tmp_path, CONFIG_FILE)
+    # Miroir persistant (Supabase) : la config survit aux redéploiements Render.
+    _mirror_config(config)
+
+
+def _mirror_config(config: dict) -> None:
+    """Best-effort : réplique la config dans Supabase (table app_config)."""
+    try:
+        from core.storage.supabase_backend import mirror_config
+
+        mirror_config(config)
+    except Exception as e:
+        logger.debug(f"[Config] Miroir Supabase impossible: {e}")
+
+
+def restore_config_from_storage() -> bool:
+    """Restaure la config depuis Supabase si le fichier local n'existe pas
+    (cas d'un conteneur Render fraîchement redéployé).
+
+    Returns:
+        True si une config a été restaurée, False sinon (fichier local présent,
+        aucune config persistée, ou stockage non configuré).
+    """
+    if os.path.exists(CONFIG_FILE):
+        return False
+    try:
+        from core.storage.supabase_backend import restore_config
+    except Exception:
+        return False
+    data = restore_config()
+    if not isinstance(data, dict) or not data:
+        return False
+    try:
+        save_config(data)
+    except Exception as e:
+        logger.warning(f"[Config] Écriture de la config restaurée impossible: {e}")
+        return False
+    logger.info("[Config] Configuration restaurée depuis Supabase.")
+    return True
 
 
 # Fallback API key intégrée pour Render (accessible à tous les visiteurs)

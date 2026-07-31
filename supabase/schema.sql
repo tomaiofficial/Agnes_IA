@@ -50,9 +50,25 @@ CREATE TABLE IF NOT EXISTS tasks (
     updated_at       DOUBLE PRECISION
 );
 
+-- Configuration applicative (clé API, filigrane, modèles, domaine, workspaces…)
+-- : survit aux redéploiements Render (miroir + restauration au démarrage)
+CREATE TABLE IF NOT EXISTS app_config (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL DEFAULT '{}',
+    updated_at DOUBLE PRECISION NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_community_likes_video    ON community_likes(video_id);
 CREATE INDEX IF NOT EXISTS idx_community_comments_video ON community_comments(video_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_updated            ON tasks(updated_at);
+
+-- RLS activé sur toutes les tables (idempotent) : seules les clés de rôle
+-- service/postgres y accèdent (l'application n'utilise jamais la clé anon).
+ALTER TABLE community_videos   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_likes    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tasks              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_config         ENABLE ROW LEVEL SECURITY;
 
 -- ------------------------------------------------------------
 -- Bucket de stockage (à créer dans Storage > New bucket)

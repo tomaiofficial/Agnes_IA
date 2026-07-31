@@ -16,6 +16,7 @@ Schéma : voir supabase/schema.sql dans le dépôt (création auto au démarrage
 SUPABASE_DATABASE_URL est fournie, sinon à exécuter manuellement dans le SQL Editor).
 """
 
+import json
 import logging
 import os
 import re
@@ -76,9 +77,25 @@ CREATE TABLE IF NOT EXISTS tasks (
     updated_at       DOUBLE PRECISION
 );
 
+-- Configuration applicative (clé API, filigrane, modèles, domaine, workspaces…)
+-- : survit aux redéploiements Render (miroir + restauration au démarrage)
+CREATE TABLE IF NOT EXISTS app_config (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL DEFAULT '{}',
+    updated_at DOUBLE PRECISION NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_community_likes_video   ON community_likes(video_id);
 CREATE INDEX IF NOT EXISTS idx_community_comments_video ON community_comments(video_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_updated           ON tasks(updated_at);
+
+-- RLS activé sur toutes les tables (idempotent) : seules les clés de rôle
+-- service/postgres y accèdent (l'application n'utilise jamais la clé anon).
+ALTER TABLE community_videos   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_likes    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tasks              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_config         ENABLE ROW LEVEL SECURITY;
 """
 
 
@@ -146,6 +163,61 @@ def _get_client():
 
         _client_cache = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
     return _client_cache
+
+
+# ═══════════════════════════════════════════════════
+# Configuration applicative persistante (app_config)
+# ═══════════════════════════════════════════════════
+
+APP_CONFIG_ROW = "main"
+
+
+def mirror_config(config: dict) -> None:
+    """Persiste la configuration applicative (clé API, filigrane, modèles, domaine…)
+    dans la table app_config. Best-effort : un échec ne casse jamais la sauvegarde locale."""
+    if not is_configured():
+        return
+    try:
+        _get_client().table("app_config").upsert(
+            {
+                "key": APP_CONFIG_ROW,
+                "value": json.dumps(config or {}, ensure_ascii=False),
+                "updated_at": time.time(),
+            },
+            on_conflict="key",
+        ).execute()
+    except Exception as e:
+        logger.warning(f"[Storage] Échec du miroir de configuration Supabase: {e}")
+
+
+def restore_config() -> Optional[dict]:
+    """Recharge la configuration persistée depuis app_config (ou None si absente).
+
+    Utilisée au démarrage : après un redéploiement Render, le fichier local
+    n'existe plus mais la config est restituée depuis la base."""
+    if not is_configured():
+        return None
+    try:
+        res = (
+            _get_client()
+            .table("app_config")
+            .select("value")
+            .eq("key", APP_CONFIG_ROW)
+            .limit(1)
+            .execute()
+        )
+    except Exception as e:
+        logger.warning(f"[Storage] Lecture de la configuration Supabase impossible: {e}")
+        return None
+    rows = res.data or []
+    if not rows:
+        return None
+    try:
+        value = json.loads(rows[0].get("value") or "{}")
+    except Exception:
+        logger.warning("[Storage] Configuration Supabase illisible (JSON invalide).")
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def _dir_name_to_ts(dir_name: str) -> Optional[float]:

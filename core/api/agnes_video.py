@@ -309,45 +309,68 @@ class AgnesVideoAPI:
                     )
                     raise RuntimeError(error_msg)
             except requests.exceptions.HTTPError as e:
-                # Erreurs HTTP non transitoires (400, 404) → abandon immédiat
+                # 400/404 : « introuvable ou expirée » peut être transitoire
+                # (instabilité/purge côté API Agnes) → fenêtre de grâce avant
+                # abandon ; refus de contenu → définitif immédiat.
                 status_code = getattr(e.response, 'status_code', 0) if hasattr(e, 'response') else 0
                 if status_code in (400, 404):
-                    # Vérifier si c'est un content_policy_violation
                     error_body = ""
                     try:
                         error_body = e.response.text if hasattr(e, 'response') and e.response else ""
-                    except:
+                    except Exception:
                         pass
                     if "content_policy" in error_body or "Unable to generate" in error_body:
                         error_msg = "Ce prompt est refusé par l'API Agnes (politique de contenu). Essayez un prompt plus neutre comme : 'un enfant qui joue dans un jardin', 'un garçon qui court dans un parc', ou 'un enfant qui lit un livre'."
-                    else:
-                        error_msg = f"Erreur API {status_code}: vidéo introuvable ou expirée ({video_id[:16]})"
-                    collect_error(
+                        collect_error(
+                            "video", "poll_task",
+                            prompt=curl_cmd,
+                            error_type="ContentPolicy",
+                            error_message=error_msg,
+                            status_code=status_code,
+                            extra={"video_id": video_id[:16]},
+                        )
+                        raise RuntimeError(error_msg)
+                    # Vidéo introuvable côté Agnes : on continue à poller pendant
+                    # la fenêtre de grâce (le 400 peut être transitoire).
+                    consecutive_failures += 1
+                    logger.warning(
+                        f"[AgnesVideo] Video {video_id[:16]} introuvable côté API "
+                        f"({consecutive_failures}/{max_consecutive_failures}), "
+                        f"polling continue (fenêtre de grâce)..."
+                    )
+                    if consecutive_failures >= max_consecutive_failures:
+                        error_msg = (
+                            f"Erreur API {status_code}: vidéo introuvable ou expirée ({video_id[:16]}) "
+                            f"— l'API Agnes a perdu la vidéo pendant la génération. "
+                            f"Relancez la tâche."
+                        )
+                        collect_error(
+                            "video", "poll_task",
+                            prompt=curl_cmd,
+                            error_type="HttpError",
+                            error_message=error_msg,
+                            status_code=status_code,
+                            extra={"video_id": video_id[:16]},
+                        )
+                        raise RuntimeError(error_msg)
+                else:
+                    # Autres erreurs HTTP → compter comme éphémère
+                    consecutive_failures += 1
+                    logger.warning(
+                        f"[AgnesVideo] Poll HTTP error ({consecutive_failures}/{max_consecutive_failures}): {e}"
+                    )
+                    collect_error_from_exception(
                         "video", "poll_task",
-                        prompt=curl_cmd,
-                        error_type="HttpError",
-                        error_message=error_msg,
-                        status_code=status_code,
-                        extra={"video_id": video_id[:16]},
+                        exc=e, prompt=curl_cmd,
+                        retry_count=consecutive_failures,
+                        extra={"video_id": video_id[:16], "poll_count": poll_count},
                     )
-                    raise RuntimeError(error_msg)
-                # Autres erreurs HTTP → compter comme éphémère
-                consecutive_failures += 1
-                logger.warning(
-                    f"[AgnesVideo] Poll HTTP error ({consecutive_failures}/{max_consecutive_failures}): {e}"
-                )
-                collect_error_from_exception(
-                    "video", "poll_task",
-                    exc=e, prompt=curl_cmd,
-                    retry_count=consecutive_failures,
-                    extra={"video_id": video_id[:16], "poll_count": poll_count},
-                )
-                if consecutive_failures >= max_consecutive_failures:
-                    error_msg = (
-                        f"[AgnesVideo] Échec du polling après {max_consecutive_failures} "
-                        f"erreurs consécutives pour la vidéo {video_id[:16]}"
-                    )
-                    raise RuntimeError(error_msg)
+                    if consecutive_failures >= max_consecutive_failures:
+                        error_msg = (
+                            f"[AgnesVideo] Échec du polling après {max_consecutive_failures} "
+                            f"erreurs consécutives pour la vidéo {video_id[:16]}"
+                        )
+                        raise RuntimeError(error_msg)
             except (requests.exceptions.RequestException, asyncio.TimeoutError) as e:
                 consecutive_failures += 1
                 logger.warning(

@@ -208,3 +208,54 @@ async def test_wait_for_video_missing_url_raises(api, monkeypatch):
                         lambda *a, **k: FakeResponse(payload={"status": "completed"}))
     with pytest.raises(RuntimeError, match="no URL in completed task"):
         await api.wait_for_video("task_abcdef123456")
+
+
+async def _no_sleep(*a, **k):
+    """Remplacer asyncio.sleep par un no-op (tests rapides)."""
+    return None
+
+
+async def test_poll_429_does_not_burn_grace_window(api, monkeypatch):
+    """429 rate limit is NOT a lost video: pause then resume without counting
+    against the consecutive-failure grace window."""
+    monkeypatch.setattr(av.asyncio, "sleep", _no_sleep)  # no real waiting
+    bad429 = _http_error_response(429, text="Too Many Requests")
+    bad400 = _http_error_response(400, text="video not found or expired")
+    result = await _run_poll(
+        api, monkeypatch,
+        [bad429, bad400, FakeResponse(payload=COMPLETED)],
+        max_consecutive_failures=2,
+    )
+    assert result["status"] == "completed"
+
+
+async def test_wait_for_video_auto_resubmit_when_video_lost(api, monkeypatch):
+    """If the API loses the video during generation, wait_for_video resubmits
+    once automatically instead of failing the task."""
+    monkeypatch.setattr(av.asyncio, "sleep", _no_sleep)  # no real waiting
+    api._last_payload = {"prompt": "un test", "num_frames": 73}
+    api._last_mode_desc = "text-to-video"
+    lost = _http_error_response(400, text="video not found or expired")
+
+    submitted = []
+    async def fake_submit(payload, mode_desc):
+        submitted.append((payload, mode_desc))
+        return "task_resubmitted_xyz"
+
+    monkeypatch.setattr(api, "_submit_with_retry", fake_submit)
+    import itertools
+    it = itertools.chain(iter([lost] * 15), itertools.repeat(FakeResponse(payload=COMPLETED)))
+    monkeypatch.setattr(av.requests, "get", lambda *a, **k: next(it))
+
+    out = await api.wait_for_video("task_lost_orig", max_poll_duration=5)
+    assert out.data == COMPLETED["video_url"]
+    assert submitted == [({"prompt": "un test", "num_frames": 73}, "text-to-video")]
+
+
+async def test_wait_for_video_no_resubmit_without_payload(api, monkeypatch):
+    """Without a stored payload (no prior submit), the error propagates."""
+    monkeypatch.setattr(av.asyncio, "sleep", _no_sleep)
+    bad = _http_error_response(400, text="video not found or expired")
+    monkeypatch.setattr(av.requests, "get", lambda *a, **k: bad)
+    with pytest.raises(RuntimeError, match="introuvable ou expirée"):
+        await api.wait_for_video("task_lost_orig", max_poll_duration=5)

@@ -247,6 +247,13 @@ class AgnesVideoAPI:
                 )
                 raise RuntimeError(error_msg)
 
+            # Polling adaptatif : les générations Full HD durent plusieurs minutes ;
+            # on espace les requêtes pour ne pas saturer le quota de l'API
+            # (le polling à 3 s consomme tout le budget → 429 sur les soumissions).
+            effective_interval = interval
+            if poll_count > 40:
+                effective_interval = max(interval, 8)
+
             try:
                 if poll_count % 10 == 0:
                     logger.info(f"[AgnesVideo] Polling video {video_id[:16]}... (poll #{poll_count + 1}, elapsed {elapsed:.0f}s)")
@@ -315,6 +322,31 @@ class AgnesVideoAPI:
                 # (instabilité/purge côté API Agnes) → fenêtre de grâce avant
                 # abandon ; refus de contenu → définitif immédiat.
                 status_code = getattr(e.response, 'status_code', 0) if hasattr(e, 'response') else 0
+                if status_code == 429:
+                    # Rate limit au polling : la vidéo n'est PAS perdue, on attend
+                    # puis on reprend (sans brûler la fenêtre de grâce).
+                    retry_after = 0
+                    try:
+                        ra = e.response.headers.get("Retry-After") if e.response else ""
+                        retry_after = int(ra) if ra and str(ra).isdigit() else 0
+                    except Exception:
+                        retry_after = 0
+                    pause = retry_after if retry_after > 0 else 8
+                    logger.warning(
+                        f"[AgnesVideo] 429 rate limit au polling de {video_id[:16]}, "
+                        f"pause {pause}s (la vidéo reste en cours)..."
+                    )
+                    collect_error(
+                        "video", "poll_task",
+                        prompt=curl_cmd,
+                        error_type="RateLimit429",
+                        error_message="HTTP 429 au polling",
+                        status_code=429,
+                        response_body=getattr(e.response, "text", "")[:500],
+                        extra={"video_id": video_id[:16], "pause_s": pause},
+                    )
+                    await asyncio.sleep(pause)
+                    continue
                 if status_code in (400, 404):
                     error_body = ""
                     try:
@@ -397,7 +429,7 @@ class AgnesVideoAPI:
                     )
                     raise RuntimeError(error_msg)
 
-            await asyncio.sleep(interval)
+            await asyncio.sleep(effective_interval)
 
     async def _submit_with_retry(self, payload: dict, mode_desc: str,
                                  on_retry: Optional[Callable] = None) -> str:
@@ -438,6 +470,13 @@ class AgnesVideoAPI:
 
                 if resp.status_code == 429:
                     delay = self.retry_base_delay * (attempt + 1)
+                    # Respecter l'en-tête Retry-After du fournisseur s'il est fourni
+                    try:
+                        ra = resp.headers.get("Retry-After")
+                        if ra and str(ra).isdigit():
+                            delay = max(float(ra), 5.0)
+                    except Exception:
+                        pass
                     logger.warning(
                         f"[AgnesVideo] 429 rate limit on {mode_desc}, "
                         f"retry {attempt + 1}/{self.max_retries} in {delay:.0f}s..."
@@ -628,16 +667,48 @@ class AgnesVideoAPI:
         logger.info(f"[AgnesVideo] {mode_desc}: {prompt[:80]}...")
 
         video_id = await self._submit_with_retry(payload, mode_desc)
+        # Conserve le payload pour l'auto-relance si l'API perd la vidéo pendant
+        # la génération (erreur « introuvable ou expirée » au polling).
+        self._last_payload = payload
+        self._last_mode_desc = mode_desc
         logger.info(f"[AgnesVideo] Video submitted: {video_id[:20]}...")
         return video_id
 
     async def wait_for_video(self, video_id: str, progress_callback=None,
                              max_poll_duration: int = 1800) -> VideoOutput:
-        final = await self._poll_task(
-            video_id,
-            progress_callback=progress_callback,
-            max_poll_duration=max_poll_duration,
-        )
+        try:
+            final = await self._poll_task(
+                video_id,
+                progress_callback=progress_callback,
+                max_poll_duration=max_poll_duration,
+            )
+        except RuntimeError as e:
+            # Auto-relance : si l'API a perdu/expiré la vidéo pendant la
+            # génération, on resoumet une seule fois au lieu de faire échouer
+            # la tâche (l'utilisateur aurait dû relancer manuellement).
+            if "introuvable ou expirée" in str(e) and getattr(self, "_last_payload", None):
+                logger.warning(
+                    f"[AgnesVideo] Vidéo {video_id[:16]} perdue par l'API — "
+                    "relance automatique de la génération (1 seule relance)..."
+                )
+                collect_error(
+                    "video", "submit_video",
+                    prompt=self._last_payload.get("prompt", ""),
+                    error_type="AutoRetryVideoLost",
+                    error_message=f"Vidéo perdue par l'API ({video_id[:16]}), resoumission automatique",
+                    retry_count=1,
+                    extra={"mode": self._last_mode_desc, "old_video_id": video_id[:16]},
+                )
+                video_id = await self._submit_with_retry(
+                    self._last_payload, self._last_mode_desc
+                )
+                final = await self._poll_task(
+                    video_id,
+                    progress_callback=progress_callback,
+                    max_poll_duration=max_poll_duration,
+                )
+            else:
+                raise
 
         video_url = (
             final.get("remixed_from_video_id")

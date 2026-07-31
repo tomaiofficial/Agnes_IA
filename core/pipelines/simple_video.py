@@ -272,15 +272,30 @@ class SimpleVideoPipeline(BasePipeline):
                 return video_path
 
             final_dur = max(v_dur, a_dur)
+            # v7.2: Durée maximale garantie 15 s (reels) — une narration trop longue
+            # est tronquée proprement au lieu de rallonger la vidéo au-delà de 15 s.
+            _MAX_REEL_DURATION = 15.0
+            if final_dur > _MAX_REEL_DURATION:
+                logger.info(
+                    f"[Simple] Narration dépasse {_MAX_REEL_DURATION:.0f}s "
+                    f"({final_dur:.1f}s) — troncature à {_MAX_REEL_DURATION:.0f}s"
+                )
+                final_dur = _MAX_REEL_DURATION
             logger.info(f"[Simple] Overlay: video={v_dur:.3f}s audio={a_dur:.3f}s final={final_dur:.3f}s")
 
             # Build filter_complex chain
             filters = []
             needs_apad = a_dur > 0 and a_dur < final_dur - 0.1
+            needs_atrim = a_dur > final_dur + 0.1
             needs_tpad = v_dur < final_dur - 0.1
 
             # Audio: pad + loudnorm (consistent volume, no clipping)
-            if needs_apad:
+            if needs_atrim:
+                filters.append(
+                    f"[1:a]atrim=0:{final_dur:.3f},asetpts=PTS-STARTPTS,"
+                    f"loudnorm=I=-16:LRA=11:TP=-1.5[a]"
+                )
+            elif needs_apad:
                 pad_dur = final_dur - a_dur
                 filters.append(f"[1:a]apad=pad_dur={pad_dur:.3f},loudnorm=I=-16:LRA=11:TP=-1.5[a]")
             elif a_dur > 0:

@@ -2360,6 +2360,22 @@ def _extract_duration(state):
     return 0
 
 
+def _probe_video_duration(path: str) -> float:
+    """Retourne la durée RÉELLE de la vidéo (ffprobe), 0.0 si indisponible."""
+    try:
+        import subprocess, json
+        r = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", path],
+            capture_output=True, text=True, timeout=15,
+        )
+        if not r.stdout:
+            return 0.0
+        data = json.loads(r.stdout)
+        return float(data.get("format", {}).get("duration", 0) or 0)
+    except Exception:
+        return 0.0
+
+
 def _community_error(e: Exception, fallback_detail: str) -> HTTPException:
     """Convertit les erreurs de la couche de stockage en HTTPException propres."""
     if isinstance(e, KeyError):
@@ -2410,7 +2426,7 @@ async def publish_video(task_id: str, request: Request, user_id: str = Header(de
             }
         raise HTTPException(status_code=400, detail="Task has no final video file")
     prompt = _extract_display_prompt(state)
-    duration = _extract_duration(state)
+    duration = _probe_video_duration(state.final_video_file) or _extract_duration(state)
     resolution = f"{state.video_width}x{state.video_height}"
     try:
         result = get_community_store().publish(

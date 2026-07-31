@@ -457,6 +457,7 @@
               <option value="12">12s</option>
               <option value="15">15s (max)</option>
             </select>
+            <p id="s_duration_note" class="hidden text-[10px] sm:text-[11px] text-amber-400/90 mt-1.5">⚠️ En Full HD, la durée maxi réelle est d'environ 11 s (limite API) : la vidéo sera raccourcie.</p>
           </div>
           <div>
             <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Résolution</label>
@@ -530,7 +531,7 @@
           <div class="border-t border-white/5 pt-3 mt-3">
             <div class="flex items-center gap-2 min-h-[44px]">
               <label class="relative inline-flex items-center cursor-pointer">
-                <input id="s_quality_boost" type="checkbox" class="sr-only peer">
+                <input id="s_quality_boost" type="checkbox" class="sr-only peer" checked>
                 <div class="w-10 sm:w-9 h-6 sm:h-5 bg-gray-700 rounded-full peer peer-checked:bg-purple-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-1 after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
               </label>
               <span class="text-[11px] sm:text-xs text-gray-400">✨ Amélioration qualité HD (1080p + audio)</span>
@@ -1859,6 +1860,33 @@ function toggleAudioOptions() {
 document.addEventListener('DOMContentLoaded', () => {
   toggleAudioOptions();
   document.getElementById('s_audio_enabled').addEventListener('change', toggleAudioOptions);
+
+  // Qualité HD par défaut : synchronise la résolution et la note de durée réelle
+  function syncResolutionToBoost() {
+    const boost = document.getElementById('s_quality_boost').checked;
+    const sel = document.getElementById('s_resolution');
+    if (boost) {
+      if (sel.value === '768x1152') sel.value = '1080x1920';
+      else if (sel.value === '1152x768') sel.value = '1920x1080';
+    } else {
+      if (sel.value === '1080x1920') sel.value = '768x1152';
+      else if (sel.value === '1920x1080') sel.value = '1152x768';
+    }
+    updateDurationNote();
+  }
+  function updateDurationNote() {
+    const boost = document.getElementById('s_quality_boost').checked;
+    const res = document.getElementById('s_resolution').value;
+    // En tier 1080p (pixels > 720p), l'API plafonne à 169 images ≈ 11 s
+    const hd = boost || res === '1080x1920' || res === '1920x1080' || res === '1024x1024';
+    const dur = parseInt(document.getElementById('s_duration').value, 10);
+    const note = document.getElementById('s_duration_note');
+    note.classList.toggle('hidden', !(hd && (dur === 12 || dur === 15)));
+  }
+  document.getElementById('s_quality_boost').addEventListener('change', syncResolutionToBoost);
+  document.getElementById('s_resolution').addEventListener('change', updateDurationNote);
+  document.getElementById('s_duration').addEventListener('change', updateDurationNote);
+  syncResolutionToBoost();
 });
 
 // ═══════════════════════════════════════════════════

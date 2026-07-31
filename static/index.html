@@ -280,6 +280,82 @@
     .header-title { font-size: 1rem !important; }
     .header-nav a { font-size: 0.7rem !important; padding: 0.3rem 0.4rem !important; }
   }
+  /* ═══════ Galerie — Feed plein écran (style Reels/TikTok) ═══════ */
+  .feed-scroll {
+    height: 100dvh;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    scrollbar-width: none;
+    background: #000;
+  }
+  .feed-scroll::-webkit-scrollbar { display: none; }
+  .feed-slide {
+    position: relative;
+    height: 100dvh;
+    scroll-snap-align: start;
+    background: #000;
+    overflow: hidden;
+  }
+  .feed-video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+  }
+  .feed-gradient {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 45%;
+    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+    pointer-events: none;
+    z-index: 5;
+  }
+  .feed-actions {
+    position: absolute;
+    right: 10px;
+    bottom: 96px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    z-index: 10;
+  }
+  .feed-action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    color: #fff;
+    font-size: 10px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    min-width: 52px;
+    min-height: 40px;
+    cursor: pointer;
+  }
+  .feed-action-icon {
+    font-size: 24px;
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.7));
+  }
+  .feed-play-badge {
+    width: 64px; height: 64px;
+    border-radius: 9999px;
+    background: rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+  }
+  .feed-comments-panel {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: min(380px, 92vw);
+    background: rgba(10,10,14,0.97);
+    border-left: 1px solid rgba(255,255,255,0.08);
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+  }
+  .feed-comments-panel.open { transform: translateX(0); }
 </style>
 </head>
 <body class="text-gray-100 min-h-screen font-sans overflow-x-hidden" style="touch-action: manipulation; background: radial-gradient(ellipse at 50% 0%, rgba(30,64,175,0.12) 0%, transparent 60%), radial-gradient(ellipse at 80% 100%, rgba(245,158,11,0.06) 0%, transparent 50%), #030712;">
@@ -592,38 +668,25 @@
       <button onclick="switchMode('video')" class="mt-4 w-full py-3 sm:py-2.5 rounded-lg text-sm font-medium bg-gray-800/50 border border-gray-700/50 text-gray-400 transition hover:bg-gray-700/50 min-h-[44px]">← Retour</button>
     </div>
 
-    <!-- Gallery Panel -->
-    <div id="panel-gallery" class="hidden mt-4 max-w-5xl mx-auto">
-      <div class="flex items-center justify-between mb-3 sm:mb-5 gap-2">
-        <h2 class="text-base sm:text-lg font-semibold text-gray-100">✨ Galerie communautaire</h2>
-        <button onclick="switchMode('video')" class="px-3 sm:px-4 py-2.5 sm:py-2 rounded-xl text-xs font-medium bg-white/5 border border-white/10 text-gray-400 transition hover:bg-white/10 hover:text-gray-200 whitespace-nowrap min-h-[40px]">+ Créer</button>
+    <!-- Gallery Panel — Feed plein écran (style Reels/TikTok) -->
+    <div id="panel-gallery" class="hidden fixed inset-0 z-40 bg-black">
+      <!-- Header du feed -->
+      <div class="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/70 to-transparent pointer-events-none">
+        <h2 class="text-sm font-semibold text-white drop-shadow pointer-events-auto">✨ Galerie</h2>
+        <button onclick="switchMode('video')" class="pointer-events-auto px-3 py-2 rounded-xl text-xs font-medium bg-white/10 border border-white/15 text-gray-200 hover:bg-white/20 transition min-h-[40px]">+ Créer</button>
       </div>
-      <div id="gallery-container" class="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
-        <p class="text-gray-500 text-xs sm:text-sm text-center py-8 col-span-full">Aucune vidéo publiée pour le moment.<br>Soyez le premier à partager votre création !</p>
-      </div>
-    </div>
-
-    <!-- Gallery Lightbox (plays video fullscreen) -->
-    <div id="gallery-lightbox" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/85 backdrop-blur-sm" onclick="closeGalleryLightbox(event)">
-      <div class="relative w-full h-full sm:max-w-3xl sm:mx-4 sm:max-h-[90vh] overflow-y-auto flex flex-col justify-center px-2 sm:px-0" onclick="event.stopPropagation()">
-        <button onclick="closeGalleryLightbox()" class="self-end sm:absolute sm:-top-10 sm:right-0 text-gray-400 hover:text-white text-sm px-3 py-2 sm:py-1 rounded-lg bg-white/5 hover:bg-white/10 transition mb-2 sm:mb-0 min-h-[40px]">&times; Fermer</button>
-        <video id="lightbox-video" class="w-full rounded-xl sm:rounded-2xl shadow-2xl max-h-[50vh] sm:max-h-none" controls autoplay></video>
-        <div id="lightbox-meta" class="mt-2 sm:mt-3 flex items-center justify-between text-xs sm:text-sm text-gray-300">
-          <span id="lightbox-author"></span>
-          <div class="flex items-center gap-2 sm:gap-3">
-            <button id="lb-like-btn" class="flex items-center gap-1 text-gray-400 hover:text-pink-300 transition-colors min-h-[36px]"></button>
-            <span class="text-gray-500">💬 <span id="lb-comment-count">0</span></span>
-          </div>
+      <!-- Liste des slides (scroll vertical plein écran) -->
+      <div id="feed-container" class="feed-scroll"></div>
+      <!-- Panneau commentaires (glisse depuis la droite) -->
+      <div id="feed-comments-panel" class="feed-comments-panel">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-white/10">
+          <h3 id="feed-comments-title" class="text-sm font-semibold text-gray-100">💬 Commentaires</h3>
+          <button onclick="closeFeedComments()" class="text-gray-400 hover:text-white text-2xl px-2 min-h-[40px]">&times;</button>
         </div>
-        <!-- Lightbox comment section -->
-        <div class="mt-2 sm:mt-3 border-t border-white/5 pt-2 sm:pt-3 pb-4">
-          <div class="flex gap-2 mb-2 sm:mb-3">
-            <input id="lb-comment-input" type="text" placeholder="Ajouter un commentaire..." class="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-3 sm:py-2 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500/50 min-h-[44px]">
-            <button onclick="addGalleryComment(lbCurrentVideoId)" class="px-4 py-3 sm:py-2 rounded-lg text-xs font-medium bg-blue-600/80 text-white hover:bg-blue-500 transition disabled:opacity-40 min-h-[44px]" id="lb-comment-btn">Envoyer</button>
-          </div>
-          <div id="lb-comments-list" class="space-y-2 max-h-32 sm:max-h-48 overflow-y-auto">
-            <p class="text-xs text-gray-600 text-center py-2">Chargement...</p>
-          </div>
+        <div id="feed-comments-list" class="flex-1 overflow-y-auto px-4 py-3 space-y-3"></div>
+        <div class="flex gap-2 p-3 border-t border-white/10">
+          <input id="feed-comment-input" type="text" placeholder="Ajouter un commentaire..." class="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500/50 min-h-[44px]">
+          <button id="feed-comment-btn" onclick="addFeedComment(feedCommentsOpen)" class="px-4 rounded-lg text-xs font-medium bg-blue-600/80 text-white hover:bg-blue-500 transition disabled:opacity-40 min-h-[44px]">Envoyer</button>
         </div>
       </div>
     </div>
@@ -770,7 +833,7 @@ function switchMode(mode) {
   if (mode === 'list') loadTaskList();
   if (mode !== 'list' && taskListTimer) { clearInterval(taskListTimer); taskListTimer = null; }
   if (mode === 'list' && !taskListTimer) taskListTimer = setInterval(loadTaskList, 5000);
-  if (mode === 'gallery') loadGallery();
+  if (mode === 'gallery') openGalleryFeed(); else closeGalleryFeed();
 }
 
 function onSimpleModeChange() {
@@ -1423,153 +1486,163 @@ async function publishVideo() {
   }
 }
 
+// ═══════════════════════════════════════════════════
+// Galerie — Feed plein écran (style Reels/TikTok)
+// ═══════════════════════════════════════════════════
+let feedObserver = null;
+let feedVideos = [];         // dernière liste de vidéos chargée
+let feedCommentsOpen = null; // video_id du panneau commentaires ouvert
+
+function openGalleryFeed() {
+  const panel = document.getElementById('panel-gallery');
+  panel.classList.remove('hidden');
+  panel.style.display = 'block';
+  document.body.style.overflow = 'hidden';
+  loadGallery();
+}
+
+function closeGalleryFeed() {
+  if (feedObserver) { feedObserver.disconnect(); feedObserver = null; }
+  document.querySelectorAll('.feed-video').forEach(v => { v.pause(); v.removeAttribute('src'); });
+  const panel = document.getElementById('panel-gallery');
+  panel.classList.add('hidden');
+  panel.style.display = 'none';
+  document.body.style.overflow = '';
+  closeFeedComments();
+}
+
 async function loadGallery() {
-  const container = document.getElementById('gallery-container');
-  container.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Chargement...</p>';
+  const container = document.getElementById('feed-container');
+  container.innerHTML = '<div class="flex items-center justify-center h-full"><p class="text-gray-400 text-sm">Chargement...</p></div>';
   try {
     const r = await fetchWithAuth(API_BASE + '/api/community/videos?per_page=50');
     const d = await r.json();
     if (!d.videos || d.videos.length === 0) {
-      container.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Aucune vidéo publiée pour le moment.<br>Soyez le premier à partager votre création !</p>';
+      container.innerHTML = '<div class="flex flex-col items-center justify-center h-full text-center px-6"><p class="text-gray-400 text-sm mb-2">Aucune vidéo publiée pour le moment.</p><p class="text-gray-600 text-xs">Soyez le premier à partager votre création !</p><button onclick="closeGalleryFeed()" class="mt-6 px-4 py-2 rounded-lg text-xs font-medium bg-white/10 text-gray-200 hover:bg-white/20 min-h-[44px]">✕ Fermer</button></div>';
       return;
     }
     container.innerHTML = '';
-    d.videos.forEach(v => {
-      container.appendChild(createVideoCard(v));
-    });
+    feedVideos = d.videos;
+    d.videos.forEach(v => container.appendChild(buildFeedSlide(v)));
+    setupFeedObserver();
   } catch(e) {
-    container.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Erreur de chargement : ' + e.message + '</p>';
+    container.innerHTML = '<div class="flex flex-col items-center justify-center h-full"><p class="text-gray-400 text-sm">Erreur de chargement : ' + escapeHtml(e.message) + '</p></div>';
   }
 }
 
-function createVideoCard(v) {
-  const card = document.createElement('div');
-  card.className = 'group relative rounded-xl overflow-hidden bg-gray-900/80 border border-white/5 hover:border-blue-500/30 transition-all duration-300 cursor-pointer';
-  card.style.aspectRatio = '9 / 16';
-  card.style.maxHeight = '420px';
+function buildFeedSlide(v) {
+  const slide = document.createElement('div');
+  slide.className = 'feed-slide';
+  slide.dataset.videoId = v.id;
 
-  // Video thumbnail (poster frame via preload)
+  // Vidéo plein écran (object-fit: contain)
   const video = document.createElement('video');
+  video.className = 'feed-video';
   video.src = v.video_url;
-  video.className = 'absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105';
-  video.preload = 'metadata';
   video.muted = true;
   video.loop = true;
   video.playsInline = true;
-  // Load first frame as thumbnail
-  video.addEventListener('loadedmetadata', () => { video.currentTime = 0.5; });
-  card.appendChild(video);
+  video.preload = 'metadata';
+  slide.appendChild(video);
 
-  // Hover preview (comme un feed vidéo) : lecture muette après un court délai
-  let hoverTimer = null;
-  card.addEventListener('mouseenter', () => {
-    hoverTimer = setTimeout(() => {
-      video.currentTime = 0.5;
-      video.play().catch(() => {});
-    }, 350);
-  });
-  card.addEventListener('mouseleave', () => {
-    if (hoverTimer) clearTimeout(hoverTimer);
-    video.pause();
-    video.currentTime = 0.5;
-  });
+  // Dégradé bas
+  const grad = document.createElement('div');
+  grad.className = 'feed-gradient';
+  slide.appendChild(grad);
 
-  // Play overlay (shows on hover)
-  const playOverlay = document.createElement('div');
-  playOverlay.className = 'absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-all duration-300';
-  playOverlay.innerHTML = '<div class="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 group-hover:scale-110"><svg class="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>';
-  card.appendChild(playOverlay);
+  // Info bas-gauche (auteur + prompt + temps)
+  const info = document.createElement('div');
+  info.className = 'absolute bottom-0 left-0 right-0 p-4 pb-6 z-10';
+  info.innerHTML = '<div class="flex items-center gap-2 mb-1.5"><span class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-xs text-white font-bold flex-shrink-0">' + escapeHtml((v.author || 'A').charAt(0).toUpperCase()) + '</span><span class="text-sm font-semibold text-white drop-shadow">' + escapeHtml(v.author || 'Anonyme') + '</span><span class="text-[10px] text-gray-400 ml-1">' + timeAgo(v.published_at) + '</span></div>' +
+    (v.prompt ? '<p class="text-xs text-gray-200/90 max-w-[70%] drop-shadow">' + escapeHtml(v.prompt) + '</p>' : '');
+  slide.appendChild(info);
 
-  // Bottom gradient overlay
-  const bottomOverlay = document.createElement('div');
-  bottomOverlay.className = 'absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 via-black/30 to-transparent';
-  card.appendChild(bottomOverlay);
+  // Barre d'actions droite (side rail, comme Reels/TikTok)
+  const actions = document.createElement('div');
+  actions.className = 'feed-actions';
 
-  // Author + time row
-  const authorRow = document.createElement('div');
-  authorRow.className = 'flex items-center gap-2 mb-1';
-  authorRow.innerHTML = '<span class="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-[10px] text-white font-bold flex-shrink-0">' + v.author.charAt(0).toUpperCase() + '</span>' +
-    '<span class="text-xs font-medium text-gray-200 truncate">' + escapeHtml(v.author) + '</span>' +
-    '<span class="text-[10px] text-gray-500 ml-auto">' + timeAgo(v.published_at) + '</span>';
-  bottomOverlay.appendChild(authorRow);
+  const likeBtn = document.createElement('button');
+  likeBtn.className = 'feed-action';
+  likeBtn.id = 'feed-like-btn-' + v.id;
+  likeBtn.innerHTML = '<div class="feed-action-icon">' + (v.liked ? '❤️' : '🤍') + '</div><span id="feed-like-count-' + v.id + '">' + (v.likes || 0) + '</span>';
+  likeBtn.onclick = (e) => { e.stopPropagation(); toggleFeedLike(v.id); };
+  actions.appendChild(likeBtn);
 
-  // Prompt line
-  const promptLine = document.createElement('p');
-  promptLine.className = 'text-[11px] text-gray-400 truncate';
-  promptLine.textContent = (v.prompt || '').substring(0, 60) + ((v.prompt || '').length > 60 ? '…' : '');
-  if (v.prompt) bottomOverlay.appendChild(promptLine);
+  const commentBtn = document.createElement('button');
+  commentBtn.className = 'feed-action';
+  commentBtn.innerHTML = '<div class="feed-action-icon">💬</div><span id="feed-comment-count-' + v.id + '">' + (v.comments_count || 0) + '</span>';
+  commentBtn.onclick = (e) => { e.stopPropagation(); openFeedComments(v); };
+  actions.appendChild(commentBtn);
 
-  // Durée (badge bas-droite)
   if (v.duration && v.duration > 0) {
-    const durBadge = document.createElement('span');
-    durBadge.className = 'absolute bottom-2 right-2 px-1.5 py-0.5 rounded-md bg-black/70 text-[10px] font-semibold text-white backdrop-blur-sm';
-    durBadge.textContent = fmtDuration(v.duration);
-    card.appendChild(durBadge);
+    const dur = document.createElement('div');
+    dur.className = 'feed-action';
+    dur.innerHTML = '<div class="feed-action-icon">⏱️</div><span>' + fmtDuration(v.duration) + '</span>';
+    actions.appendChild(dur);
   }
 
-  // Action bar (like + delete) — visible on hover
-  const actionBar = document.createElement('div');
-  actionBar.className = 'absolute top-2 right-2 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300';
-  
-  const likeBtn = document.createElement('button');
-  likeBtn.id = 'like-btn-' + v.id;
-  likeBtn.className = 'flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs backdrop-blur-sm transition-all bg-black/40 text-gray-300 hover:text-pink-300 hover:bg-pink-500/20';
-  likeBtn.innerHTML = (v.liked ? '❤️' : '🤍') + ' <span id="like-count-' + v.id + '">' + (v.likes || 0) + '</span>';
-  likeBtn.onclick = (e) => { e.stopPropagation(); toggleLike(v.id); };
-  actionBar.appendChild(likeBtn);
-
-  // Suppression réservée au créateur de la publication (user_id) — les
-  // autres visiteurs ne voient aucun bouton de suppression.
+  // Suppression réservée au créateur de la publication (user_id)
   if (v.user_id && v.user_id === agnesUserId) {
     const delBtn = document.createElement('button');
-    delBtn.className = 'flex items-center justify-center px-2.5 py-1.5 rounded-lg text-xs backdrop-blur-sm transition-all bg-black/40 text-gray-500 hover:text-red-400 hover:bg-red-500/20';
-    delBtn.innerHTML = '🗑';
+    delBtn.className = 'feed-action';
     delBtn.title = 'Supprimer (créateur)';
+    delBtn.innerHTML = '<div class="feed-action-icon">🗑</div><span>Suppr.</span>';
     delBtn.onclick = (e) => { e.stopPropagation(); deleteGalleryVideo(v.id); };
-    actionBar.appendChild(delBtn);
+    actions.appendChild(delBtn);
   }
+  slide.appendChild(actions);
 
-  card.appendChild(actionBar);
+  // Badge lecture/pause au tap
+  const playBadge = document.createElement('div');
+  playBadge.className = 'absolute inset-0 z-[6] flex items-center justify-center pointer-events-none';
+  playBadge.innerHTML = '<div class="feed-play-badge hidden">▶</div>';
+  slide.appendChild(playBadge);
 
-  // Click to play in lightbox
-  card.onclick = () => openGalleryLightbox(v);
+  // Tap = lecture / pause ; actions = stopPropagation
+  slide.addEventListener('click', (e) => {
+    if (e.target.closest('.feed-actions')) return;
+    if (video.paused) { video.play().catch(() => {}); } else { video.pause(); }
+  });
+  video.addEventListener('play', () => { const b = playBadge.querySelector('.feed-play-badge'); if (b) b.classList.add('hidden'); });
+  video.addEventListener('pause', () => { const b = playBadge.querySelector('.feed-play-badge'); if (b) b.classList.remove('hidden'); });
+  // Première frame comme vignette
+  video.addEventListener('loadedmetadata', () => { if (video.paused) video.currentTime = 0.5; });
 
-  return card;
+  return slide;
 }
 
-// Gallery lightbox
-let lbCurrentVideoId = null;
-
-function openGalleryLightbox(v) {
-  lbCurrentVideoId = v.id;
-  const lb = document.getElementById('gallery-lightbox');
-  const vid = document.getElementById('lightbox-video');
-  vid.src = v.video_url;
-  vid.load();
-  vid.play();
-  document.getElementById('lightbox-author').innerHTML = '👤 ' + escapeHtml(v.author) + ' · ' + timeAgo(v.published_at);
-  const lbLikeBtn = document.getElementById('lb-like-btn');
-  lbLikeBtn.innerHTML = (v.liked ? '❤️' : '🤍') + ' <span id="lb-like-count">' + (v.likes || 0) + '</span>';
-  lbLikeBtn.onclick = () => { toggleLike(v.id); };
-  document.getElementById('lb-comment-count').textContent = v.comments_count || 0;
-  lb.classList.remove('hidden');
-  lb.style.display = 'flex';
-  loadLightboxComments(v.id);
+function setupFeedObserver() {
+  if (feedObserver) feedObserver.disconnect();
+  feedObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const video = entry.target.querySelector('.feed-video');
+      if (!video) return;
+      if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
+        video.play().catch(() => {});
+      } else {
+        video.pause();
+      }
+    });
+  }, { threshold: 0.55 });
+  document.querySelectorAll('.feed-slide').forEach(s => feedObserver.observe(s));
 }
 
-function closeGalleryLightbox(e) {
-  if (e && e.target !== e.currentTarget) return;
-  const lb = document.getElementById('gallery-lightbox');
-  const vid = document.getElementById('lightbox-video');
-  vid.pause();
-  vid.src = '';
-  lbCurrentVideoId = null;
-  lb.classList.add('hidden');
-  lb.style.display = 'none';
+// Panneau de commentaires du feed (glisse depuis la droite)
+function openFeedComments(v) {
+  feedCommentsOpen = v.id;
+  document.getElementById('feed-comments-title').textContent = '💬 Commentaires (' + (v.comments_count || 0) + ')';
+  document.getElementById('feed-comments-panel').classList.add('open');
+  loadFeedComments(v.id);
 }
 
-async function loadLightboxComments(videoId) {
-  const list = document.getElementById('lb-comments-list');
+function closeFeedComments() {
+  feedCommentsOpen = null;
+  const panel = document.getElementById('feed-comments-panel');
+  if (panel) panel.classList.remove('open');
+}
+
+async function loadFeedComments(videoId) {
+  const list = document.getElementById('feed-comments-list');
   list.innerHTML = '<div class="text-center py-3"><div class="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin mx-auto"></div></div>';
   try {
     const r = await fetchWithAuth(API_BASE + '/api/community/videos/' + videoId + '/comments');
@@ -1591,10 +1664,10 @@ async function loadLightboxComments(videoId) {
   }
 }
 
-async function addGalleryComment(videoId) {
+async function addFeedComment(videoId) {
   if (!videoId) return;
-  const input = document.getElementById('lb-comment-input');
-  const btn = document.getElementById('lb-comment-btn');
+  const input = document.getElementById('feed-comment-input');
+  const btn = document.getElementById('feed-comment-btn');
   const text = input.value.trim();
   if (!text) return;
   btn.disabled = true;
@@ -1604,9 +1677,9 @@ async function addGalleryComment(videoId) {
     const d = await r.json();
     if (d.ok) {
       input.value = '';
-      loadLightboxComments(videoId);
-      const countEl = document.getElementById('lb-comment-count');
-      countEl.textContent = parseInt(countEl.textContent) + 1;
+      loadFeedComments(videoId);
+      const countEl = document.getElementById('feed-comment-count-' + videoId);
+      if (countEl) countEl.textContent = (parseInt(countEl.textContent) || 0) + 1;
     }
   } catch(e) {
     showToast('Erreur: ' + e.message, 3000);
@@ -1615,20 +1688,14 @@ async function addGalleryComment(videoId) {
   btn.textContent = 'Envoyer';
 }
 
-async function toggleLike(videoId) {
+async function toggleFeedLike(videoId) {
   try {
     const r = await fetchWithAuth(API_BASE + '/api/community/videos/' + videoId + '/like', {method: 'POST'});
     const d = await r.json();
     if (!d.ok) throw new Error(d.detail || 'Échec');
-    // Update card button (if visible)
-    const btn = document.getElementById('like-btn-' + videoId);
+    const btn = document.getElementById('feed-like-btn-' + videoId);
     if (btn) {
-      btn.innerHTML = (d.liked ? '❤️' : '🤍') + ' <span id="like-count-' + videoId + '">' + d.likes + '</span>';
-    }
-    // Update lightbox button
-    const lbLikeBtn = document.getElementById('lb-like-btn');
-    if (lbLikeBtn && lbCurrentVideoId === videoId) {
-      lbLikeBtn.innerHTML = (d.liked ? '❤️' : '🤍') + ' <span id="lb-like-count">' + d.likes + '</span>';
+      btn.innerHTML = '<div class="feed-action-icon">' + (d.liked ? '❤️' : '🤍') + '</div><span id="feed-like-count-' + videoId + '">' + d.likes + '</span>';
     }
   } catch(e) {
     showToast('Erreur like : ' + e.message, 3000);
@@ -1733,7 +1800,11 @@ async function deleteGalleryVideo(videoId) {
     const d = await r.json();
     if (!d.ok) throw new Error(d.detail || 'Échec');
     showToast('🗑️ Vidéo supprimée de la galerie', 3000);
-    loadGallery();
+    if (feedCommentsOpen === videoId) closeFeedComments();
+    const slide = document.querySelector('.feed-slide[data-video-id="' + videoId + '"]');
+    if (slide) slide.remove();
+    const container = document.getElementById('feed-container');
+    if (container && !container.querySelector('.feed-slide')) loadGallery();
   } catch(e) {
     showToast('Erreur : ' + e.message, 3000);
   }

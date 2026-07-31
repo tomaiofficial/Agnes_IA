@@ -214,7 +214,7 @@ class AgnesVideoAPI:
         return fallback_nf, round(fallback_nf / d) if d else 15
 
     async def _poll_task(self, video_id: str, interval: int = 3,
-                          max_poll_duration: int = 600,
+                          max_poll_duration: int = 1800,
                           max_consecutive_failures: int = 15,
                           progress_callback=None) -> dict:
         last_status = ""
@@ -593,8 +593,13 @@ class AgnesVideoAPI:
         logger.info(f"[AgnesVideo] Video submitted: {video_id[:20]}...")
         return video_id
 
-    async def wait_for_video(self, video_id: str, progress_callback=None) -> VideoOutput:
-        final = await self._poll_task(video_id, progress_callback=progress_callback)
+    async def wait_for_video(self, video_id: str, progress_callback=None,
+                             max_poll_duration: int = 1800) -> VideoOutput:
+        final = await self._poll_task(
+            video_id,
+            progress_callback=progress_callback,
+            max_poll_duration=max_poll_duration,
+        )
 
         video_url = (
             final.get("remixed_from_video_id")

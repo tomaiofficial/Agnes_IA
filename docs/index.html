@@ -711,6 +711,7 @@ let _progressStartTime = 0;
 let _prevPct = 0;
 let _prevTime = 0;
 let _smoothedRemaining = null;
+let _elapsedTicker = null;
 
 // Steps
 const STEPS = {
@@ -1044,10 +1045,21 @@ async function startPolling(taskId) {
   _smoothedRemaining = null;
   await pollTaskProgress(taskId);
   pollTimer = setInterval(() => pollTaskProgress(taskId), POLL_INTERVAL);
+  // Ticker d'élapsed à 1s : le compteur reste vivant même si le % ne bouge pas
+  if (_elapsedTicker) clearInterval(_elapsedTicker);
+  _elapsedTicker = setInterval(() => {
+    if (!isTaskRunning || !_progressStartTime) return;
+    const el = document.getElementById('progress-elapsed');
+    if (!el) return;
+    const s = Math.floor((Date.now() - _progressStartTime) / 1000);
+    const m = Math.floor(s / 60);
+    el.textContent = (m > 0 ? m + 'min ' : '') + (s % 60) + 's écoulé';
+  }, 1000);
 }
 
 function stopPolling() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  if (_elapsedTicker) { clearInterval(_elapsedTicker); _elapsedTicker = null; }
 }
 
 async function pollTaskProgress(taskId) {
@@ -1090,6 +1102,10 @@ async function pollTaskProgress(taskId) {
     // Update step name
     const step = (state.current_step || '').replace(/^step_/, '');
     const status = state.current_status || '';
+    // Tant que l'ETA ne peut pas être calculé (progrès gelé), afficher "en cours"
+    if (_smoothedRemaining === null && status === 'running' && pct > 0) {
+      document.getElementById('progress-remaining').textContent = '— en cours...';
+    }
     if (step) {
       const stepLabel = STEPS.simple.find(s => s.key === step);
       if (stepLabel) {

@@ -8,6 +8,7 @@ import asyncio
 import logging
 import os
 import re
+import time
 from typing import Callable, Optional
 
 from core.api.agnes_video import AgnesVideoAPI
@@ -94,6 +95,27 @@ class SimpleVideoPipeline(BasePipeline):
             logger.info("[Simple] Video already exists, skipping")
             return video_path
 
+        # 轮询超时随视频时长缩放（API 渲染约为实时 10-20x，长视频需要更多时间）
+        poll_timeout = max(900, (self._state.duration or 5) * 120)
+
+        # 进度回调：将 API 进度 (0-100) 归一化为前端 0.3-0.9。
+        # Agnes API 在渲染期间经常只返回 progress=0 直到完成，
+        # 因此叠加一个时间驱动的“蠕变”分量，让进度条保持移动，
+        # 避免 UI 长时间冻结在 30%。
+        _wait_started = time.time()
+
+        async def _api_progress(status, progress, curl_cmd):
+            elapsed_min = max(0.0, (time.time() - _wait_started) / 60.0)
+            creep = min(0.35, elapsed_min * 0.10)  # +10%/min, plafonné à +35%
+            normalized = min(0.85, 0.3 + (progress / 100.0) * 0.6 + creep)
+            if status in ("queued", "QUEUED", "") and progress == 0:
+                msg = "En attente dans la file du serveur Agnes..."
+            elif progress > 0:
+                msg = f"Génération vidéo... {progress}%"
+            else:
+                msg = f"Génération vidéo en cours... ({elapsed_min:.0f} min écoulée)"
+            await self._emit("video_gen", "running", msg, normalized)
+
         # 尝试从 task.json 恢复（resume 场景）
         saved_video_id = self._load_task_json(self.working_dir)
         if saved_video_id:
@@ -101,7 +123,11 @@ class SimpleVideoPipeline(BasePipeline):
             self._state.video_id = saved_video_id
             self.task_manager.update_state(video_id=saved_video_id)
             await self._emit("video_gen", "running", f"Génération vidéo {saved_video_id[:16]}...", 0.3)
-            video_output = await self.video_api.wait_for_video(saved_video_id)
+            video_output = await self.video_api.wait_for_video(
+                saved_video_id,
+                progress_callback=_api_progress,
+                max_poll_duration=poll_timeout,
+            )
             video_output.save(video_path)
             return video_path
 
@@ -110,7 +136,11 @@ class SimpleVideoPipeline(BasePipeline):
             logger.info(f"[Simple] Resuming from state video_id: {self._state.video_id}")
             self._save_task_json(self.working_dir, {"video_id": self._state.video_id})
             await self._emit("video_gen", "running", f"Génération vidéo {self._state.video_id[:16]}...", 0.3)
-            video_output = await self.video_api.wait_for_video(self._state.video_id)
+            video_output = await self.video_api.wait_for_video(
+                self._state.video_id,
+                progress_callback=_api_progress,
+                max_poll_duration=poll_timeout,
+            )
             video_output.save(video_path)
             return video_path
 
@@ -153,19 +183,11 @@ class SimpleVideoPipeline(BasePipeline):
 
         await self._emit("video_gen", "running", f"Génération vidéo {video_id[:16]}...", 0.3)
 
-        # Passer le vrai progrès API (0-100%) au frontend
-        async def _api_progress(status, progress, curl_cmd):
-            # progress est 0-100 côté API, normaliser en 0.3-0.9 pour le frontend
-            normalized = 0.3 + (progress / 100.0) * 0.6
-            if status in ("queued", "") and progress == 0:
-                msg = "En attente dans la file..."
-            elif progress > 0:
-                msg = f"Génération vidéo... {progress}%"
-            else:
-                msg = "Préparation..."
-            await self._emit("video_gen", "running", msg, normalized)
-
-        video_output = await self.video_api.wait_for_video(video_id, progress_callback=_api_progress)
+        video_output = await self.video_api.wait_for_video(
+            video_id,
+            progress_callback=_api_progress,
+            max_poll_duration=poll_timeout,
+        )
         video_output.save(video_path)
 
         await self._emit("video_gen", "completed", "Vidéo générée", 0.9)

@@ -72,6 +72,18 @@ class CommunityStore(ABC):
         du fichier vidéo, ou None si introuvable."""
 
     @abstractmethod
+    def find_published(self, task_id: str) -> Optional[dict]:
+        """Retourne la publication la plus récente d'une tâche, ou None.
+
+        Permet de récupérer la vidéo publiée en galerie quand le fichier local
+        de la tâche a disparu (système de fichiers éphémère après redéploiement).
+
+        Returns:
+            {"video_id": str, "video_url": str, "video_target": str} —
+            video_target est l'URL publique (mode distant) ou le chemin local (mode local).
+        """
+
+    @abstractmethod
     def delete(self, video_id: str) -> None:
         """Supprime la vidéo (fichier + métadonnées + likes + commentaires)."""
 

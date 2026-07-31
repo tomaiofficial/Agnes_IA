@@ -424,6 +424,20 @@ class SupabaseCommunityStore(CommunityStore):
             return None
         return self._public_url(meta.get("storage_path") or f"videos/{video_id}.mp4")
 
+    def find_published(self, task_id: str) -> Optional[dict]:
+        res = (
+            _get_client().table("community_videos")
+            .select("*").eq("task_id", task_id)
+            .order("published_at", desc=True).limit(1).execute()
+        )
+        rows = res.data or []
+        if not rows:
+            return None
+        row = rows[0]
+        storage_path = row.get("storage_path") or f"videos/{row['id']}.mp4"
+        url = self._public_url(storage_path)
+        return {"video_id": row["id"], "video_url": url, "video_target": url}
+
     def delete(self, video_id: str) -> None:
         client = _get_client()
         meta = self.get_meta(video_id)

@@ -140,6 +140,21 @@ class LocalCommunityStore(CommunityStore):
             return None
         return video_path
 
+    def find_published(self, task_id: str) -> Optional[dict]:
+        index = self._load_index()
+        for vid, meta in (index.get("videos") or {}).items():
+            if meta.get("task_id") != task_id:
+                continue
+            video_path = os.path.join(self._get_community_dir(), f"{vid}.mp4")
+            if not os.path.exists(video_path):
+                return None
+            return {
+                "video_id": vid,
+                "video_url": f"/api/community/videos/{vid}/video",
+                "video_target": video_path,
+            }
+        return None
+
     def delete(self, video_id: str) -> None:
         index = self._load_index()
         videos = index.get("videos", {})

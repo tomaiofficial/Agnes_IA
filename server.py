@@ -33,7 +33,7 @@ from typing import Dict, List, Optional, Union
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Header
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 
 from core.config import get_api_key, set_api_key, delete_api_key, get_api_key_source, get_working_dir, DURATION_FRAME_MAP, get_workspaces, add_workspace, remove_workspace, set_active_workspace, get_active_workspace, REGRESSION_WORKING_DIR_ENV, get_watermark_config, set_watermark_config, WATERMARK_PROMO_TEXT_ZH, WATERMARK_PROMO_TEXT_EN, get_selected_models, set_selected_models, get_agnes_domain, set_agnes_domain, AGNES_DOMAIN_MAP, get_agnes_api_root
 from core.path_security import safe_join, safe_workspace_path, UnsafePathError
@@ -1050,9 +1050,59 @@ async def serve_video(task_id: str, user_id: str = Header(default="", alias="X-U
     except UnsafePathError:
         raise HTTPException(status_code=404, detail="Video not found")
     video_path = os.path.join(task_dir, "final_video.mp4")
-    if not os.path.exists(video_path):
+    if os.path.exists(video_path):
+        return FileResponse(video_path, media_type="video/mp4")
+    # Fichier local perdu (système de fichiers éphémère après redéploiement) :
+    # on sert la copie publiée en galerie si elle existe.
+    published = _get_published_video(task_id)
+    if published is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    return FileResponse(video_path, media_type="video/mp4")
+    target = published["video_target"]
+    if target.startswith("http://") or target.startswith("https://"):
+        return _proxy_storage_video(target)
+    if os.path.exists(target):
+        return FileResponse(target, media_type="video/mp4")
+    raise HTTPException(status_code=404, detail="Video not found")
+
+
+def _get_published_video(task_id: str) -> Optional[dict]:
+    """Retourne la publication galerie d'une tâche, sans jamais faire échouer
+    la requête si la galerie est indisponible (simple fallback vidéo)."""
+    try:
+        return get_community_store().find_published(task_id)
+    except Exception as e:
+        logger.warning(f"[Video] Récupération publication {task_id} impossible: {e}")
+        return None
+
+
+def _proxy_storage_video(url: str) -> StreamingResponse:
+    """Sert une vidéo stockée dans Supabase Storage en la relayant en streaming.
+
+    On ne peut pas rediriger simplement le navigateur : le frontend charge les
+    vidéos via fetch() avec le header X-User-Id, ce qui déclencherait un
+    préflight CORS vers le domaine Storage."""
+
+    try:
+        upstream = requests.get(url, stream=True, timeout=60)
+    except Exception as e:
+        logger.warning(f"[Video] Proxy storage, connexion impossible: {e}")
+        raise HTTPException(status_code=502, detail="Stockage vidéo indisponible")
+    if upstream.status_code != 200:
+        upstream.close()
+        logger.warning(f"[Video] Proxy storage {upstream.status_code} pour {url}")
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    def _stream():
+        try:
+            for chunk in upstream.iter_content(65536):
+                if chunk:
+                    yield chunk
+        except Exception as e:
+            logger.warning(f"[Video] Proxy storage, flux interrompu: {e}")
+        finally:
+            upstream.close()
+
+    return StreamingResponse(_stream(), media_type="video/mp4")
 
 
 # ═══════════════════════════════════════════════════
@@ -2333,6 +2383,17 @@ async def publish_video(task_id: str, request: Request, user_id: str = Header(de
     if state.user_id and state.user_id != user_id:
         raise HTTPException(status_code=403, detail="Accès refusé : cette tâche appartient à un autre utilisateur")
     if not state.final_video_file or not os.path.exists(state.final_video_file):
+        # Fichier local disparu (redéploiement, FS éphémère) : si la vidéo a déjà
+        # été publiée en galerie, on la renvoie telle quelle (idempotent).
+        existing = _get_published_video(task_id)
+        if existing:
+            logger.info(f"[Community] Tâche {task_id}: déjà publiée ({existing['video_id']}), fichier local absent")
+            return {
+                "ok": True,
+                "video_id": existing["video_id"],
+                "video_url": existing["video_url"],
+                "already_published": True,
+            }
         raise HTTPException(status_code=400, detail="Task has no final video file")
     prompt = _extract_display_prompt(state)
     duration = _extract_duration(state)

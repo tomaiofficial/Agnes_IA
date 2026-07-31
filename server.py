@@ -2420,6 +2420,7 @@ async def publish_video(task_id: str, request: Request, user_id: str = Header(de
             duration=duration,
             resolution=resolution,
             video_path=state.final_video_file,
+            user_id=user_id,
         )
     except Exception as e:
         raise _community_error(e, "Publication impossible")
@@ -2500,12 +2501,18 @@ async def serve_community_video(video_id: str):
 
 
 @app.delete("/api/community/videos/{video_id}")
-async def delete_community_video(video_id: str):
-    """Supprimer une vidéo publiée de la galerie (fichier + métadonnées + likes + commentaires)."""
+async def delete_community_video(video_id: str, user_id: str = Header(default="", alias="X-User-Id")):
+    """Supprimer une vidéo publiée de la galerie (fichier + métadonnées + likes + commentaires).
+
+    Réservé au créateur de la publication : le header X-User-Id doit
+    correspondre au user_id enregistré à la publication (403 sinon).
+    """
     try:
-        get_community_store().delete(video_id)
+        get_community_store().delete(video_id, user_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Video not found in gallery")
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         raise _community_error(e, "Suppression impossible")
     logger.info(f"[Community] Video {video_id} deleted (storage={storage_mode()})")

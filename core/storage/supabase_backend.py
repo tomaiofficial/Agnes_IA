@@ -81,6 +81,10 @@ CREATE TABLE IF NOT EXISTS tasks (
 -- Migration idempotente (table déjà créée avant l'ajout de user_id) :
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT '';
 
+-- Migration idempotente : user_id du créateur d'une publication galerie
+-- ('' = publication héritée, créée avant l'isolation par créateur).
+ALTER TABLE community_videos ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT '';
+
 -- Configuration applicative (clé API, filigrane, modèles, domaine, workspaces…)
 -- : survit aux redéploiements Render (miroir + restauration au démarrage)
 CREATE TABLE IF NOT EXISTS app_config (
@@ -249,7 +253,8 @@ class SupabaseCommunityStore(CommunityStore):
         except Exception:
             return f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/public/{SUPABASE_STORAGE_BUCKET}/{storage_path}"
 
-    def publish(self, task_id, author, prompt, duration, resolution, video_path) -> dict:
+    def publish(self, task_id, author, prompt, duration, resolution, video_path,
+                user_id: str = "") -> dict:
         import uuid
 
         client = _get_client()
@@ -269,6 +274,7 @@ class SupabaseCommunityStore(CommunityStore):
             "published_at": now,
             "storage_path": storage_path,
             "created_at": now,
+            "user_id": user_id or "",
         }).execute()
         logger.info(
             f"[CommunityStore] Published {video_id} -> supabase storage "
@@ -287,6 +293,7 @@ class SupabaseCommunityStore(CommunityStore):
             "duration": row.get("duration", 0) or 0,
             "resolution": row.get("resolution", "") or "",
             "published_at": row.get("published_at", 0) or 0,
+            "user_id": row.get("user_id", "") or "",
             "likes": like_counts.get(vid, 0),
             "comments_count": comment_counts.get(vid, 0),
             "video_url": self._public_url(row.get("storage_path") or f"videos/{vid}.mp4"),
@@ -438,11 +445,16 @@ class SupabaseCommunityStore(CommunityStore):
         url = self._public_url(storage_path)
         return {"video_id": row["id"], "video_url": url, "video_target": url}
 
-    def delete(self, video_id: str) -> None:
-        client = _get_client()
+    def delete(self, video_id: str, user_id: str = "") -> None:
         meta = self.get_meta(video_id)
         if not meta:
             raise KeyError(video_id)
+        owner = (meta.get("user_id") or "").strip()
+        if owner and user_id != owner:
+            raise PermissionError("Cette vidéo appartient à un autre créateur : seule la suppression par son créateur est autorisée")
+        if not owner:
+            raise PermissionError("Créateur non identifiable sur cette publication : suppression par API impossible")
+        client = _get_client()
         storage_path = meta.get("storage_path") or f"videos/{video_id}.mp4"
         try:
             self._storage().remove([storage_path])

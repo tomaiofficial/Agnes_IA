@@ -1460,6 +1460,20 @@ function createVideoCard(v) {
   video.addEventListener('loadedmetadata', () => { video.currentTime = 0.5; });
   card.appendChild(video);
 
+  // Hover preview (comme un feed vidéo) : lecture muette après un court délai
+  let hoverTimer = null;
+  card.addEventListener('mouseenter', () => {
+    hoverTimer = setTimeout(() => {
+      video.currentTime = 0.5;
+      video.play().catch(() => {});
+    }, 350);
+  });
+  card.addEventListener('mouseleave', () => {
+    if (hoverTimer) clearTimeout(hoverTimer);
+    video.pause();
+    video.currentTime = 0.5;
+  });
+
   // Play overlay (shows on hover)
   const playOverlay = document.createElement('div');
   playOverlay.className = 'absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-all duration-300';
@@ -1485,6 +1499,14 @@ function createVideoCard(v) {
   promptLine.textContent = (v.prompt || '').substring(0, 60) + ((v.prompt || '').length > 60 ? '…' : '');
   if (v.prompt) bottomOverlay.appendChild(promptLine);
 
+  // Durée (badge bas-droite)
+  if (v.duration && v.duration > 0) {
+    const durBadge = document.createElement('span');
+    durBadge.className = 'absolute bottom-2 right-2 px-1.5 py-0.5 rounded-md bg-black/70 text-[10px] font-semibold text-white backdrop-blur-sm';
+    durBadge.textContent = fmtDuration(v.duration);
+    card.appendChild(durBadge);
+  }
+
   // Action bar (like + delete) — visible on hover
   const actionBar = document.createElement('div');
   actionBar.className = 'absolute top-2 right-2 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300';
@@ -1496,12 +1518,16 @@ function createVideoCard(v) {
   likeBtn.onclick = (e) => { e.stopPropagation(); toggleLike(v.id); };
   actionBar.appendChild(likeBtn);
 
-  const delBtn = document.createElement('button');
-  delBtn.className = 'flex items-center justify-center px-2.5 py-1.5 rounded-lg text-xs backdrop-blur-sm transition-all bg-black/40 text-gray-500 hover:text-red-400 hover:bg-red-500/20';
-  delBtn.innerHTML = '🗑';
-  delBtn.title = 'Supprimer';
-  delBtn.onclick = (e) => { e.stopPropagation(); deleteGalleryVideo(v.id); };
-  actionBar.appendChild(delBtn);
+  // Suppression réservée au créateur de la publication (user_id) — les
+  // autres visiteurs ne voient aucun bouton de suppression.
+  if (v.user_id && v.user_id === agnesUserId) {
+    const delBtn = document.createElement('button');
+    delBtn.className = 'flex items-center justify-center px-2.5 py-1.5 rounded-lg text-xs backdrop-blur-sm transition-all bg-black/40 text-gray-500 hover:text-red-400 hover:bg-red-500/20';
+    delBtn.innerHTML = '🗑';
+    delBtn.title = 'Supprimer (créateur)';
+    delBtn.onclick = (e) => { e.stopPropagation(); deleteGalleryVideo(v.id); };
+    actionBar.appendChild(delBtn);
+  }
 
   card.appendChild(actionBar);
 
@@ -1691,6 +1717,13 @@ function timeAgo(ts) {
   if (diff < 3600) return 'il y a ' + Math.floor(diff / 60) + 'min';
   if (diff < 86400) return 'il y a ' + Math.floor(diff / 3600) + 'h';
   return 'il y a ' + Math.floor(diff / 86400) + 'j';
+}
+
+function fmtDuration(sec) {
+  sec = Math.round(sec || 0);
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m > 0 ? m + ':' + String(s).padStart(2, '0') : '0:' + String(s).padStart(2, '0');
 }
 
 async function deleteGalleryVideo(videoId) {

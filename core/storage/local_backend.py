@@ -49,7 +49,8 @@ class LocalCommunityStore(CommunityStore):
             json.dump(index, f, ensure_ascii=False, indent=2)
         os.replace(tmp, path)
 
-    def publish(self, task_id, author, prompt, duration, resolution, video_path) -> dict:
+    def publish(self, task_id, author, prompt, duration, resolution, video_path,
+                user_id: str = "") -> dict:
         import uuid
 
         video_id = uuid.uuid4().hex[:12]
@@ -63,6 +64,7 @@ class LocalCommunityStore(CommunityStore):
             "duration": duration,
             "resolution": resolution,
             "published_at": time.time(),
+            "user_id": user_id or "",
             "likes": [],
             "comments": [],
         }
@@ -82,6 +84,7 @@ class LocalCommunityStore(CommunityStore):
                 "duration": meta.get("duration", 0),
                 "resolution": meta.get("resolution", ""),
                 "published_at": meta.get("published_at", 0),
+                "user_id": meta.get("user_id", ""),
                 "likes": len(meta.get("likes", [])),
                 "comments_count": len(meta.get("comments", [])),
                 "video_url": f"/api/community/videos/{vid}/video",
@@ -155,11 +158,16 @@ class LocalCommunityStore(CommunityStore):
             }
         return None
 
-    def delete(self, video_id: str) -> None:
+    def delete(self, video_id: str, user_id: str = "") -> None:
         index = self._load_index()
         videos = index.get("videos", {})
         if video_id not in videos:
             raise KeyError(video_id)
+        owner = (videos[video_id].get("user_id") or "").strip()
+        if owner and user_id != owner:
+            raise PermissionError("Cette vidéo appartient à un autre créateur : seule la suppression par son créateur est autorisée")
+        if not owner:
+            raise PermissionError("Créateur non identifiable sur cette publication : suppression par API impossible")
         video_path = os.path.join(self._get_community_dir(), f"{video_id}.mp4")
         if os.path.exists(video_path):
             os.remove(video_path)

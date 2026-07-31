@@ -26,8 +26,12 @@ class CommunityStore(ABC):
         duration: float,
         resolution: str,
         video_path: str,
+        user_id: str = "",
     ) -> dict:
         """Publie une vidéo (upload du fichier + enregistrement des métadonnées).
+
+        user_id : identifiant opaque du créateur ('' pour les publications
+        héritées). Sert à réserver la suppression au créateur.
 
         Returns:
             {"video_id": str, "video_url": str}
@@ -84,8 +88,13 @@ class CommunityStore(ABC):
         """
 
     @abstractmethod
-    def delete(self, video_id: str) -> None:
-        """Supprime la vidéo (fichier + métadonnées + likes + commentaires)."""
+    def delete(self, video_id: str, user_id: str = "") -> None:
+        """Supprime la vidéo (fichier + métadonnées + likes + commentaires).
+
+        Seul le créateur de la publication (user_id) peut la supprimer :
+        lève PermissionError si l'appelant n'est pas le propriétaire, ou si
+        la publication n'a pas de user_id enregistré (créateur non vérifiable).
+        """
 
 
 class TaskStore(ABC):

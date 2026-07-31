@@ -55,6 +55,10 @@ CREATE TABLE IF NOT EXISTS tasks (
 -- Migration idempotente (table déjà créée avant l'ajout de user_id) :
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT '';
 
+-- Migration idempotente : user_id du créateur d'une publication galerie
+-- ('' = publication héritée, créée avant l'isolation par créateur).
+ALTER TABLE community_videos ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT '';
+
 -- Configuration applicative (clé API, filigrane, modèles, domaine, workspaces…)
 -- : survit aux redéploiements Render (miroir + restauration au démarrage)
 CREATE TABLE IF NOT EXISTS app_config (

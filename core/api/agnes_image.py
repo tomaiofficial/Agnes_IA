@@ -82,8 +82,8 @@ class AgnesImageAPI:
         prompt: str,
         reference_image_paths: List[str] = [],
         size: Optional[str] = None,
-        max_retries: int = 3,
-        retry_base_delay: float = 20.0,
+        max_retries: int = 5,
+        retry_base_delay: float = 15.0,
         **kwargs,
     ) -> ImageOutput:
         use_i2i = len(reference_image_paths) > 0

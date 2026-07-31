@@ -38,8 +38,20 @@ class SimpleVideoPipeline(BasePipeline):
         shutdown_event: Optional[asyncio.Event] = None,
     ):
         super().__init__(api_key, task_id, dir_name, progress_callback, shutdown_event)
-        self.video_api = AgnesVideoAPI(api_key=api_key, model=video_model)
+        self.video_api = AgnesVideoAPI(
+            api_key=api_key,
+            model=video_model,
+            on_retry=self._on_video_submit_retry,
+        )
         self.video_api.shutdown_event = shutdown_event
+
+    async def _on_video_submit_retry(self, attempt: int, delay: float, reason: str) -> None:
+        """Informe l'utilisateur pendant les nouvelles tentatives d'envoi à l'API vidéo."""
+        await self._emit(
+            "video_gen", "running",
+            f"API vidéo occupée ({reason}) — nouvel essai {attempt}/6 dans {delay:.0f}s...",
+            0.2,
+        )
 
     async def run(self, state: SimpleVideoTask) -> str:
         """执行简单视频生成流水线。"""

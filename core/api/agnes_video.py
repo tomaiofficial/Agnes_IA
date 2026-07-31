@@ -7,7 +7,7 @@ import logging
 import mimetypes
 import os
 import time
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 import requests
 
@@ -49,14 +49,16 @@ class AgnesVideoAPI:
         api_key: str,
         model: str = "agnes-video-v2.0",
         default_duration: int = 5,
-        max_retries: int = 3,
-        retry_base_delay: float = 10.0,
+        max_retries: int = 6,
+        retry_base_delay: float = 15.0,
+        on_retry: Optional[Callable] = None,
     ):
         self.api_key = api_key
         self.model = model
         self.default_duration = default_duration
         self.max_retries = max_retries
         self.retry_base_delay = retry_base_delay
+        self.on_retry = on_retry
         self.shutdown_event = None
         self.headers = {
             "Authorization": f"Bearer {api_key}",
@@ -397,7 +399,17 @@ class AgnesVideoAPI:
 
             await asyncio.sleep(interval)
 
-    async def _submit_with_retry(self, payload: dict, mode_desc: str) -> str:
+    async def _submit_with_retry(self, payload: dict, mode_desc: str,
+                                 on_retry: Optional[Callable] = None) -> str:
+        cb = on_retry or self.on_retry
+
+        async def _notify(attempt: int, delay: float, reason: str) -> None:
+            if cb:
+                try:
+                    await cb(attempt, delay, reason)
+                except Exception:
+                    pass  # ne jamais bloquer la boucle de retry
+
         frame_reductions_left = 2  # allow up to 2 frame-count reductions on 400
         for attempt in range(self.max_retries):
             if self.shutdown_event and self.shutdown_event.is_set():
@@ -440,6 +452,7 @@ class AgnesVideoAPI:
                         retry_count=attempt + 1,
                         extra={"mode": mode_desc},
                     )
+                    await _notify(attempt + 1, delay, "429 rate limit")
                     await asyncio.sleep(delay)
                     continue
 
@@ -459,6 +472,7 @@ class AgnesVideoAPI:
                         retry_count=attempt + 1,
                         extra={"mode": mode_desc},
                     )
+                    await _notify(attempt + 1, delay, f"HTTP {resp.status_code}")
                     await asyncio.sleep(delay)
                     continue
 
@@ -519,6 +533,7 @@ class AgnesVideoAPI:
                         f"[AgnesVideo] {type(e).__name__} on {mode_desc}, "
                         f"retry {attempt + 1}/{self.max_retries} in {delay:.0f}s..."
                     )
+                    await _notify(attempt + 1, delay, type(e).__name__)
                     await asyncio.sleep(delay)
                     continue
                 raise

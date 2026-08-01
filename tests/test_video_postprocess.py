@@ -110,4 +110,4 @@ def test_postprocessor_build_filter_chain_no_enhance():
 def asyncio_run(coro):
     """Helper pour exécuter un coroutine dans les tests synchrones."""
     import asyncio
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)

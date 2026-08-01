@@ -71,6 +71,11 @@ def test_prompt_optimizer_optimize_simple():
 
 
 def asyncio_run(coro):
-    """Helper pour exécuter un coroutine dans les tests synchrones."""
+    """Helper pour exécuter un coroutine dans les tests synchrones.
+
+    Utilise asyncio.run() (et non get_event_loop().run_until_complete) :
+    ce dernier lève RuntimeError sous Python 3.13 quand aucune loop active
+    n'existe dans le thread (même problème que test_video_postprocess).
+    """
     import asyncio
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)

@@ -37,6 +37,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from core.api.agnes_video import AgnesVideoAPI
+from core.cache.redis_cache import get_cache
 from core.video.postprocess import VideoPostProcessor, PostProcessConfig, VIDEO_STYLES
 from core.video.prompt_optimizer import PromptOptimizer
 from core.video.queue import VideoQueue, TaskPriority
@@ -112,6 +113,7 @@ class AIVideoPipeline:
         self.config = config or PipelineConfig()
         self.queue = queue or VideoQueue(max_concurrent=self.config.max_concurrent)
         self.monitor = monitor or VideoMonitor()
+        self.cache = get_cache()
 
         # Initialiser les composants
         self.video_api = AgnesVideoAPI(
@@ -179,14 +181,36 @@ class AIVideoPipeline:
         self.monitor.start_stage(task_id, "prompt_analysis")
         optimized_prompt = prompt
         if self.config.optimize_prompt:
-            opt_result = await self.prompt_optimizer.optimize(prompt)
-            optimized_prompt = opt_result.optimized
-            stages["prompt_optimization"] = {
-                "original": opt_result.original,
-                "optimized": opt_result.optimized,
-                "corrections": opt_result.corrections,
-                "added_keywords": opt_result.added_keywords,
-            }
+            # Cache Redis : éviter de re-optimiser des prompts identiques
+            cache_key = f"prompt_opt:{hash(prompt) & 0xFFFFFFFF}"
+            cached_opt = self.cache.get(cache_key)
+            if cached_opt and isinstance(cached_opt, dict) and cached_opt.get("optimized"):
+                optimized_prompt = cached_opt["optimized"]
+                stages["prompt_optimization"] = {
+                    "original": prompt,
+                    "optimized": optimized_prompt,
+                    "corrections": cached_opt.get("corrections", []),
+                    "added_keywords": cached_opt.get("added_keywords", []),
+                    "from_cache": True,
+                }
+            else:
+                opt_result = await self.prompt_optimizer.optimize(prompt)
+                optimized_prompt = opt_result.optimized
+                stages["prompt_optimization"] = {
+                    "original": opt_result.original,
+                    "optimized": opt_result.optimized,
+                    "corrections": opt_result.corrections,
+                    "added_keywords": opt_result.added_keywords,
+                }
+                self.cache.set(
+                    cache_key,
+                    {
+                        "optimized": optimized_prompt,
+                        "corrections": opt_result.corrections,
+                        "added_keywords": opt_result.added_keywords,
+                    },
+                    ttl=86400,  # 24h
+                )
         self.monitor.end_stage(task_id, "prompt_analysis", extra=stages.get("prompt_optimization"))
 
         # ── Étape 2 : Génération vidéo (via queue) ──

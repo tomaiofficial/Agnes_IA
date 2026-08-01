@@ -80,12 +80,30 @@ def test_should_reload_model_no_cache(optimizer):
     assert optimizer.should_reload_model("new_model") is True
 
 
-def test_should_reload_model_cached(optimizer):
+def test_should_reload_model_cached(optimizer, monkeypatch):
     """Avec modèle en cache et VRAM suffisante, ne recharge pas."""
     optimizer.cache_model("cached_model", object())
-    # Sans GPUtil, get_gpu_info retourne None → should_reload_model retourne False
-    # car le modèle est en cache et pas de contrainte VRAM
+    # Simule l'absence de GPU (comme en CI) : get_gpu_info → None
+    # → should_reload_model retourne False car le modèle est en cache
+    # et pas de contrainte VRAM.
+    monkeypatch.setattr(optimizer, "get_gpu_info", lambda: None)
     assert optimizer.should_reload_model("cached_model") is False
+
+
+def test_should_reload_model_cached_low_vram(optimizer, monkeypatch):
+    """Avec modèle en cache mais VRAM insuffisante, recharge."""
+    optimizer.cache_model("cached_model", object())
+    info = GPUInfo(
+        total_vram_mb=4096,
+        used_vram_mb=3584,
+        free_vram_mb=512,
+        utilization=90.0,
+        temperature=70.0,
+    )
+    monkeypatch.setattr(optimizer, "get_gpu_info", lambda: info)
+    assert optimizer.should_reload_model("cached_model") is True
+    # Le cache est libéré par manque de VRAM
+    assert optimizer.get_cached_model("cached_model") is None
 
 
 def test_should_reload_model_force(optimizer):

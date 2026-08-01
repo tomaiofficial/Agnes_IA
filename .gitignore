@@ -27,3 +27,20 @@ Thumbs.db
 
 # Config with API keys
 .agnes_config/config.json
+
+# Coverage / test artefacts
+htmlcov/
+.coverage
+coverage.xml
+coverage.json
+.pytest_cache/
+
+# Local CI reproduction & error logs
+ci_full*.log
+ci_full*.err
+mock_reg.out
+mock_reg.err
+ci_repro.log
+error_logs/
+*.MPY_wvf_snd.mp4
+*.MPY_wvf_snd.wav

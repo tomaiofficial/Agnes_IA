@@ -90,7 +90,11 @@ class VideoQueue:
         self._completed: dict[str, QueuedTask] = {}
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._lock = asyncio.Lock()
-        self._event = asyncio.Event()
+        # Condition (et non Event) : évite la perte de wake-up du worker quand
+        # plusieurs tâches arrivent pendant l'exécution d'une autre. Le wait()
+        # s'exécute sous le lock et revérifie la file, donc aucune tâche ne
+        # reste en file sans être traitée.
+        self._condition = asyncio.Condition()
         self._worker_task: Optional[asyncio.Task] = None
         self._shutdown = False
 
@@ -136,7 +140,7 @@ class VideoQueue:
         Raises:
             RuntimeError: Si la file est pleine.
         """
-        async with self._lock:
+        async with self._condition:
             if len(self._queue) >= self.max_queue_size:
                 raise RuntimeError(
                     f"Queue full ({self.max_queue_size} tasks). Try again later."
@@ -160,7 +164,7 @@ class VideoQueue:
             if not inserted:
                 self._queue.append(task)
 
-            self._event.set()
+            self._condition.notify()
             logger.info(
                 f"[VideoQueue] Enqueued task {task_id} "
                 f"(priority={priority.name}, queue_size={len(self._queue)})"
@@ -170,13 +174,14 @@ class VideoQueue:
     async def _worker(self) -> None:
         """Worker principal : traite les tâches de la file."""
         while not self._shutdown:
-            await self._event.wait()
-            self._event.clear()
-
-            async with self._lock:
-                if not self._queue:
-                    continue
-                # Prendre la tâche la plus prioritaire
+            # Attendre une tâche sous la condition : le wait() relâche le lock
+            # puis le ré-acquiert, et la boucle while revérifie la file →
+            # aucune perte de wake-up entre enqueue() et la prise de la tâche.
+            async with self._condition:
+                while not self._queue:
+                    if self._shutdown:
+                        return
+                    await self._condition.wait()
                 task = self._queue.pop(0)
                 self._running[task.task_id] = task
 

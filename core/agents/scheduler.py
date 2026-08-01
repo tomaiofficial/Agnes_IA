@@ -51,8 +51,10 @@ class AgentScheduler:
         self._background: Set[asyncio.Task] = set()
         self._semaphore = asyncio.Semaphore(1)  # un seul bot à la fois (rate limit 16/min)
         self._last_launch_at: float = 0.0
-        self._attempted: set = set()  # créneaux déjà tentés cette heure (anti-boucle en cas d'échec)
+        self._retry: dict = {}  # slot -> {"attempts": n, "next_at": epoch} (API down → retry)
         self._current_hour: Optional[str] = None
+        self._max_attempts = 6      # 1 essai + 5 retries par créneau
+        self._retry_delay = 600     # 10 min entre deux essais (API Agnes instable)
         # État local : {persona_id: {"enabled": bool}}
         self._state: dict = {}
         self._load_state()
@@ -155,15 +157,20 @@ class AgentScheduler:
         hour_key = f"{now:%Y-%m-%d}_{now.hour:02d}"
         if hour_key != self._current_hour:
             self._current_hour = hour_key
-            self._attempted.clear()  # nouvelle heure : on oublie les échecs précédents
+            self._retry.clear()  # nouvelle heure : on oublie les échecs précédents
         if self._api_key_provider():
             for persona in AGENT_PERSONAS:
                 if now.hour in persona.schedule and self.is_enabled(persona):
                     slot = self._slot_key(now)
-                    if slot in self._attempted:
-                        continue  # déjà tenté ce créneau (échec) : on n'insiste pas
+                    # Réessai espacé si la génération précédente a échoué (API down)
+                    retry = self._retry.get(slot)
+                    if retry:
+                        if retry["attempts"] >= self._max_attempts:
+                            continue  # créneau abandonné après trop d'échecs
+                        if time.time() < retry["next_at"]:
+                            continue  # pas encore l'heure du prochain essai
                     if self._slot_published(persona, now):
-                        self._attempted.add(slot)
+                        self._retry.pop(slot, None)
                         continue
                     # espacement minimal de 90s entre deux lancements de bots
                     if time.time() - self._last_launch_at < 90:

@@ -84,6 +84,8 @@ async def generate_and_publish(
         audio_voice=persona.voice,
         priority=TaskPriority.FREE,
         max_concurrent=1,
+        generation_timeout=900,   # 15 min max : ne pas bloquer la file des vrais utilisateurs
+        postprocess_timeout=300,  # 5 min max de post-traitement
     )
 
     pipeline = AIVideoPipeline(

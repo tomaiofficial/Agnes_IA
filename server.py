@@ -403,9 +403,33 @@ async def lifespan(app: FastAPI):
     await _video_queue.start()
     logger.info("[Startup] Video queue + monitor + security validator initialized (v8.0)")
 
+    # Moteur de créateurs IA autonomes (scheduler horaire)
+    try:
+        import os as _os
+        from core.agents import AgentScheduler, set_scheduler
+        from core.config import get_api_key as _agents_api_key
+        agents_scheduler = AgentScheduler(
+            api_key_provider=_agents_api_key,
+            queue=_video_queue,
+            monitor=_video_monitor,
+            tz=_os.environ.get("AGENTS_TZ"),
+        )
+        set_scheduler(agents_scheduler)
+        await agents_scheduler.start()
+        logger.info("[Startup] Agents scheduler started (8 personas français)")
+    except Exception as e:
+        logger.warning(f"[Startup] Agents scheduler init failed ({e}); continuing")
+
     yield
 
     # Cleanup à l'arrêt
+    try:
+        from core.agents import get_scheduler
+        sched = get_scheduler()
+        if sched:
+            await sched.stop()
+    except Exception as e:
+        logger.warning(f"[Startup] Agents scheduler stop failed: {e}")
     if _video_queue:
         await _video_queue.stop()
 
@@ -2798,6 +2822,61 @@ async def delete_community_video(video_id: str, user_id: str = Header(default=""
         raise _community_error(e, "Suppression impossible")
     logger.info(f"[Community] Video {video_id} deleted (storage={storage_mode()})")
     return {"ok": True}
+
+
+# ═══════════════════════════════════════════════════
+# Créateurs IA autonomes (agents)
+# ═══════════════════════════════════════════════════
+
+
+@app.get("/api/agents")
+async def list_agents():
+    """Statut des créateurs IA autonomes (personas, planning, état)."""
+    from core.agents import get_scheduler
+    sched = get_scheduler()
+    if not sched:
+        return {"ok": False, "error": "Scheduler non initialisé"}
+    return sched.status()
+
+
+@app.post("/api/agents/toggle")
+async def toggle_agent(request: Request):
+    """Activer/désactiver un créateur IA. Body: {agent_id, enabled}."""
+    from core.agents import get_scheduler
+    sched = get_scheduler()
+    if not sched:
+        raise HTTPException(status_code=503, detail="Scheduler non initialisé")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Body JSON requis")
+    agent_id = body.get("agent_id")
+    enabled = body.get("enabled")
+    if not agent_id or enabled is None:
+        raise HTTPException(status_code=400, detail="agent_id et enabled requis")
+    if not sched.set_enabled(agent_id, bool(enabled)):
+        raise HTTPException(status_code=404, detail=f"Persona inconnu: {agent_id}")
+    return {"ok": True, "agent_id": agent_id, "enabled": bool(enabled)}
+
+
+@app.post("/api/agents/run-now")
+async def run_agent_now(request: Request):
+    """Forcer la génération immédiate d'un créateur IA. Body: {agent_id}."""
+    from core.agents import get_scheduler
+    sched = get_scheduler()
+    if not sched:
+        raise HTTPException(status_code=503, detail="Scheduler non initialisé")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Body JSON requis")
+    agent_id = body.get("agent_id")
+    if not agent_id:
+        raise HTTPException(status_code=400, detail="agent_id requis")
+    result = await sched.run_now(agent_id)
+    if not result.get("ok"):
+        raise HTTPException(status_code=409, detail=result.get("error", "Impossible de lancer"))
+    return result
 
 
 # ═══════════════════════════════════════════════════

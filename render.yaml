@@ -1,7 +1,24 @@
+# ════════════════════════════════════════════════════
+# Config Render pour le service web agnes-ia
+#
+# ⚠️ SPIN-DOWN (mise en veille) — à lire absolument :
+#   - Plan Free : l'instance se met en veille après ~15 min sans trafic,
+#     puis redémarre à la prochaine requête (cycle visible toutes les
+#     20-30 min). Ce n'est PAS un bug : c'est le comportement du plan Free.
+#   - Gardien d'éveil : .github/workflows/keepalive.yml pinge /api/health
+#     toutes les 3 min pour maintenir l'instance éveillée (gratuit,
+#     best-effort — les cron GitHub peuvent être retardés).
+#   - Solution DÉFINITIVE : passer ce service en plan payant Starter
+#     (~7 $/mois) → plus jamais de veille ni de redémarrage. Mettre
+#     `plan: starter` ci-dessous et cliquer Deploy dans le dashboard Render.
+# ════════════════════════════════════════════════════
+
 services:
   - type: web
     name: agnes-ia
     env: python
+    # Débloquer en payant pour supprimer le spin-down :
+    # plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
     envVars:
@@ -19,4 +36,4 @@ services:
         sync: false
       - key: SUPABASE_STORAGE_BUCKET
         value: agnes-community
-    healthCheckPath: /
+    healthCheckPath: /api/health

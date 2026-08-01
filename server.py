@@ -531,6 +531,22 @@ async def root():
     return {"message": "Agnes Video Generator API"}
 
 
+@app.get("/api/health")
+async def health():
+    """Endpoint santé ultra-léger pour Render (health check + keepalive).
+
+    Réponse JSON immédiate (~1 Ko), contrairement à `/` qui renvoie la page
+    HTML (100 Ko). Utilisé par :
+      - Render healthCheckPath (render.yaml)
+      - Le gardien d'éveil GitHub Actions (.github/workflows/keepalive.yml)
+
+    Le spin-down du plan Free de Render (après ~15 min sans trafic) est évité
+    en pinguant cet endpoint régulièrement : toute requête HTTP entrante
+    compte comme activité pour Render.
+    """
+    return {"ok": True, "status": "healthy", "service": "agnes-ia"}
+
+
 # ═══════════════════════════════════════════════════
 # API Key 配置
 # ═══════════════════════════════════════════════════

@@ -428,7 +428,7 @@
       <button onclick="switchMode('video')" id="tab-video" class="flex-1 px-3 sm:px-4 py-3 sm:py-3 rounded-xl text-xs sm:text-sm font-medium bg-blue-600/20 border border-blue-500/30 text-blue-300 transition hover:bg-blue-600/30 min-h-[48px]">
         <span class="text-base sm:text-lg">🎬</span><br><span class="hidden sm:inline">Vidéo</span><span class="sm:hidden">Vidéo</span>
       </button>
-      <button onclick="switchMode('image')" id="tab-image" class="flex-1 px-3 sm:px-4 py-3 sm:py-3 rounded-xl text-xs sm:text-sm font-medium bg-gray-800/50 border border-gray-700/50 text-gray-400 transition hover:bg-gray-700/50 min-h-[48px]">
+      <button onclick="showComingSoon('image')" id="tab-image" class="flex-1 px-3 sm:px-4 py-3 sm:py-3 rounded-xl text-xs sm:text-sm font-medium bg-gray-800/50 border border-gray-700/50 text-gray-500 transition cursor-not-allowed opacity-50 min-h-[48px]">
         <span class="text-base sm:text-lg">🖼️</span><br><span class="hidden sm:inline">Image</span><span class="sm:hidden">Image</span>
       </button>
     </div>
@@ -605,37 +605,15 @@
        </button>
     </div>
 
-    <!-- Image Form -->
+    <!-- Image Form - Coming Soon -->
     <div id="form-image" class="hidden sora-form-collapse">
-      <div class="glass-card rounded-2xl p-4 sm:p-6 mb-4">
-        <div class="mb-3 sm:mb-4">
-          <label class="block text-xs sm:text-sm text-gray-400 mb-1 sm:mb-1.5">Description image (prompt) <span class="text-red-400">*</span></label>
-          <textarea id="i_prompt" rows="3" placeholder="Décrivez l'image souhaitée..." class="w-full glass-input rounded-lg px-4 py-3 sm:py-2.5 text-sm resize-y text-gray-100 placeholder-gray-500"></textarea>
-        </div>
-        <div class="mb-3 sm:mb-4">
-          <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Taille</label>
-            <select id="i_size" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
-              <option value="1024x1024">Carré 1:1 (1024x1024)</option>
-              <option value="768x1152">Portrait 9:16 (768x1152)</option>
-              <option value="1152x768">Paysage 16:9 (1152x768)</option>
-              <option value="1080x1920">Portrait Full HD</option>
-              <option value="1920x1080">Paysage Full HD</option>
-            </select>
-        </div>
-        <div>
-          <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Image de référence (optionnel)</label>
-          <input id="i_ref_image" type="file" accept="image/*" class="w-full text-sm text-gray-400 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-200 hover:file:bg-gray-600 file:min-h-[44px]">
-        </div>
-      </div>
-      <button id="btn-image" onclick="submitImage()" class="w-full py-4 sm:py-3.5 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 rounded-xl text-base font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed glow-btn min-h-[50px]">
-        🖼️ Générer l'image
-      </button>
-      <div id="image-result" class="hidden mt-4 p-4 glass-card rounded-lg">
-        <p class="text-green-400 text-sm font-medium mb-2">Image générée !</p>
-        <img id="result-image" class="w-full rounded-lg max-h-72 sm:max-h-96 object-contain">
+      <div class="glass-card rounded-2xl p-4 sm:p-6 mb-4 text-center">
+        <div class="text-4xl mb-3">🔒</div>
+        <h3 class="text-base sm:text-lg font-semibold text-gray-200 mb-2">Génération d'images</h3>
+        <p class="text-gray-400 text-sm">Cette fonctionnalité sera bientôt disponible !</p>
+        <p class="text-gray-500 text-xs mt-2">Revenez bientôt pour générer des images IA.</p>
       </div>
     </div>
-
     <!-- Sora 2 Inspired Progress Panel -->
     <div id="progress-panel" class="hidden mt-4 sm:mt-6 relative overflow-hidden">
       <!-- Ambient glow background -->
@@ -771,6 +749,11 @@
 </footer>
 
 <script>
+
+function showComingSoon(mode) {
+  showToast('🔒 Cette fonctionnalité sera bientôt disponible !', 3000);
+}
+
 // ═══════════════════════════════════════════════════
 // Configuration — URL de l'API backend
 // En production (GitHub Pages), l'API est sur Render
@@ -1071,35 +1054,9 @@ async function submitSimple() {
 }
 
 async function submitImage() {
-  const prompt = document.getElementById('i_prompt').value.trim();
-  if (!prompt) return alert('Veuillez décrire l\'image');
-  const btn = document.getElementById('btn-image');
-  btn.disabled = true;
-  document.getElementById('image-result').classList.add('hidden');
-
-  const form = new FormData();
-  form.append('prompt', prompt);
-  form.append('size', document.getElementById('i_size').value);
-  const refFile = document.getElementById('i_ref_image').files[0];
-  if (refFile) form.append('reference_image', refFile);
-
-  try {
-    const r = await fetchWithAuth(API_BASE + '/api/image/generate', { method: 'POST', body: form });
-    const d = await r.json();
-    if (!d.ok) throw new Error(d.detail || 'Échec');
-    setMediaSrc('result-image', API_BASE + '/api/image/' + d.task_id);
-    document.getElementById('image-result').classList.remove('hidden');
-    showToast('Image générée !', 5000);
-  } catch(e) {
-    alert('Échec : ' + e.message);
-  } finally {
-    btn.disabled = false;
-  }
+  showToast('🔒 Génération d'images bientôt disponible !', 4000);
 }
 
-// ═══════════════════════════════════════════════════
-// Progress
-// ═══════════════════════════════════════════════════
 async function showProgress(taskId, dirName) {
   const panel = document.getElementById('progress-panel');
   panel.classList.remove('hidden');

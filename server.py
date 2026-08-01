@@ -33,7 +33,7 @@ from typing import Dict, List, Optional, Union
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Header
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 
 from core.config import get_api_key, set_api_key, delete_api_key, get_api_key_source, get_working_dir, DURATION_FRAME_MAP, get_workspaces, add_workspace, remove_workspace, set_active_workspace, get_active_workspace, REGRESSION_WORKING_DIR_ENV, get_watermark_config, set_watermark_config, WATERMARK_PROMO_TEXT_ZH, WATERMARK_PROMO_TEXT_EN, get_selected_models, set_selected_models, get_agnes_domain, set_agnes_domain, AGNES_DOMAIN_MAP, get_agnes_api_root
 from core.path_security import safe_join, safe_workspace_path, UnsafePathError
@@ -531,6 +531,17 @@ async def root():
     return {"message": "Agnes Video Generator API"}
 
 
+@app.head("/")
+async def root_head():
+    """HEAD / — requis par les uptime monitors (UptimeRobot utilise HEAD).
+
+    FastAPI/Starlette >= 0.47 ne route plus automatiquement HEAD vers GET :
+    sans cette route, un monitor reçoit 405 Method Not Allowed et marque
+    le service Down alors qu'il est UP.
+    """
+    return Response(status_code=200)
+
+
 @app.get("/api/health")
 async def health():
     """Endpoint santé ultra-léger pour Render (health check + keepalive).
@@ -545,6 +556,12 @@ async def health():
     compte comme activité pour Render.
     """
     return {"ok": True, "status": "healthy", "service": "agnes-ia"}
+
+
+@app.head("/api/health")
+async def health_head():
+    """HEAD /api/health — même raison que `root_head` (moniteurs externes)."""
+    return Response(status_code=200)
 
 
 # ═══════════════════════════════════════════════════

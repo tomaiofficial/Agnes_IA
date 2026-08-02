@@ -1648,6 +1648,7 @@ def _launch_background_task(coro):
 
 @app.post("/api/tasks/simple")
 async def create_simple_task(
+    request: Request,
     prompt: str = Form(...),
     user_id: str = Header(default="", alias="X-User-Id"),
     mode: str = Form("t2v"),
@@ -1691,7 +1692,7 @@ async def create_simple_task(
     # v8.0: Validation de sécurité (prompt + rate limit IP)
     if _security_validator:
         # Rate limit par IP (protection DDoS)
-        client_ip = request.client.host if request else ""
+        client_ip = request.client.host if request.client else ""
         if not _security_validator.check_ip_rate_limit(client_ip):
             _security_validator.log_security_event("rate_limit_exceeded", ip=client_ip)
             raise HTTPException(status_code=429, detail="Trop de requêtes, veuillez patienter")

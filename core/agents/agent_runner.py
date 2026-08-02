@@ -78,11 +78,22 @@ async def generate_and_publish(
     os.makedirs(working_dir, exist_ok=True)
 
     config = PipelineConfig(
-        quality="full_hd",
+        quality="hd",            # HD (pas Full HD) : les bots restent légers en RAM,
+                                 # sinon le postprocess fait OOM le plan Free 512 MB
+                                 # et tue les tâches des utilisateurs en file.
         style="ultra_realistic",
         audio_enabled=True,
         audio_voice=persona.voice,
-        priority=TaskPriority.FREE,
+        # Postprocess allégé : sans filtre, enhance() copie la vidéo sans ffmpeg
+        # → beaucoup moins de mémoire, zéro OOM, génération plus rapide.
+        denoise=False,
+        face_enhance=False,
+        motion_enhance=False,
+        hdr=False,
+        color_correct=False,
+        compress=False,
+        # Priorité BOT (la plus basse) : les utilisateurs passent toujours avant.
+        priority=TaskPriority.BOT,
         max_concurrent=1,
         generation_timeout=900,   # 15 min max : ne pas bloquer la file des vrais utilisateurs
         postprocess_timeout=300,  # 5 min max de post-traitement

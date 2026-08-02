@@ -30,10 +30,15 @@ logger = logging.getLogger(__name__)
 
 
 class TaskPriority(Enum):
-    """Priorités de file d'attente (plus la valeur est basse, plus c'est prioritaire)."""
+    """Priorités de file d'attente (plus la valeur est basse, plus c'est prioritaire).
+
+    Les bots IA (créneaux automatiques) sont classés APRÈS les utilisateurs
+    gratuits : une génération de bot ne bloque jamais un utilisateur réel.
+    """
     ADMIN = 0
     PREMIUM = 1
     FREE = 2
+    BOT = 3
 
 
 @dataclass

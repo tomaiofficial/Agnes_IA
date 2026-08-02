@@ -238,7 +238,13 @@ class AIVideoPipeline:
 
         # ── Étape 2 : Génération vidéo (via queue) ──
         self.monitor.start_stage(task_id, "video_generation")
-        await self._emit_progress("video_gen", "Génération de la vidéo...", 0.10)
+        # La tâche peut attendre un slot (file partagée bots/utilisateurs) :
+        # message honnête plutôt qu'un « Génération... » figé pendant l'attente.
+        await self._emit_progress(
+            "video_gen",
+            "En attente d'un slot de génération...",
+            0.10,
+        )
         video_path = await self._generate_video(
             prompt=optimized_prompt,
             duration=duration,
@@ -309,19 +315,20 @@ class AIVideoPipeline:
         # Soumettre via la queue
         async def _agv_progress(status: str, progress, curl_cmd: str) -> None:
             # Mappe la progression Agnes (0-100%) sur la tranche 10-70%
-            # de l'échelle globale du pipeline.
+            # de l'échelle globale du pipeline. Même à 0%, on publie un
+            # message : dès que la tâche sort de la file et est soumise,
+            # l'utilisateur voit la transition « attente → génération ».
             try:
                 pct = float(progress)
             except (TypeError, ValueError):
                 return
             if pct <= 0:
-                return
-            mapped = 0.10 + min(100.0, pct) * 0.60 / 100.0
-            await self._emit_progress(
-                "video_gen",
-                f"Génération de la vidéo... {int(pct)}%",
-                round(mapped, 4),
-            )
+                mapped = 0.10
+                msg = "Génération de la vidéo en cours (démarrage)..."
+            else:
+                mapped = 0.10 + min(100.0, pct) * 0.60 / 100.0
+                msg = f"Génération de la vidéo... {int(pct)}%"
+            await self._emit_progress("video_gen", msg, round(mapped, 4))
 
         async def _do_generate():
             video_output = await self.video_api.generate_single_video(

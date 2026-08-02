@@ -754,29 +754,64 @@ class AgnesVideoAPI:
                 )
                 if not video_url:
                     raise RuntimeError(f"Agnes video: no URL after auto-relance: {final}")
+                # v8.1: on re-vérifie l'URL de la nouvelle génération. Si elle
+                # est toujours inaccessible, on remonte une erreur claire plutôt
+                # que de renvoyer une URL morte au téléchargeur (échec plus tard).
+                if not await self._verify_video_url(video_url):
+                    raise RuntimeError(
+                        f"Agnes video: URL still not accessible after auto-relance: {video_url[:80]}..."
+                    )
 
         logger.info(f"[AgnesVideo] Done: {video_url[:80]}...")
         return VideoOutput(fmt="url", ext="mp4", data=video_url)
 
-    async def _verify_video_url(self, url: str, timeout: int = 10) -> bool:
-        """Vérifie qu'une URL de vidéo est accessible (HEAD request).
+    async def _verify_video_url(self, url: str, timeout: int = 10, attempts: int = 3) -> bool:
+        """Vérifie qu'une URL de vidéo est accessible (GET rangeé, sans auth).
 
-        v8.0 : évite de renvoyer une URL morte à la chaîne de traitement.
+        v8.1 : on utilise un GET partiel (Range: bytes=0-0) SANS header
+        Authorization au lieu d'un HEAD signé : le CDN Agnes
+        (platform-outputs.agnes-ai.space) répondait 403 aux HEAD avec le bearer,
+        ce qui faisait échouer systématiquement la vérification et déclenchait
+        une auto-relance inutile (une génération complète gaspillée à chaque
+        tâche). Les 30x (redirections) et 2xx/206 (GET partiel servi) passent.
         """
         if not url or not url.startswith(("http://", "https://")):
             return True  # URL locale ou non-HTTP : on ne peut pas vérifier
-        try:
-            resp = await asyncio.wait_for(
-                asyncio.to_thread(
-                    requests.head,
-                    url,
-                    headers=self.headers,
-                    timeout=timeout,
-                    allow_redirects=True,
-                ),
-                timeout=timeout + 5,
-            )
-            return resp.status_code < 400
-        except Exception as e:
-            logger.debug(f"[AgnesVideo] URL verification failed: {e}")
-            return False
+        headers = {
+            "Range": "bytes=0-0",
+            "User-Agent": "Mozilla/5.0 (compatible; AgnesVideo/2.0)",
+        }
+        for attempt in range(attempts):
+            try:
+                resp = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        requests.get,
+                        url,
+                        headers=headers,
+                        timeout=timeout,
+                        allow_redirects=True,
+                        stream=True,
+                    ),
+                    timeout=timeout + 5,
+                )
+                try:
+                    if resp.status_code < 400:
+                        return True
+                    logger.debug(
+                        f"[AgnesVideo] URL verification got HTTP {resp.status_code} "
+                        f"for {url[:80]}..."
+                    )
+                finally:
+                    close = getattr(resp, "close", None)
+                    if close is not None:
+                        try:
+                            close()
+                        except Exception:
+                            pass
+            except Exception as e:
+                logger.debug(
+                    f"[AgnesVideo] URL verification attempt {attempt + 1}/{attempts} failed: {e}"
+                )
+            if attempt < attempts - 1:
+                await asyncio.sleep(2 * (attempt + 1))
+        return False

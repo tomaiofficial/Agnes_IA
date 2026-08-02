@@ -96,6 +96,15 @@ class CommunityStore(ABC):
         la publication n'a pas de user_id enregistré (créateur non vérifiable).
         """
 
+    def save_task_video_backup(self, task_id: str, video_path: str) -> Optional[str]:
+        """Sauvegarde la vidéo finale d'une tâche (copie privée de secours).
+
+        Capacité optionnelle (le backend local est un no-op : le fichier est
+        déjà sur le disque persistant). Retourne l'URL publique de la
+        sauvegarde, ou None si non disponible / en échec.
+        """
+        return None
+
 
 class TaskStore(ABC):
     """Persistance des métadonnées de tâches (survit aux redéploiements)."""

@@ -313,6 +313,8 @@ class AIVideoPipeline:
         video_path = os.path.join(working_dir, "final_video.mp4")
 
         # Soumettre via la queue
+        _gen_started = time.time()
+
         async def _agv_progress(status: str, progress, curl_cmd: str) -> None:
             # Mappe la progression Agnes (0-100%) sur la tranche 10-70%
             # de l'échelle globale du pipeline. Même à 0%, on publie un
@@ -323,12 +325,18 @@ class AIVideoPipeline:
             except (TypeError, ValueError):
                 return
             if pct <= 0:
-                mapped = 0.10
-                msg = "Génération de la vidéo en cours (démarrage)..."
+                # v8.1: Agnes remonte souvent 0% pendant de longues minutes
+                # puis saute directement à 100% : on fait avancer la barre
+                # selon le temps écoulé (+10%/min, plafond +30%) pour que
+                # l'UI ne semble pas figée sur 10%.
+                elapsed_min = (time.time() - _gen_started) / 60.0
+                creep = min(0.30, elapsed_min * 0.10)
+                mapped = 0.10 + creep
+                msg = "Génération de la vidéo en cours..."
             else:
                 mapped = 0.10 + min(100.0, pct) * 0.60 / 100.0
                 msg = f"Génération de la vidéo... {int(pct)}%"
-            await self._emit_progress("video_gen", msg, round(mapped, 4))
+            await self._emit_progress("video_gen", msg, round(min(0.68, mapped), 4))
 
         async def _do_generate():
             video_output = await self.video_api.generate_single_video(

@@ -74,12 +74,17 @@ CREATE TABLE IF NOT EXISTS tasks (
     prompt           TEXT NOT NULL DEFAULT '',
     current_message  TEXT NOT NULL DEFAULT '',
     final_video_file TEXT NOT NULL DEFAULT '',
+    video_backup_url TEXT NOT NULL DEFAULT '',
     created_at       DOUBLE PRECISION,
     updated_at       DOUBLE PRECISION
 );
 
 -- Migration idempotente (table déjà créée avant l'ajout de user_id) :
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT '';
+
+-- Migration idempotente : URL de sauvegarde Supabase de la vidéo finale
+-- (lecture possible après redéploiement, disque éphémère effacé) :
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS video_backup_url TEXT NOT NULL DEFAULT '';
 
 -- Migration idempotente : user_id du créateur d'une publication galerie
 -- ('' = publication héritée, créée avant l'isolation par créateur).
@@ -281,6 +286,30 @@ class SupabaseCommunityStore(CommunityStore):
             f"({len(data)} octets, bucket={SUPABASE_STORAGE_BUCKET})"
         )
         return {"video_id": video_id, "video_url": self._public_url(storage_path)}
+
+    def save_task_video_backup(self, task_id: str, video_path: str) -> Optional[str]:
+        """Sauvegarde la vidéo finale d'une tâche (copie privée de secours).
+
+        Upload vers `backup/{task_id}.mp4` dans le bucket Supabase et retourne
+        l'URL publique, ou None en cas d'échec. Ne publie rien dans la galerie :
+        c'est une copie de secours, référencée par `tasks.video_backup_url` pour
+        rester lisible après un redéploiement Render (disque éphémère effacé).
+        """
+        try:
+            if not task_id or not video_path or not os.path.exists(video_path):
+                return None
+            storage_path = f"backup/{task_id}.mp4"
+            with open(video_path, "rb") as f:
+                data = f.read()
+            self._storage().upload(storage_path, data, {"content-type": DEFAULT_VIDEO_MIME})
+            logger.info(
+                f"[CommunityStore] Backup vidéo {task_id} -> supabase storage "
+                f"({len(data)} octets, bucket={SUPABASE_STORAGE_BUCKET})"
+            )
+            return self._public_url(storage_path)
+        except Exception as e:
+            logger.warning(f"[CommunityStore] Échec sauvegarde vidéo {task_id}: {e}")
+            return None
 
     def _row_to_video(self, row: dict, like_counts: dict, comment_counts: dict) -> dict:
         vid = row["id"]
@@ -514,6 +543,7 @@ class _CoalescingWriter:
             "prompt": meta.get("prompt", ""),
             "current_message": meta.get("current_message", ""),
             "final_video_file": meta.get("final_video_file", ""),
+            "video_backup_url": meta.get("video_backup_url", ""),
             "created_at": meta.get("created_at"),
             "updated_at": meta.get("updated_at", time.time()),
         }, on_conflict="task_id").execute()

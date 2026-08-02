@@ -110,6 +110,7 @@ def export_meta(state, dir_name: str) -> dict:
         "prompt": (prompt or "")[:500],
         "current_message": getattr(state, "current_message", "") or "",
         "final_video_file": getattr(state, "final_video_file", "") or "",
+        "video_backup_url": getattr(state, "video_backup_url", "") or "",
         "created_at": _created_at_from_dir(dir_name),
         "updated_at": now,
     }

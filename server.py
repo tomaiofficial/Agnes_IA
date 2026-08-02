@@ -67,6 +67,7 @@ from core.storage import (
     get_task_store,
     init_persistent_storage,
     storage_mode,
+    is_persistent_storage,
 )
 from core.task_manager import TaskManager
 from core.video import (
@@ -113,7 +114,7 @@ TASK_TYPE_WEIGHTS = {
     TaskType.POETRY: 3,       # 1 Chat(拆分) + N*Video + N*合成
     TaskType.IMAGE: 1,        # 1 image submit
 }
-MAX_CONCURRENT_WEIGHT = int(_AGNES_RATE_LIMIT * 0.7)  # 默认 21
+MAX_CONCURRENT_WEIGHT = min(int(_AGNES_RATE_LIMIT * 0.7), 4)  # plan Free 512 Mo : ~1 pipeline lourd à la fois (manuscript=4)
 
 
 class WeightedSemaphore:
@@ -397,7 +398,7 @@ async def lifespan(app: FastAPI):
 
     # v8.0: Initialiser la file d'attente globale, le monitoring et le validateur de sécurité
     global _video_queue, _video_monitor, _security_validator
-    _video_queue = VideoQueue(max_concurrent=2, max_queue_size=100)
+    _video_queue = VideoQueue(max_concurrent=1, max_queue_size=100)  # 1 génération à la fois : évite l'OOM sur le plan Free 512 Mo
     _video_monitor = VideoMonitor()
     _security_validator = SecurityValidator()
     await _video_queue.start()
@@ -1085,7 +1086,7 @@ async def list_tasks(user_id: str = Header(default="", alias="X-User-Id")):
                     "status": row.get("status", "failed"),
                     "prompt": row.get("prompt", ""),
                     "current_message": row.get("current_message", ""),
-                    "final_video_file": row.get("final_video_file", ""),
+                    "final_video_file": row.get("final_video_file", "") or row.get("video_backup_url", ""),
                     "updated_at": row.get("updated_at"),
                     "restored_from_db": True,
                 }
@@ -1118,6 +1119,11 @@ async def get_task(task_id: str, user_id: str = Header(default="", alias="X-User
         data["dir_name"] = meta.get("dir_name", "") or dir_name
         data["restored_from_db"] = True
         data["current_progress"] = 1.0 if data.get("status") == "completed" else 0.0
+        # v8.1: l'UI affiche le lecteur si final_video_file est renseigné ; on y
+        # met l'URL de sauvegarde Supabase quand le fichier local a disparu.
+        data["final_video_file"] = (
+            meta.get("final_video_file", "") or meta.get("video_backup_url", "")
+        )
         return data
     if state.user_id and state.user_id != user_id:
         raise HTTPException(status_code=403, detail="Accès refusé : cette tâche appartient à un autre utilisateur")
@@ -1138,8 +1144,10 @@ async def serve_video(task_id: str, user_id: str = Header(default="", alias="X-U
     if os.path.exists(video_path):
         return FileResponse(video_path, media_type="video/mp4")
     # Fichier local perdu (système de fichiers éphémère après redéploiement) :
-    # on sert la copie publiée en galerie si elle existe.
+    # on sert d'abord la copie publiée en galerie, puis la sauvegarde Supabase.
     published = _get_published_video(task_id)
+    if published is None:
+        published = _get_task_video_backup(task_id)
     if published is None:
         raise HTTPException(status_code=404, detail="Video not found")
     target = published["video_target"]
@@ -1158,6 +1166,44 @@ def _get_published_video(task_id: str) -> Optional[dict]:
     except Exception as e:
         logger.warning(f"[Video] Récupération publication {task_id} impossible: {e}")
         return None
+
+
+def _get_task_video_backup(task_id: str) -> Optional[dict]:
+    """Retourne la sauvegarde Supabase de la vidéo d'une tâche (video_backup_url),
+    ou None. Best-effort : ne fait jamais échouer la requête."""
+    try:
+        meta = get_task_store().get_meta(task_id)
+        url = (meta or {}).get("video_backup_url") or ""
+        if not url:
+            return None
+        return {"video_target": url}
+    except Exception as e:
+        logger.warning(f"[Video] Récupération sauvegarde {task_id} impossible: {e}")
+        return None
+
+
+def _persist_video_backup(task_id: str, video_path: str) -> None:
+    """Sauvegarde la vidéo finale vers Supabase Storage (copie privée de secours)
+    pour que la lecture reste possible après un redéploiement Render (le disque
+    éphémère du plan Free est effacé). Best-effort : un échec ne casse jamais la
+    génération — on logge simplement."""
+    try:
+        if not is_persistent_storage():
+            return
+        if not video_path or not os.path.exists(video_path):
+            return
+        url = get_community_store().save_task_video_backup(task_id, video_path)
+        if not url:
+            return
+        meta = get_task_store().get_meta(task_id) or {
+            "task_id": task_id,
+            "dir_name": _find_dir_name(task_id),
+        }
+        meta["video_backup_url"] = url
+        get_task_store().upsert_meta(meta)
+        logger.info(f"[VideoBackup] {task_id} sauvegardée ({url[:80]}...)")
+    except Exception as e:
+        logger.warning(f"[VideoBackup] Échec sauvegarde {task_id}: {e}")
 
 
 def _proxy_storage_video(url: str) -> StreamingResponse:
@@ -1502,6 +1548,14 @@ async def _run_pipeline(pipeline: BasePipeline, state: BaseTaskState):
         logger.info(f"[Pipeline] Starting run for task {pipeline.task_id}, type={state.task_type}")
         await pipeline.run(state)
         logger.info(f"[Pipeline] Completed run for task {pipeline.task_id}")
+        # v8.1: sauvegarde Supabase de la vidéo finale (lecture possible après
+        # redéploiement malgré le disque éphémère du plan Free).
+        try:
+            final_path = getattr(state, "final_video_file", "") or ""
+            if final_path:
+                await asyncio.to_thread(_persist_video_backup, pipeline.task_id, final_path)
+        except Exception as e:
+            logger.warning(f"[Pipeline] Sauvegarde vidéo {pipeline.task_id} impossible: {e}")
     except PipelineShutdown:
         logger.info(f"[Pipeline] Task {pipeline.task_id} stopped by user")
     except Exception as e:
@@ -1900,6 +1954,12 @@ async def create_advanced_task(
                 current_progress=1.0,
             )
             logger.info(f"[Advanced] Task {task_id} completed: {result.video_path}")
+            # v8.1: sauvegarde Supabase de la vidéo finale (lecture possible
+            # après redéploiement malgré le disque éphémère du plan Free).
+            try:
+                await asyncio.to_thread(_persist_video_backup, task_id, result.video_path)
+            except Exception as e:
+                logger.warning(f"[Advanced] Sauvegarde vidéo {task_id} impossible: {e}")
 
         except Exception as e:
             logger.error(f"[Advanced] Task {task_id} failed: {e}", exc_info=True)

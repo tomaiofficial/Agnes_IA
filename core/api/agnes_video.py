@@ -52,6 +52,7 @@ class AgnesVideoAPI:
         max_retries: int = 6,
         retry_base_delay: float = 15.0,
         on_retry: Optional[Callable] = None,
+        poll_interval: float = 3.0,
     ):
         self.api_key = api_key
         self.model = model
@@ -59,6 +60,7 @@ class AgnesVideoAPI:
         self.max_retries = max_retries
         self.retry_base_delay = retry_base_delay
         self.on_retry = on_retry
+        self.poll_interval = poll_interval
         self.shutdown_event = None
         self.headers = {
             "Authorization": f"Bearer {api_key}",
@@ -676,12 +678,17 @@ class AgnesVideoAPI:
         return video_id
 
     async def wait_for_video(self, video_id: str, progress_callback=None,
-                             max_poll_duration: int = 1800) -> VideoOutput:
+                             max_poll_duration: int = 1800,
+                             interval: Optional[float] = None) -> VideoOutput:
+        # Intervalle de polling : défaut = poll_interval du constructeur
+        # (3 s pour les utilisateurs, 15 s pour les bots → préserve le rate limiter global)
+        poll_interval = interval if interval is not None else self.poll_interval
         try:
             final = await self._poll_task(
                 video_id,
                 progress_callback=progress_callback,
                 max_poll_duration=max_poll_duration,
+                interval=poll_interval,
             )
         except RuntimeError as e:
             # Auto-relance : si l'API a perdu/expiré la vidéo pendant la
@@ -707,6 +714,7 @@ class AgnesVideoAPI:
                     video_id,
                     progress_callback=progress_callback,
                     max_poll_duration=max_poll_duration,
+                    interval=poll_interval,
                 )
             else:
                 raise
@@ -737,6 +745,7 @@ class AgnesVideoAPI:
                     video_id,
                     progress_callback=progress_callback,
                     max_poll_duration=max_poll_duration,
+                    interval=poll_interval,
                 )
                 video_url = (
                     final.get("video_url")

@@ -86,6 +86,8 @@ async def generate_and_publish(
         max_concurrent=1,
         generation_timeout=900,   # 15 min max : ne pas bloquer la file des vrais utilisateurs
         postprocess_timeout=300,  # 5 min max de post-traitement
+        poll_interval=15,         # polling lent : préserve le rate limiter global partagé
+                                  # avec les tâches des utilisateurs (429 observés à 3 s)
     )
 
     pipeline = AIVideoPipeline(

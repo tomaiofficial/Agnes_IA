@@ -1845,18 +1845,30 @@ async def create_advanced_task(
 
     # Lancer le pipeline avancé en arrière-plan
     async def _run_advanced():
+        tm = TaskManager(task_id, dir_name=dir_name)
         try:
+            async def _on_progress(step: str, message: str, progress: float) -> None:
+                # Publie l'avancement du pipeline dans le task_state :
+                # l'UI (pollTaskProgress) affiche la barre, le message et
+                # l'étape en direct pendant toute la génération.
+                tm.update_state(
+                    current_step=step,
+                    current_status="running",
+                    current_message=message,
+                    current_progress=round(float(progress), 4),
+                )
+
             pipeline = AIVideoPipeline(
                 api_key=api_key,
                 config=config,
                 queue=_video_queue,
                 monitor=_video_monitor,
+                on_progress=_on_progress,
             )
             pipeline.video_api.shutdown_event = shutdown_event
 
             # Émettre le statut initial
             state.status = StepStatus.QUEUED
-            tm = TaskManager(task_id, dir_name=dir_name)
             tm.create(state)
             tm.update_state(
                 current_step="init", current_status="running",
@@ -1892,7 +1904,6 @@ async def create_advanced_task(
         except Exception as e:
             logger.error(f"[Advanced] Task {task_id} failed: {e}", exc_info=True)
             state.status = StepStatus.FAILED
-            tm = TaskManager(task_id, dir_name=dir_name)
             tm.update_state(
                 status=StepStatus.FAILED,
                 current_message=f"Erreur: {str(e)[:200]}",

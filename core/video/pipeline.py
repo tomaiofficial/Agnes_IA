@@ -34,7 +34,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Callable, Optional
 
 from core.api.agnes_video import AgnesVideoAPI
 from core.cache.redis_cache import get_cache
@@ -70,6 +70,10 @@ class PipelineConfig:
     # File d'attente
     priority: TaskPriority = TaskPriority.FREE
     max_concurrent: int = 2
+
+    # Polling API Agnes : les bots ralentissent l'intervalle (15 s) pour ne pas
+    # saturer le rate limiter global partagé avec les tâches utilisateur.
+    poll_interval: float = 3.0
 
     # Optimisation prompt
     optimize_prompt: bool = True
@@ -108,17 +112,23 @@ class AIVideoPipeline:
         config: Optional[PipelineConfig] = None,
         queue: Optional[VideoQueue] = None,
         monitor: Optional[VideoMonitor] = None,
+        on_progress: Optional[Callable[[str, str, float], None]] = None,
     ):
         self.api_key = api_key
         self.config = config or PipelineConfig()
         self.queue = queue or VideoQueue(max_concurrent=self.config.max_concurrent)
         self.monitor = monitor or VideoMonitor()
         self.cache = get_cache()
+        # Callback de progression (step_key, message, progress 0..1) :
+        # utilisé par le endpoint /api/tasks/advanced pour publier l'avancement
+        # dans le task_state (sinon l'UI reste bloquée sur « Initialisation... »).
+        self.on_progress = on_progress
 
         # Initialiser les composants
         self.video_api = AgnesVideoAPI(
             api_key=api_key,
             on_retry=self._on_retry,
+            poll_interval=self.config.poll_interval,
         )
         self.postprocessor = VideoPostProcessor(
             config=PostProcessConfig(
@@ -144,6 +154,17 @@ class AIVideoPipeline:
         logger.warning(
             f"[AIVideoPipeline] Retry {attempt} in {delay:.0f}s: {reason}"
         )
+
+    async def _emit_progress(self, step: str, message: str, progress: float) -> None:
+        """Publie la progression via le callback on_progress (si fourni)."""
+        if not self.on_progress:
+            return
+        try:
+            result = self.on_progress(step, message, progress)
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception as e:
+            logger.warning(f"[AIVideoPipeline] Progress callback error: {e}")
 
     async def generate(
         self,
@@ -179,6 +200,7 @@ class AIVideoPipeline:
 
         # ── Étape 1 : Analyse IA du prompt ──
         self.monitor.start_stage(task_id, "prompt_analysis")
+        await self._emit_progress("prompt_analysis", "Analyse du prompt...", 0.05)
         optimized_prompt = prompt
         if self.config.optimize_prompt:
             # Cache Redis : éviter de re-optimiser des prompts identiques
@@ -212,9 +234,11 @@ class AIVideoPipeline:
                     ttl=86400,  # 24h
                 )
         self.monitor.end_stage(task_id, "prompt_analysis", extra=stages.get("prompt_optimization"))
+        await self._emit_progress("prompt_optimization", "Optimisation du prompt terminée", 0.08)
 
         # ── Étape 2 : Génération vidéo (via queue) ──
         self.monitor.start_stage(task_id, "video_generation")
+        await self._emit_progress("video_gen", "Génération de la vidéo...", 0.10)
         video_path = await self._generate_video(
             prompt=optimized_prompt,
             duration=duration,
@@ -225,10 +249,12 @@ class AIVideoPipeline:
             negative_prompt=negative_prompt,
             working_dir=working_dir,
         )
+        await self._emit_progress("video_gen", "Vidéo générée", 0.70)
         self.monitor.end_stage(task_id, "video_generation", extra={"video_path": video_path})
 
         # ── Étape 3 : Upscaling + amélioration visuelle ──
         self.monitor.start_stage(task_id, "upscaling")
+        await self._emit_progress("upscaling", "Upscaling et amélioration visuelle...", 0.85)
         enhanced_path = await self.postprocessor.enhance(video_path)
         if enhanced_path != video_path:
             video_path = enhanced_path
@@ -237,17 +263,20 @@ class AIVideoPipeline:
         # ── Étape 4 : Amélioration audio ──
         if self.config.audio_enabled:
             self.monitor.start_stage(task_id, "audio_enhancement")
+            await self._emit_progress("audio", "Ajout de l'audio...", 0.92)
             video_path = await self._enhance_audio(video_path, prompt)
             self.monitor.end_stage(task_id, "audio_enhancement")
 
         # ── Étape 5 : Compression intelligente ──
         self.monitor.start_stage(task_id, "compression")
+        await self._emit_progress("compression", "Compression de la vidéo...", 0.98)
         final_path = await self._compress(video_path)
         self.monitor.end_stage(task_id, "compression")
 
         # ── Finalisation ──
         total_duration = time.time() - start_time
         self.monitor.finalize_task(task_id, status="completed")
+        await self._emit_progress("done", "Terminé", 1.0)
 
         # Récupérer les métriques
         metrics = self.monitor.get_metrics(task_id) or {}
@@ -278,6 +307,22 @@ class AIVideoPipeline:
         video_path = os.path.join(working_dir, "final_video.mp4")
 
         # Soumettre via la queue
+        async def _agv_progress(status: str, progress, curl_cmd: str) -> None:
+            # Mappe la progression Agnes (0-100%) sur la tranche 10-70%
+            # de l'échelle globale du pipeline.
+            try:
+                pct = float(progress)
+            except (TypeError, ValueError):
+                return
+            if pct <= 0:
+                return
+            mapped = 0.10 + min(100.0, pct) * 0.60 / 100.0
+            await self._emit_progress(
+                "video_gen",
+                f"Génération de la vidéo... {int(pct)}%",
+                round(mapped, 4),
+            )
+
         async def _do_generate():
             video_output = await self.video_api.generate_single_video(
                 prompt=prompt,
@@ -287,6 +332,7 @@ class AIVideoPipeline:
                 height=height,
                 seed=seed,
                 negative_prompt=negative_prompt,
+                progress_callback=_agv_progress,
             )
             video_output.save(video_path)
             return video_path

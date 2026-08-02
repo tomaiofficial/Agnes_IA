@@ -150,7 +150,7 @@ class IAPipeline:
         
         return result
 
-    async def _step_prompt(self, job):
+    async def _step_prompt(self, job, result):
         start = time.time()
         try:
             prompt = job.get("prompt", "")

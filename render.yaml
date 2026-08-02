@@ -1,39 +1,57 @@
-# ════════════════════════════════════════════════════
-# Config Render pour le service web agnes-ia
-#
-# ⚠️ SPIN-DOWN (mise en veille) — à lire absolument :
-#   - Plan Free : l'instance se met en veille après ~15 min sans trafic,
-#     puis redémarre à la prochaine requête (cycle visible toutes les
-#     20-30 min). Ce n'est PAS un bug : c'est le comportement du plan Free.
-#   - Gardien d'éveil : .github/workflows/keepalive.yml pinge /api/health
-#     toutes les 3 min pour maintenir l'instance éveillée (gratuit,
-#     best-effort — les cron GitHub peuvent être retardés).
-#   - Solution DÉFINITIVE : passer ce service en plan payant Starter
-#     (~7 $/mois) → plus jamais de veille ni de redémarrage. Mettre
-#     `plan: starter` ci-dessous et cliquer Deploy dans le dashboard Render.
-# ════════════════════════════════════════════════════
-
 services:
   - type: web
-    name: agnes-ia
-    env: python
-    # Débloquer en payant pour supprimer le spin-down :
-    # plan: starter
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    name: agnes-ia-api
+    runtime: python
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
     envVars:
-      - key: AGNES_API_KEY
-        sync: false
-      - key: PORT
-        value: 10000
-      # Stockage persistant (galerie communautaire + metadonnees de taches)
-      # Creer un projet gratuit sur https://supabase.com (voir SUPABASE_SETUP.md)
+      - key: REDIS_URL
+        fromService: agnes-redis
       - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
-      - key: SUPABASE_DATABASE_URL
-        sync: false
-      - key: SUPABASE_STORAGE_BUCKET
-        value: agnes-community
-    healthCheckPath: /api/health
+        value: YOUR_SUPABASE_URL
+      - key: SUPABASE_KEY
+        value: YOUR_SUPABASE_KEY
+      - key: AWS_ACCESS_KEY_ID
+        value: YOUR_AWS_ACCESS_KEY
+      - key: AWS_SECRET_ACCESS_KEY
+        value: YOUR_AWS_SECRET_KEY
+      - key: S3_BUCKET
+        value: agnes-ia
+      - key: MAX_VRAM
+        value: "0.9"
+      - key: DEBUG
+        value: "false"
+    autoDeploy: true
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port 8000
+    numInstances: 1
+    memoryLimit: 4GB
+    diskLimit: 10GB
+    cpuLimit: 2
+    
+  - type: worker
+    name: agnes-ia-worker
+    runtime: python
+    command: celery -A queue.tasks worker --loglevel=info
+    envVars:
+      - key: REDIS_URL
+        fromService: agnes-redis
+      - key: SUPABASE_URL
+        value: YOUR_SUPABASE_URL
+      - key: SUPABASE_KEY
+        value: YOUR_SUPABASE_KEY
+      - key: AWS_ACCESS_KEY_ID
+        value: YOUR_AWS_ACCESS_KEY
+      - key: AWS_SECRET_ACCESS_KEY
+        value: YOUR_AWS_SECRET_KEY
+      - key: S3_BUCKET
+        value: agnes-ia
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A queue.tasks worker --loglevel=info
+    numInstances: 2
+    memoryLimit: 4GB
+    diskLimit: 10GB
+    cpuLimit: 2
+
+  - type: redis
+    name: agnes-redis
+    plan: starter

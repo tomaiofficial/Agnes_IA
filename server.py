@@ -310,6 +310,58 @@ def _reconcile_stale_task(meta: dict) -> dict:
     return meta
 
 
+async def _auto_resume_interrupted(tasks: list) -> None:
+    """v8.3: Reprend automatiquement les tâches interrompues par un redémarrage.
+
+    Le disque éphémère a survécu (restart Render / OOM / arrêt propre) :
+    task_state.json et le video_id déjà soumis (task.json) sont présents, donc
+    le pipeline reprend le polling de la génération Agnes **sans la resoumettre**
+    (pas de double facturation). Limite à 3 tâches pour ne pas saturer le plan
+    Free au démarrage ; la file de concurrency (max 1) gère le reste.
+
+    Les tâches perdues lors d'un redéploiement Render (disque effacé) ne sont
+    PAS concernées : leur état est irrécupérable sans sauvegarde Supabase de la
+    vidéo (video_backup_url) → elles restent marquées échouées pour ne pas
+    bloquer l'interface.
+    """
+    if not tasks:
+        return
+    api_key = get_api_key()
+    if not api_key:
+        logger.warning("[Startup] Auto-reprise ignorée: pas de clé API configurée")
+        return
+    limit = min(len(tasks), 3)
+    logger.info(f"[Startup] Auto-reprise de {len(tasks)} tâche(s) interrompue(s) (max {limit})")
+    resumed = 0
+    for task_id, dir_name in tasks[:limit]:
+        try:
+            tm = TaskManager(task_id, dir_name=dir_name)
+            state = tm.load()
+            if not state or state.status == StepStatus.COMPLETED:
+                logger.warning(
+                    f"[Startup] Auto-reprise {task_id}: état non récupérable, ignorée"
+                )
+                continue
+            async with _get_pipeline_lock(task_id):
+                if task_id in active_pipelines:
+                    continue
+                pipeline = _create_pipeline_for_type(
+                    state.task_type, api_key, task_id, dir_name
+                )
+                active_pipelines[task_id] = pipeline
+                _launch_background_task(
+                    _run_pipeline_with_concurrency(pipeline, state, tm)
+                )
+            logger.info(
+                f"[Startup] Auto-reprise lancée pour {task_id} (type={state.task_type})"
+            )
+            resumed += 1
+        except Exception as e:
+            logger.warning(f"[Startup] Auto-reprise {task_id} impossible: {e}")
+    if resumed:
+        logger.info(f"[Startup] {resumed} tâche(s) reprise(s) automatiquement")
+
+
 # ═══════════════════════════════════════════════════
 # Lifespan
 # ═══════════════════════════════════════════════════
@@ -324,6 +376,11 @@ async def lifespan(app: FastAPI):
     working_dir = get_working_dir()
     set_workspace_root(working_dir)  # 错误收集模块使用激活的工作空间
     recovered = 0
+    # v8.3: tâches running/queued dont l'état local a survécu au redémarrage
+    # (restart/OOM Render) → à reprendre automatiquement après initialisation
+    # de la file d'attente (l'état ne survit pas à un redéploiement : disque
+    # éphémère effacé → ces tâches restent échouées, voir mark_interrupted).
+    interrupted_tasks: list = []
     if os.path.exists(working_dir):
         for name in os.listdir(working_dir):
             task_file = os.path.join(working_dir, name, "task_state.json")
@@ -364,6 +421,12 @@ async def lifespan(app: FastAPI):
                         if data.get("status") in ("running", "queued"):
                             data["status"] = "failed"
                             data["current_message"] = "Interrompu: le serveur a redémarré"
+                            # v8.3: état local conservé → reprise automatique
+                            # au démarrage (poll du video_id déjà soumis, pas
+                            # de double facturation).
+                            interrupted_tasks.append(
+                                (data.get("task_id") or name, name)
+                            )
                         
                         tmp_fd, tmp_path = tempfile.mkstemp(
                             dir=os.path.join(working_dir, name), suffix=".tmp"
@@ -403,6 +466,14 @@ async def lifespan(app: FastAPI):
     _security_validator = SecurityValidator()
     await _video_queue.start()
     logger.info("[Startup] Video queue + monitor + security validator initialized (v8.0)")
+
+    # v8.3: Reprise automatique des tâches interrompues par un redémarrage.
+    # L'état local (task_state.json + task.json/video_id) a survécu → le
+    # pipeline reprend le poll de la génération Agnes déjà soumise.
+    try:
+        await _auto_resume_interrupted(interrupted_tasks)
+    except Exception as e:
+        logger.warning(f"[Startup] Auto-reprise échouée: {e}")
 
     # Moteur de créateurs IA autonomes (scheduler horaire)
     try:

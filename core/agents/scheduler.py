@@ -104,7 +104,10 @@ class AgentScheduler:
         return True
 
     def is_enabled(self, persona: AgentPersona) -> bool:
-        return bool(self._state.get(persona.id, {}).get("enabled", True))
+        # Désactivé par défaut : les générations autonomes (Full HD 15s) font
+        # OOM le plan Free 512 Mo (cascade de "Ran out of memory"). Réactivable
+        # à la demande via POST /api/agents/toggle (ou run-now).
+        return bool(self._state.get(persona.id, {}).get("enabled", False))
 
     # ── Slot / anti-doublon ──────────────────────────────────────────
     @staticmethod

@@ -423,10 +423,15 @@ async def lifespan(app: FastAPI):
                             data["current_message"] = "Interrompu: le serveur a redémarré"
                             # v8.3: état local conservé → reprise automatique
                             # au démarrage (poll du video_id déjà soumis, pas
-                            # de double facturation).
-                            interrupted_tasks.append(
-                                (data.get("task_id") or name, name)
-                            )
+                            # de double facturation). RESTREINT aux tâches
+                            # simples : les pipelines avancés (creative/
+                            # manuscript/anchor/poetry) reprennent un
+                            # postprocess Full HD qui OOM le plan Free
+                            # 512 Mo → boucle de redémarrage à chaque boot.
+                            if data.get("task_type") == "simple":
+                                interrupted_tasks.append(
+                                    (data.get("task_id") or name, name)
+                                )
                         
                         tmp_fd, tmp_path = tempfile.mkstemp(
                             dir=os.path.join(working_dir, name), suffix=".tmp"

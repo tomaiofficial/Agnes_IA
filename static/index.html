@@ -287,6 +287,11 @@
     scroll-snap-type: y mandatory;
     scrollbar-width: none;
     background: #000;
+    /* v8.5: scroll fluide + touch optimisé */
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: auto;
+    touch-action: pan-y;
+    contain: layout paint;
   }
   .feed-scroll::-webkit-scrollbar { display: none; }
   .feed-slide {
@@ -295,12 +300,19 @@
     scroll-snap-align: start;
     background: #000;
     overflow: hidden;
+    /* v8.5: GPU layer pour swipe fluide */
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    contain: layout paint style;
   }
   .feed-video {
     width: 100%;
     height: 100%;
     object-fit: contain;
     background: #000;
+    /* v8.5: décodage hardware + layer GPU */
+    transform: translateZ(0);
   }
   .feed-gradient {
     position: absolute;
@@ -1573,6 +1585,34 @@ function feedActivateVideo(video) {
     video.muted = true;
     video.play().catch(() => {});
   }
+  // v8.5: passer en preload=auto pour la vidéo active
+  if (video.preload !== 'auto') video.preload = 'auto';
+}
+
+// v8.5: préchargement intelligent des vidéos adjacentes
+const preloadedUrls = new Set();
+function preloadVideo(url) {
+  if (!url || preloadedUrls.has(url)) return;
+  preloadedUrls.add(url);
+  const link = document.createElement('link');
+  link.rel = 'prefetch';
+  link.href = url;
+  link.as = 'video';
+  document.head.appendChild(link);
+  // Aussi créer un élément video caché pour forcer le préchargement navigateur
+  const v = document.createElement('video');
+  v.src = url;
+  v.preload = 'auto';
+  v.style.display = 'none';
+  v.muted = true;
+  document.body.appendChild(v);
+  // Nettoyer après un délai
+  setTimeout(() => { v.remove(); }, 30000);
+}
+
+function preloadAdjacentVideos(currentIndex, total) {
+  if (currentIndex > 0) preloadVideo(feedVideos[currentIndex - 1]?.video_url);
+  if (currentIndex < total - 1) preloadVideo(feedVideos[currentIndex + 1]?.video_url);
 }
 
 // Dès la première interaction (clic/tap n'importe où), activer le son de la
@@ -1616,17 +1656,21 @@ async function loadGallery() {
     }
     container.innerHTML = '';
     feedVideos = d.videos;
-    d.videos.forEach(v => container.appendChild(buildFeedSlide(v)));
+    const total = d.videos.length;
+    d.videos.forEach((v, i) => container.appendChild(buildFeedSlide(v, i, total)));
     setupFeedObserver();
+    // v8.5: précharger la 2ème vidéo dès le début
+    if (total > 1) preloadVideo(d.videos[1].video_url);
   } catch(e) {
     container.innerHTML = '<div class="flex flex-col items-center justify-center h-full"><p class="text-gray-400 text-sm">Erreur de chargement : ' + escapeHtml(e.message) + '</p></div>';
   }
 }
 
-function buildFeedSlide(v) {
+function buildFeedSlide(v, index, total) {
   const slide = document.createElement('div');
   slide.className = 'feed-slide';
   slide.dataset.videoId = v.id;
+  slide.dataset.index = index;
 
   // Vidéo plein écran (object-fit: contain)
   const video = document.createElement('video');
@@ -1635,7 +1679,11 @@ function buildFeedSlide(v) {
   video.muted = true;
   video.loop = true;
   video.playsInline = true;
-  video.preload = 'metadata';
+  // v8.5: preload metadata pour la 1ère, auto pour la vidéo active
+  video.preload = index === 0 ? 'auto' : 'metadata';
+  // v8.5: hint décodage hardware
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
   slide.appendChild(video);
 
   // Dégradé bas
@@ -1701,6 +1749,11 @@ function buildFeedSlide(v) {
   // Première frame comme vignette
   video.addEventListener('loadedmetadata', () => { if (video.paused) video.currentTime = 0.5; });
 
+  // v8.5: précharger la vidéo suivante/précédente quand celle-ci devient active
+  video.addEventListener('play', () => {
+    preloadAdjacentVideos(index, total);
+  });
+
   return slide;
 }
 
@@ -1710,14 +1763,18 @@ function setupFeedObserver() {
     entries.forEach(entry => {
       const video = entry.target.querySelector('.feed-video');
       if (!video) return;
-      if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
+      if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
         feedActivateVideo(video);
       } else {
         video.pause();
         video.muted = true;
       }
     });
-  }, { threshold: 0.55 });
+  }, { 
+    root: document.getElementById('feed-container'),
+    rootMargin: '0px',
+    threshold: [0.55, 0.6, 0.75]
+  });
   document.querySelectorAll('.feed-slide').forEach(s => feedObserver.observe(s));
 }
 

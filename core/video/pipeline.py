@@ -367,7 +367,7 @@ class AIVideoPipeline:
         return result
 
     async def _enhance_audio(self, video_path: str, prompt: str) -> str:
-        """Améliore l'audio de la vidéo (TTS + débruitage + normalisation + spatialisation)."""
+        """Améliore l'audio de la vidéo (TTS + débruitage léger + normalisation douce)."""
         from core.audio.tts import EdgeTTSEngine
         from core.audio.enhancer import AudioEnhancer, AudioEnhanceConfig
 
@@ -380,15 +380,17 @@ class AIVideoPipeline:
             rate=self.config.audio_rate,
         )
 
-        # v8.0: Amélioration audio avancée (débruitage, normalisation, spatialisation)
+        # v8.5: config audio adaptée au TTS synthétique (pas de débruitage agressif
+        # qui dégrade la voix artificielle). On garde normalisation douce + EQ vocal.
         enhancer = AudioEnhancer(
             config=AudioEnhanceConfig(
-                denoise=True,
-                normalize=True,
-                reduce_breath=True,
+                denoise=False,           # TTS = pas de bruit à enlever (afftdn crée des artefacts)
+                normalize=True,          # loudnorm doux pour niveau constant
+                reduce_breath=False,     # pas de souffle sur TTS
                 spatialize=False,
-                eq_preset="vocal",
-                remove_clicks=True,
+                eq_preset="vocal",       # EQ vocal léger
+                remove_clicks=False,     # pas de clics sur TTS
+                target_lufs=-18.0,       # niveau plus naturel pour narration
             )
         )
         enhanced_audio = await enhancer.enhance(audio_path, audio_path + ".enhanced.wav")
@@ -426,16 +428,15 @@ class AIVideoPipeline:
         return video_path
 
     async def _compress(self, video_path: str) -> str:
-        """Compression intelligente (2-passes, bitrate adaptatif)."""
+        """Compression intelligente (qualité préservée, preset fast)."""
         output_path = video_path + ".final.mp4"
         cmd = [
             "ffmpeg", "-y",
             "-i", video_path,
             "-c:v", "libx264",
-            "-crf", "23",
-            # v8.4: preset ultrafast + 2 threads max (le preset medium faisait
-            # OOM le plan Free 512 Mo pendant la 2ème passe d'encodage)
-            "-preset", "ultrafast",
+            "-crf", "21",
+            # v8.5: preset fast (meilleur qualité/taille que ultrafast, encore OK RAM)
+            "-preset", "fast",
             "-threads", "2",
             "-c:a", "aac",
             "-b:a", "128k",

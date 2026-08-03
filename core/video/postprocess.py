@@ -148,18 +148,21 @@ class VideoPostProcessor:
         # 2. Dénombrement / débruitage
         if self.config.denoise:
             # hqdn3d = débruitage temporel + spatial haute qualité
-            filters.append(("hqdn3d", "2.0:1.5:6.0:4.5"))
+            # v8.5: paramètres plus doux pour éviter les artefacts (traînées, flou)
+            filters.append(("hqdn3d", "1.5:1.0:4.0:3.0"))
 
         # 3. Correction couleurs + contraste (auto)
         if self.config.color_correct:
             # eq = brightness/contrast/saturation/hue
-            filters.append(("eq", "contrast=1.1:saturation=1.1:brightness=0.02"))
+            # v8.5: contraste/saturation plus subtils
+            filters.append(("eq", "contrast=1.05:saturation=1.05:brightness=0.01"))
 
         # 4. Amélioration des visages (optionnel — nécessite le filtre face)
         if self.config.face_enhance:
             # Le filtre 'face' n'existe pas dans ffmpeg standard.
             # On utilise un sharpening sélectif au lieu de ça (fail-safe).
-            filters.append(("unsharp", "5:5:1.0"))
+            # v8.5: unsharp plus doux pour éviter les halos
+            filters.append(("unsharp", "3:3:0.5:3:3:0.0"))
 
         # 5. Interpolation de mouvement (ralentissement / fluidité)
         if self.config.motion_enhance:

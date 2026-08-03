@@ -61,6 +61,10 @@ class PipelineConfig:
     hdr: bool = False
     color_correct: bool = True
     compress: bool = True
+    # v8.4: plafond de largeur du postprocess (0 = illimité). Sur le plan Free
+    # 512 Mo, on passe la largeur demandée pour ne JAMAIS upscaler au-delà de
+    # la source (l'upscaling full_hd/2k/4k + preset medium faisait OOM).
+    max_width: int = 0
 
     # Audio
     audio_enabled: bool = True
@@ -140,6 +144,7 @@ class AIVideoPipeline:
                 hdr=self.config.hdr,
                 color_correct=self.config.color_correct,
                 compress=self.config.compress,
+                max_width=self.config.max_width,
             )
         )
         self.prompt_optimizer = PromptOptimizer(
@@ -428,7 +433,10 @@ class AIVideoPipeline:
             "-i", video_path,
             "-c:v", "libx264",
             "-crf", "23",
-            "-preset", "medium",
+            # v8.4: preset ultrafast + 2 threads max (le preset medium faisait
+            # OOM le plan Free 512 Mo pendant la 2ème passe d'encodage)
+            "-preset", "ultrafast",
+            "-threads", "2",
             "-c:a", "aac",
             "-b:a", "128k",
             "-movflags", "+faststart",

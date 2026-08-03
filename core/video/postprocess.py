@@ -132,10 +132,18 @@ class VideoPostProcessor:
         cur_w = info.get("width", 0)
         cur_h = info.get("height", 0)
 
-        if cur_w > 0 and (target_w > cur_w or self.config.denoise):
+        # v8.4: on ne redimensionne que si la cible est STRICTEMENT plus grande
+        # que la source. Avant, denoise=True forçait un scale même sans upscale :
+        # le postprocess full_hd + preset medium faisait OOM le plan Free 512 Mo
+        # et déformait les vidéos portrait (768x1152 → 1920x1080). Avec
+        # max_width = largeur demandée, on ne monte jamais au-delà de la source
+        # et l'aspect ratio est préservé (pas de distorsion).
+        if cur_w > 0 and target_w > cur_w:
             # Utiliser le super-échantillonnage bicubique pour l'upscaling
             # (Real-ESRGAN nécessiterait un modèle externe — on reste compatible)
-            scale_filter = f"scale={target_w}:{target_h}:flags=lanczos"
+            scale_filter = (
+                f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease:flags=lanczos"
+            )
             filters.append(("scale", scale_filter))
 
         # 2. Dénombrement / débruitage
@@ -202,7 +210,10 @@ class VideoPostProcessor:
             "-vf", filter_chain,
             "-c:v", "libx264",
             "-crf", str(self.config.crf),
-            "-preset", "medium",
+            # v8.4: preset ultrafast + 2 threads max → lookahead minimal,
+            # compatible plan Free 512 Mo (le preset medium OOM en full_hd)
+            "-preset", "ultrafast",
+            "-threads", "2",
             "-c:a", "copy",
             "-movflags", "+faststart",
             output_path,

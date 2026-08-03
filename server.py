@@ -1942,6 +1942,9 @@ async def create_advanced_task(
         audio_rate=audio_rate,
         priority=priority_map[priority],
         optimize_prompt=optimize_prompt,
+        # v8.4: le postprocess ne monte jamais au-delà de la largeur demandée
+        # (l'upscaling full_hd/2k/4k faisait OOM le plan Free 512 Mo)
+        max_width=video_width,
     )
 
     # Traitement de l'image de référence

@@ -136,14 +136,13 @@ class VideoPostProcessor:
         # que la source. Avant, denoise=True forçait un scale même sans upscale :
         # le postprocess full_hd + preset medium faisait OOM le plan Free 512 Mo
         # et déformait les vidéos portrait (768x1152 → 1920x1080). Avec
-        # max_width = largeur demandée, on ne monte jamais au-delà de la source
-        # et l'aspect ratio est préservé (pas de distorsion).
+        # max_width = largeur demandée, on ne monte jamais au-delà de la source.
+        # Le scale se fait sur la largeur seule (hauteur -2 = auto) pour
+        # préserver l'aspect ratio quel que soit le format (portrait/paysage).
         if cur_w > 0 and target_w > cur_w:
             # Utiliser le super-échantillonnage bicubique pour l'upscaling
             # (Real-ESRGAN nécessiterait un modèle externe — on reste compatible)
-            scale_filter = (
-                f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease:flags=lanczos"
-            )
+            scale_filter = f"scale={target_w}:-2:flags=lanczos"
             filters.append(("scale", scale_filter))
 
         # 2. Dénombrement / débruitage

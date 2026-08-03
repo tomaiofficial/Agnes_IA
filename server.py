@@ -450,6 +450,43 @@ async def lifespan(app: FastAPI):
     if recovered > 0:
         logger.info(f"[Startup] Recovered {recovered} video(s) from previous session")
 
+    # v8.4: restauration depuis video_backup_url (Supabase) pour les tâches
+    # qui ont un backup mais sont marquées failed/interrupted (disque effacé
+    # lors du redéploiement). Évite le message "Interrompu: le serveur a
+    # redémarré" quand la vidéo existe déjà en backup.
+    try:
+        from core.storage import get_task_store
+        store = get_task_store()
+        if hasattr(store, "list_meta"):
+            all_meta = store.list_meta()
+            restored_from_backup = 0
+            for meta in all_meta:
+                backup_url = meta.get("video_backup_url", "")
+                task_id = meta.get("task_id", "")
+                status = meta.get("status", "")
+                if backup_url and status != "completed" and task_id:
+                    # Vérifier si le répertoire local existe déjà
+                    task_dir = os.path.join(working_dir, task_id)
+                    video_path = os.path.join(task_dir, "final_video.mp4")
+                    if not os.path.exists(video_path):
+                        os.makedirs(task_dir, exist_ok=True)
+                        try:
+                            import urllib.request
+                            urllib.request.urlretrieve(backup_url, video_path)
+                            # Mettre à jour le méta local et Supabase
+                            meta["status"] = "completed"
+                            meta["final_video_file"] = video_path
+                            meta["current_message"] = "Restauré depuis backup Supabase"
+                            store.upsert_meta(meta)
+                            restored_from_backup += 1
+                            logger.info(f"[Startup] Restored {task_id} from video_backup_url")
+                        except Exception as e:
+                            logger.warning(f"[Startup] Failed to restore {task_id} from backup: {e}")
+            if restored_from_backup > 0:
+                logger.info(f"[Startup] Restored {restored_from_backup} video(s) from Supabase backup")
+    except Exception as e:
+        logger.warning(f"[Startup] Backup restoration failed: {e}")
+
     # v4.0: 预加载音色目录（edge_tts.list_voices），失败不阻断启动
     try:
         await load_voice_catalog()

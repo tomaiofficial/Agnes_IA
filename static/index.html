@@ -280,7 +280,7 @@
     .header-title { font-size: 1rem !important; }
     .header-nav a { font-size: 0.7rem !important; padding: 0.3rem 0.4rem !important; }
   }
-  /* ═══════ Galerie — Feed plein écran (style Reels/TikTok) ═══════ */
+  /* ═══════ Vibes — Feed plein écran (style Reels/TikTok) ═══════ */
   .feed-scroll {
     height: 100dvh;
     overflow-y: scroll;
@@ -292,6 +292,11 @@
     scroll-behavior: auto;
     touch-action: pan-y;
     contain: layout paint;
+    /* v8.12: pas de scroll chaining — quand on atteint le début ou la fin du
+       feed, le body ne doit PAS se mettre à défiler derrière (bug « quand on
+       descend, le fond bouge aussi ») */
+    overscroll-behavior: contain;
+    overscroll-behavior-y: contain;
   }
   .feed-scroll::-webkit-scrollbar { display: none; }
   .feed-slide {
@@ -388,7 +393,7 @@
       </a>
       <nav class="header-nav flex items-center gap-1 sm:gap-1">
         <a href="/" onclick="switchMode('video');return false;" class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors text-cyan-300/90 hover:text-cyan-100 hover:bg-cyan-500/10">Accueil</a>
-        <a href="#" onclick="switchMode('gallery');return false;" class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors text-cyan-300/90 hover:text-cyan-100 hover:bg-cyan-500/10">Galerie</a>
+        <a href="#" onclick="switchMode('gallery');return false;" class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors text-cyan-300/90 hover:text-cyan-100 hover:bg-cyan-500/10">Vibes</a>
         <!-- Pseudo popover -->
         <div class="relative ml-1 sm:ml-2" id="pseudo-container">
           <button id="pseudo-btn" onclick="togglePseudoPopover()" class="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors bg-white/5 border border-white/10 text-gray-400 hover:text-gray-200 hover:bg-white/10 whitespace-nowrap">
@@ -719,7 +724,7 @@
             <span class="text-xs sm:text-sm font-medium text-green-400">Vidéo générée avec succès</span>
           </div>
           <button id="btn-publish" onclick="publishVideo()" class="mt-3 w-full py-3 sm:py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 text-white transition-all hidden min-h-[44px]">
-            📤 Publier dans la Galerie
+            📤 Publier dans Vibes
           </button>
         </div>
       </div>
@@ -744,7 +749,7 @@
     <div id="panel-gallery" class="hidden fixed inset-0 z-40 bg-black">
       <!-- Header du feed -->
       <div class="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/70 to-transparent pointer-events-none">
-        <h2 class="text-sm font-semibold text-white drop-shadow pointer-events-auto">✨ Galerie</h2>
+        <h2 class="text-sm font-semibold text-white drop-shadow pointer-events-auto">✨ Vibes</h2>
         <button onclick="switchMode('video')" class="pointer-events-auto px-3 py-2 rounded-xl text-xs font-medium bg-white/10 border border-white/15 text-gray-200 hover:bg-white/20 transition min-h-[40px]">+ Créer</button>
       </div>
       <!-- Liste des slides (scroll vertical plein écran) -->
@@ -1546,7 +1551,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ═══════════════════════════════════════════════════
-// Galerie communautaire
+// Vibes communautaire
 // ═══════════════════════════════════════════════════
 
 async function publishVideo() {
@@ -1562,7 +1567,7 @@ async function publishVideo() {
     });
     const d = await r.json();
     if (!d.ok) throw new Error(d.detail || 'Échec');
-    showToast('🎉 Vidéo publiée dans la galerie !', 4000);
+    showToast('🎉 Vidéo publiée dans Vibes !', 4000);
     btn.textContent = '✅ Publié !';
     btn.className = btn.className.replace(/from-amber-600 to-orange-500/, 'from-green-600 to-green-500').replace(/hover:from-amber-500 hover:to-orange-400/, '');
     btn.disabled = true;
@@ -1571,12 +1576,12 @@ async function publishVideo() {
   } catch(e) {
     showToast('Erreur : ' + e.message, 4000);
     btn.disabled = false;
-    btn.textContent = '📤 Publier dans la Galerie';
+    btn.textContent = '📤 Publier dans Vibes';
   }
 }
 
 // ═══════════════════════════════════════════════════
-// Galerie — Feed plein écran (style Reels/TikTok)
+// Vibes — Feed plein écran (style Reels/TikTok)
 // ═══════════════════════════════════════════════════
 let feedObserver = null;
 let feedVideos = [];         // dernière liste de vidéos chargée
@@ -1639,7 +1644,7 @@ document.addEventListener('pointerdown', () => {
 }, { passive: true });
 
 function openGalleryFeed() {
-  feedUserInteracted = true; // l'ouverture se fait par un clic sur « Galerie » → son autorisé
+  feedUserInteracted = true; // l'ouverture se fait par un clic sur « Vibes » → son autorisé
   const panel = document.getElementById('panel-gallery');
   panel.classList.remove('hidden');
   panel.style.display = 'block';
@@ -1958,12 +1963,12 @@ function fmtDuration(sec) {
 }
 
 async function deleteGalleryVideo(videoId) {
-  if (!confirm('Supprimer cette vidéo de la galerie ?')) return;
+  if (!confirm('Supprimer cette vidéo de Vibes ?')) return;
   try {
     const r = await fetchWithAuth(API_BASE + '/api/community/videos/' + videoId, {method: 'DELETE'});
     const d = await r.json();
     if (!d.ok) throw new Error(d.detail || 'Échec');
-    showToast('🗑️ Vidéo supprimée de la galerie', 3000);
+    showToast('🗑️ Vidéo supprimée de Vibes', 3000);
     if (feedCommentsOpen === videoId) closeFeedComments();
     const slide = document.querySelector('.feed-slide[data-video-id="' + videoId + '"]');
     if (slide) slide.remove();

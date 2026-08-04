@@ -2024,7 +2024,39 @@ async def create_advanced_task(
     # Lancer le pipeline avancé en arrière-plan
     async def _run_advanced():
         tm = TaskManager(task_id, dir_name=dir_name)
+        # v8.7: le pipeline avancé doit passer par le MÊME sémaphore global que
+        # les autres pipelines. Avant, _run_advanced était lancé sans
+        # _run_pipeline_with_concurrency : le postprocess/compression Full HD
+        # (hors _video_queue, qui ne sérialise que la génération API) pouvait
+        # tourner EN PARALLÈLE d'un pipeline simple → 2 ré-encodages Full HD
+        # simultanés → OOM 512 Mo (Render « Ran out of memory » du
+        # 2026-08-04 11:06, tâches 2f6c51565415 + e72f74ad9641).
+        weight = TASK_TYPE_WEIGHTS.get(TaskType.SIMPLE, 1)
+        acquired = False
+        _queued_tasks[task_id] = weight
         try:
+            # Émettre le statut initial (en attente de slot si occupé)
+            state.status = StepStatus.QUEUED
+            tm.create(state)
+            tm.update_state(
+                current_step="init", current_status="running",
+                current_message="En file d'attente (priorité " + priority + ")...",
+                current_progress=0.0,
+            )
+            logger.info(
+                f"[Concurrency] Advanced task {task_id} queued (weight={weight}, "
+                f"current={_pipeline_semaphore.current}/{_pipeline_semaphore.max_weight})"
+            )
+
+            # Attendre un slot global (une seule pipeline à la fois sur le Free)
+            await _pipeline_semaphore.acquire(weight)
+            acquired = True
+            _queued_tasks.pop(task_id, None)
+            logger.info(
+                f"[Concurrency] Advanced task {task_id} acquired slot (weight={weight}, "
+                f"current={_pipeline_semaphore.current}/{_pipeline_semaphore.max_weight})"
+            )
+
             async def _on_progress(step: str, message: str, progress: float) -> None:
                 # Publie l'avancement du pipeline dans le task_state :
                 # l'UI (pollTaskProgress) affiche la barre, le message et
@@ -2044,15 +2076,6 @@ async def create_advanced_task(
                 on_progress=_on_progress,
             )
             pipeline.video_api.shutdown_event = shutdown_event
-
-            # Émettre le statut initial
-            state.status = StepStatus.QUEUED
-            tm.create(state)
-            tm.update_state(
-                current_step="init", current_status="running",
-                current_message="En file d'attente (priorité " + priority + ")...",
-                current_progress=0.0,
-            )
 
             # Générer la vidéo
             result = await pipeline.generate(
@@ -2092,6 +2115,19 @@ async def create_advanced_task(
                 status=StepStatus.FAILED,
                 current_message=f"Erreur: {str(e)[:200]}",
             )
+        finally:
+            # Libérer le slot global (uniquement si acquis)
+            if acquired:
+                try:
+                    await _pipeline_semaphore.release(weight)
+                    logger.info(
+                        f"[Concurrency] Advanced task {task_id} released slot "
+                        f"(weight={weight}, "
+                        f"current={_pipeline_semaphore.current}/{_pipeline_semaphore.max_weight})"
+                    )
+                except Exception:
+                    pass
+            _queued_tasks.pop(task_id, None)
 
     _launch_background_task(_run_advanced())
     logger.info(f"[Advanced] Task created: {task_id}, quality={quality}, style={style}, priority={priority}")

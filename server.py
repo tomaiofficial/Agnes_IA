@@ -370,6 +370,184 @@ async def _auto_resume_interrupted(tasks: list) -> None:
 
 
 # ═══════════════════════════════════════════════════
+# v8.14: reprise automatique après redéploiement
+# (disque éphémère effacé → état reconstruit depuis Supabase)
+# ═══════════════════════════════════════════════════
+
+
+def _advanced_config_from_params(params: dict) -> PipelineConfig:
+    """Reconstruit le PipelineConfig du mode avancé depuis les params persistés
+    (v8.14). La priorité retombe sur `free` : elle n'est pas persistée."""
+    priority_map = {
+        "admin": TaskPriority.ADMIN,
+        "premium": TaskPriority.PREMIUM,
+        "free": TaskPriority.FREE,
+    }
+    return PipelineConfig(
+        quality=params.get("quality") or "full_hd",
+        style=params.get("style") or "ultra_realistic",
+        denoise=bool(params.get("denoise", True)),
+        face_enhance=bool(params.get("face_enhance", True)),
+        motion_enhance=bool(params.get("motion_enhance", False)),
+        hdr=bool(params.get("hdr", True)),
+        color_correct=bool(params.get("color_correct", True)),
+        compress=bool(params.get("compress", True)),
+        audio_enabled=bool(params.get("audio_enabled", True)),
+        audio_voice=params.get("audio_voice") or "fr-FR-DeniseNeural",
+        audio_rate=params.get("audio_rate") or "+0%",
+        priority=priority_map["free"],
+        optimize_prompt=bool(params.get("optimize_prompt", True)),
+        # v8.4: le postprocess ne monte jamais au-delà de la largeur demandée
+        max_width=int(params.get("video_width") or 1152),
+    )
+
+
+def _recreate_simple_state_from_meta(meta: dict, params: dict) -> SimpleVideoTask:
+    """Reconstruit un état simple/advanced depuis les métadonnées Supabase
+    (v8.14 : reprise après redéploiement, disque éphémère effacé)."""
+    mode_str = params.get("mode") or "t2v"
+    try:
+        mode = VideoMode(mode_str)
+    except ValueError:
+        mode = VideoMode.T2V
+    return SimpleVideoTask(
+        task_id=meta["task_id"],
+        dir_name=meta.get("dir_name", ""),
+        task_type=TaskType.SIMPLE,
+        creative_name=meta.get("creative_name", ""),
+        user_id=meta.get("user_id", ""),
+        prompt=meta.get("prompt", ""),
+        mode=mode,
+        duration=int(params.get("duration") or 5),
+        video_width=int(params.get("video_width") or 1152),
+        video_height=int(params.get("video_height") or 768),
+        seed=params.get("seed"),
+        negative_prompt=params.get("negative_prompt") or None,
+        system_prompt=params.get("system_prompt") or "",
+        audio_enabled=bool(params.get("audio_enabled", True)),
+        audio_voice=params.get("audio_voice") or "fr-FR-DeniseNeural",
+        audio_rate=params.get("audio_rate") or "+0%",
+        quality_boost=bool(params.get("quality_boost", False)),
+        # Mode avancé (v8.14)
+        advanced_mode=bool(params.get("advanced_mode", False)),
+        quality=params.get("quality") or "full_hd",
+        style=params.get("style") or "ultra_realistic",
+        denoise=bool(params.get("denoise", True)),
+        face_enhance=bool(params.get("face_enhance", True)),
+        motion_enhance=bool(params.get("motion_enhance", False)),
+        hdr=bool(params.get("hdr", True)),
+        color_correct=bool(params.get("color_correct", True)),
+        compress=bool(params.get("compress", True)),
+        optimize_prompt=bool(params.get("optimize_prompt", True)),
+    )
+
+
+async def _auto_resume_from_backup() -> None:
+    """v8.14 : relance les tâches simple/advanced laissées en cours par un
+    redéploiement Render (disque éphémère effacé → l'état local a disparu).
+
+    L'état est reconstruit depuis Supabase grâce aux `params` persistés
+    (export_meta v8.14) et la génération est resoumise. Garde-fous pour
+    éviter toute boucle :
+      - uniquement les tâches marquées « Interrompu… » (donc ni les tâches
+        stoppées volontairement, ni les échecs API normaux) ;
+      - l'état local ne doit PAS avoir survécu (sinon v8.3 s'en occupe) ;
+      - pas de backup Supabase déjà disponible (bloc v8.4 s'en charge) ;
+      - budget : 2 reprises par tâche, fenêtre de 6 h après la dernière
+        mise à jour ;
+      - maximum 2 relances par démarrage.
+    """
+    if not is_persistent_storage():
+        return
+    api_key = get_api_key()
+    if not api_key:
+        return
+    try:
+        store = get_task_store()
+        metas = store.list_meta()
+    except Exception as e:
+        logger.warning(f"[Resume] Lecture des métadonnées Supabase impossible: {e}")
+        return
+
+    now = time.time()
+    candidates = []
+    for meta in metas:
+        try:
+            status = meta.get("status", "")
+            if status != "failed":
+                continue
+            if not (meta.get("current_message") or "").startswith("Interrompu"):
+                continue
+            if meta.get("task_type", "") != "simple":
+                continue
+            if meta.get("video_backup_url"):
+                continue  # restaurée par le bloc startup v8.4
+            if int(meta.get("resume_attempts") or 0) >= 2:
+                continue
+            try:
+                updated = float(meta.get("updated_at") or 0)
+            except (TypeError, ValueError):
+                continue
+            if not updated or now - updated > 6 * 3600:
+                continue  # trop ancienne → ne pas ressusciter
+            params = meta.get("params") or {}
+            if not params or not params.get("duration"):
+                continue  # créée avant v8.14 → params absents → impossible
+            # L'état local a survécu au redémarrage ? → v8.3 s'en charge.
+            task_file = os.path.join(
+                get_working_dir(), meta.get("dir_name") or meta["task_id"], "task_state.json"
+            )
+            if os.path.exists(task_file):
+                continue
+            candidates.append(meta)
+        except Exception:
+            continue
+
+    # Tri : d'abord les plus récentes ; relance au maximum 2 par démarrage.
+    candidates.sort(key=lambda m: float(m.get("updated_at") or 0), reverse=True)
+    for meta in candidates[:2]:
+        task_id = meta["task_id"]
+        try:
+            params = meta.get("params") or {}
+            dir_name = meta.get("dir_name") or task_id
+            tm = TaskManager(task_id, dir_name=dir_name)
+            state = _recreate_simple_state_from_meta(meta, params)
+
+            # Incrémenter le compteur de reprises AVANT de lancer (idempotent
+            # face à un crash pendant la relance) puis marquer queued. Le
+            # compteur est porté par l'état : export_meta le ré-écrit à chaque
+            # update_state du pipeline.
+            attempts = int(meta.get("resume_attempts") or 0) + 1
+            state.resume_attempts = attempts
+            meta["resume_attempts"] = attempts
+            meta["status"] = "queued"
+            meta["current_message"] = (
+                f"Reprise automatique après redéploiement (tentative {attempts}/2)..."
+            )
+            store.upsert_meta(meta)
+
+            if params.get("advanced_mode"):
+                config = _advanced_config_from_params(params)
+                _launch_background_task(
+                    _run_advanced_pipeline(state, dir_name, config, api_key, "free")
+                )
+            else:
+                pipeline = _create_pipeline_for_type(
+                    TaskType.SIMPLE, api_key, task_id, dir_name
+                )
+                _launch_background_task(
+                    _run_pipeline_with_concurrency(pipeline, state, tm)
+                )
+            logger.info(
+                f"[Resume] Tâche {task_id} relancée depuis Supabase "
+                f"(type={'advanced' if params.get('advanced_mode') else 'simple'}, "
+                f"tentative {meta['resume_attempts']}/2)"
+            )
+        except Exception as e:
+            logger.warning(f"[Resume] Relance {task_id} impossible: {e}")
+
+
+# ═══════════════════════════════════════════════════
 # Lifespan
 # ═══════════════════════════════════════════════════
 
@@ -523,6 +701,14 @@ async def lifespan(app: FastAPI):
         await _auto_resume_interrupted(interrupted_tasks)
     except Exception as e:
         logger.warning(f"[Startup] Auto-reprise échouée: {e}")
+
+    # v8.14: Reprise automatique des tâches interrompues par un REDÉPLOIEMENT
+    # (disque éphémère effacé) : l'état est reconstruit depuis Supabase grâce
+    # aux params persistés, puis la génération est resoumise (budget 2×/6 h).
+    try:
+        await _auto_resume_from_backup()
+    except Exception as e:
+        logger.warning(f"[Startup] Auto-reprise depuis Supabase échouée: {e}")
 
     # Moteur de créateurs IA autonomes (scheduler horaire)
     try:
@@ -2058,119 +2244,159 @@ async def create_advanced_task(
         audio_voice=audio_voice,
         audio_rate=audio_rate,
         quality_boost=True,  # toujours activé pour advanced
+        # v8.14: persistance des paramètres avancés → reprise automatique
+        # après redéploiement (export_meta → colonne Supabase `params`).
+        advanced_mode=True,
+        quality=quality,
+        style=style,
+        denoise=denoise,
+        face_enhance=face_enhance,
+        motion_enhance=motion_enhance,
+        hdr=hdr,
+        color_correct=color_correct,
+        compress=compress,
+        optimize_prompt=optimize_prompt,
     )
 
-    # Lancer le pipeline avancé en arrière-plan
-    async def _run_advanced():
-        tm = TaskManager(task_id, dir_name=dir_name)
-        # v8.7: le pipeline avancé doit passer par le MÊME sémaphore global que
-        # les autres pipelines. Avant, _run_advanced était lancé sans
-        # _run_pipeline_with_concurrency : le postprocess/compression Full HD
-        # (hors _video_queue, qui ne sérialise que la génération API) pouvait
-        # tourner EN PARALLÈLE d'un pipeline simple → 2 ré-encodages Full HD
-        # simultanés → OOM 512 Mo (Render « Ran out of memory » du
-        # 2026-08-04 11:06, tâches 2f6c51565415 + e72f74ad9641).
-        weight = TASK_TYPE_WEIGHTS.get(TaskType.SIMPLE, 1)
-        acquired = False
-        _queued_tasks[task_id] = weight
-        try:
-            # Émettre le statut initial (en attente de slot si occupé)
-            state.status = StepStatus.QUEUED
-            tm.create(state)
-            tm.update_state(
-                current_step="init", current_status="running",
-                current_message="En file d'attente (priorité " + priority + ")...",
-                current_progress=0.0,
-            )
-            logger.info(
-                f"[Concurrency] Advanced task {task_id} queued (weight={weight}, "
-                f"current={_pipeline_semaphore.current}/{_pipeline_semaphore.max_weight})"
-            )
-
-            # Attendre un slot global (une seule pipeline à la fois sur le Free)
-            await _pipeline_semaphore.acquire(weight)
-            acquired = True
-            _queued_tasks.pop(task_id, None)
-            logger.info(
-                f"[Concurrency] Advanced task {task_id} acquired slot (weight={weight}, "
-                f"current={_pipeline_semaphore.current}/{_pipeline_semaphore.max_weight})"
-            )
-
-            async def _on_progress(step: str, message: str, progress: float) -> None:
-                # Publie l'avancement du pipeline dans le task_state :
-                # l'UI (pollTaskProgress) affiche la barre, le message et
-                # l'étape en direct pendant toute la génération.
-                tm.update_state(
-                    current_step=step,
-                    current_status="running",
-                    current_message=message,
-                    current_progress=round(float(progress), 4),
-                )
-
-            pipeline = AIVideoPipeline(
-                api_key=api_key,
-                config=config,
-                queue=_video_queue,
-                monitor=_video_monitor,
-                on_progress=_on_progress,
-            )
-            pipeline.video_api.shutdown_event = shutdown_event
-
-            # Générer la vidéo
-            result = await pipeline.generate(
-                prompt=prompt,
-                duration=duration,
-                width=video_width,
-                height=video_height,
-                reference_image_paths=ref_paths,
-                seed=seed,
-                negative_prompt=negative_prompt,
-                working_dir=os.path.join(get_working_dir(), dir_name),
-            )
-
-            # Mettre à jour l'état
-            state.status = StepStatus.COMPLETED
-            state.final_video_file = result.video_path
-            tm.update_state(
-                status=StepStatus.COMPLETED,
-                final_video_file=result.video_path,
-                current_step="done",
-                current_status="completed",
-                current_message="Vidéo générée avec succès !",
-                current_progress=1.0,
-            )
-            logger.info(f"[Advanced] Task {task_id} completed: {result.video_path}")
-            # v8.1: sauvegarde Supabase de la vidéo finale (lecture possible
-            # après redéploiement malgré le disque éphémère du plan Free).
-            try:
-                await asyncio.to_thread(_persist_video_backup, task_id, result.video_path)
-            except Exception as e:
-                logger.warning(f"[Advanced] Sauvegarde vidéo {task_id} impossible: {e}")
-
-        except Exception as e:
-            logger.error(f"[Advanced] Task {task_id} failed: {e}", exc_info=True)
-            state.status = StepStatus.FAILED
-            tm.update_state(
-                status=StepStatus.FAILED,
-                current_message=f"Erreur: {str(e)[:200]}",
-            )
-        finally:
-            # Libérer le slot global (uniquement si acquis)
-            if acquired:
-                try:
-                    await _pipeline_semaphore.release(weight)
-                    logger.info(
-                        f"[Concurrency] Advanced task {task_id} released slot "
-                        f"(weight={weight}, "
-                        f"current={_pipeline_semaphore.current}/{_pipeline_semaphore.max_weight})"
-                    )
-                except Exception:
-                    pass
-            _queued_tasks.pop(task_id, None)
-
-    _launch_background_task(_run_advanced())
+    # v8.14: lance le pipeline avancé via le helper factorisé (réutilisé par
+    # la reprise automatique après redéploiement).
+    _launch_background_task(
+        _run_advanced_pipeline(state, dir_name, config, api_key, priority)
+    )
     logger.info(f"[Advanced] Task created: {task_id}, quality={quality}, style={style}, priority={priority}")
     return {"ok": True, "task_id": task_id, "dir_name": dir_name}
+
+
+async def _run_advanced_pipeline(
+    state: SimpleVideoTask,
+    dir_name: str,
+    config: PipelineConfig,
+    api_key: str,
+    priority: str,
+    ref_paths: Optional[list] = None,
+) -> None:
+    """Exécute le pipeline avancé (factorisé depuis l'ancienne closure
+    `_run_advanced` de create_advanced_task).
+
+    v8.14: les paramètres (prompt, durée, dimensions, seed, negative prompt,
+    référence…) sont lus depuis `state` afin que le même helper puisse relancer
+    une tâche interrompue par un redéploiement à partir d'un état reconstruit
+    depuis Supabase (disque éphémère effacé).
+    """
+    ref_paths = ref_paths or []
+    task_id = state.task_id
+    prompt = state.prompt
+    duration = state.duration
+    video_width = state.video_width
+    video_height = state.video_height
+    seed = state.seed
+    negative_prompt = state.negative_prompt or DEFAULT_NEGATIVE_PROMPT
+
+    tm = TaskManager(task_id, dir_name=dir_name)
+    # v8.7: le pipeline avancé doit passer par le MÊME sémaphore global que
+    # les autres pipelines. Avant, _run_advanced était lancé sans
+    # _run_pipeline_with_concurrency : le postprocess/compression Full HD
+    # (hors _video_queue, qui ne sérialise que la génération API) pouvait
+    # tourner EN PARALLÈLE d'un pipeline simple → 2 ré-encodages Full HD
+    # simultanés → OOM 512 Mo (Render « Ran out of memory » du
+    # 2026-08-04 11:06, tâches 2f6c51565415 + e72f74ad9641).
+    weight = TASK_TYPE_WEIGHTS.get(TaskType.SIMPLE, 1)
+    acquired = False
+    _queued_tasks[task_id] = weight
+    try:
+        # Émettre le statut initial (en attente de slot si occupé)
+        state.status = StepStatus.QUEUED
+        tm.create(state)
+        tm.update_state(
+            current_step="init", current_status="running",
+            current_message="En file d'attente (priorité " + priority + ")...",
+            current_progress=0.0,
+        )
+        logger.info(
+            f"[Concurrency] Advanced task {task_id} queued (weight={weight}, "
+            f"current={_pipeline_semaphore.current}/{_pipeline_semaphore.max_weight})"
+        )
+
+        # Attendre un slot global (une seule pipeline à la fois sur le Free)
+        await _pipeline_semaphore.acquire(weight)
+        acquired = True
+        _queued_tasks.pop(task_id, None)
+        logger.info(
+            f"[Concurrency] Advanced task {task_id} acquired slot (weight={weight}, "
+            f"current={_pipeline_semaphore.current}/{_pipeline_semaphore.max_weight})"
+        )
+
+        async def _on_progress(step: str, message: str, progress: float) -> None:
+            # Publie l'avancement du pipeline dans le task_state :
+            # l'UI (pollTaskProgress) affiche la barre, le message et
+            # l'étape en direct pendant toute la génération.
+            tm.update_state(
+                current_step=step,
+                current_status="running",
+                current_message=message,
+                current_progress=round(float(progress), 4),
+            )
+
+        pipeline = AIVideoPipeline(
+            api_key=api_key,
+            config=config,
+            queue=_video_queue,
+            monitor=_video_monitor,
+            on_progress=_on_progress,
+        )
+        pipeline.video_api.shutdown_event = shutdown_event
+
+        # Générer la vidéo
+        result = await pipeline.generate(
+            prompt=prompt,
+            duration=duration,
+            width=video_width,
+            height=video_height,
+            reference_image_paths=ref_paths,
+            seed=seed,
+            negative_prompt=negative_prompt,
+            working_dir=os.path.join(get_working_dir(), dir_name),
+        )
+
+        # Mettre à jour l'état
+        state.status = StepStatus.COMPLETED
+        state.final_video_file = result.video_path
+        tm.update_state(
+            status=StepStatus.COMPLETED,
+            final_video_file=result.video_path,
+            current_step="done",
+            current_status="completed",
+            current_message="Vidéo générée avec succès !",
+            current_progress=1.0,
+        )
+        logger.info(f"[Advanced] Task {task_id} completed: {result.video_path}")
+        # v8.1: sauvegarde Supabase de la vidéo finale (lecture possible
+        # après redéploiement malgré le disque éphémère du plan Free).
+        try:
+            await asyncio.to_thread(_persist_video_backup, task_id, result.video_path)
+        except Exception as e:
+            logger.warning(f"[Advanced] Sauvegarde vidéo {task_id} impossible: {e}")
+
+    except Exception as e:
+        logger.error(f"[Advanced] Task {task_id} failed: {e}", exc_info=True)
+        state.status = StepStatus.FAILED
+        tm.update_state(
+            status=StepStatus.FAILED,
+            current_message=f"Erreur: {str(e)[:200]}",
+        )
+    finally:
+        # Libérer le slot global (uniquement si acquis)
+        if acquired:
+            try:
+                await _pipeline_semaphore.release(weight)
+                logger.info(
+                    f"[Concurrency] Advanced task {task_id} released slot "
+                    f"(weight={weight}, "
+                    f"current={_pipeline_semaphore.current}/{_pipeline_semaphore.max_weight})"
+                )
+            except Exception:
+                pass
+        _queued_tasks.pop(task_id, None)
 
 
 @app.post("/api/tasks/creative")

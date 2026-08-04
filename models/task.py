@@ -166,6 +166,11 @@ class BaseTaskState(BaseModel):
     current_progress: float = 0.0  # 0.0 ~ 1.0
     current_message: str = ""     # 人类可读消息
 
+    # v8.14: compteur de reprises automatiques après redéploiement (persisté
+    # via export_meta → colonne Supabase `resume_attempts`). Le compteur vit
+    # dans l'état pour survivre aux ré-écritures de la méta (export_meta).
+    resume_attempts: int = 0
+
 
 class SimpleVideoTask(BaseTaskState):
     """简单视频任务（类型 1）
@@ -195,6 +200,21 @@ class SimpleVideoTask(BaseTaskState):
 
     # v7.0: 画质增强
     quality_boost: bool = False
+
+    # v8.14: paramètres du mode avancé (persistés → reprise automatique
+    # après redéploiement, le disque éphémère de Render étant effacé).
+    # Defaults rétrocompatibles : les anciens états (sans ces champs) se
+    # désérialisent avec les valeurs par défaut.
+    advanced_mode: bool = False
+    quality: str = "full_hd"        # standard | hd | full_hd | 2k | 4k
+    style: str = "ultra_realistic"  # ultra_realistic | cinema | anime | photorealistic | hyper_realistic
+    denoise: bool = True
+    face_enhance: bool = True
+    motion_enhance: bool = False
+    hdr: bool = True
+    color_correct: bool = True
+    compress: bool = True
+    optimize_prompt: bool = True
 
 
 class CreativeVideoTask(BaseTaskState):

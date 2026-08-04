@@ -100,6 +100,38 @@ def export_meta(state, dir_name: str) -> dict:
     elif hasattr(state, "poem_text"):
         prompt = state.poem_text or ""
     now = time.time()
+
+    # v8.14: paramètres de génération persistés → reprise automatique après
+    # redéploiement (disque éphémère effacé). Prompt moins tronqué (2000)
+    # pour que la relance du mode avancé garde un prompt complet.
+    params = {}
+    if hasattr(state, "duration"):
+        mode = getattr(state, "mode", None)
+        params = {
+            "duration": getattr(state, "duration", None),
+            "video_width": getattr(state, "video_width", None),
+            "video_height": getattr(state, "video_height", None),
+            "seed": getattr(state, "seed", None),
+            "negative_prompt": getattr(state, "negative_prompt", None),
+            "system_prompt": getattr(state, "system_prompt", ""),
+            "mode": mode.value if hasattr(mode, "value") else str(mode or ""),
+            "audio_enabled": getattr(state, "audio_enabled", None),
+            "audio_voice": getattr(state, "audio_voice", None),
+            "audio_rate": getattr(state, "audio_rate", None),
+            "quality_boost": getattr(state, "quality_boost", False),
+            # Mode avancé (v8.14)
+            "advanced_mode": getattr(state, "advanced_mode", False),
+            "quality": getattr(state, "quality", None),
+            "style": getattr(state, "style", None),
+            "denoise": getattr(state, "denoise", None),
+            "face_enhance": getattr(state, "face_enhance", None),
+            "motion_enhance": getattr(state, "motion_enhance", None),
+            "hdr": getattr(state, "hdr", None),
+            "color_correct": getattr(state, "color_correct", None),
+            "compress": getattr(state, "compress", None),
+            "optimize_prompt": getattr(state, "optimize_prompt", None),
+        }
+
     return {
         "task_id": getattr(state, "task_id", "") or "",
         "dir_name": dir_name or "",
@@ -107,10 +139,12 @@ def export_meta(state, dir_name: str) -> dict:
         "creative_name": getattr(state, "creative_name", "") or "",
         "user_id": getattr(state, "user_id", "") or "",
         "status": status.value if hasattr(status, "value") else str(status or "pending"),
-        "prompt": (prompt or "")[:500],
+        "prompt": (prompt or "")[:2000],
         "current_message": getattr(state, "current_message", "") or "",
         "final_video_file": getattr(state, "final_video_file", "") or "",
         "video_backup_url": getattr(state, "video_backup_url", "") or "",
+        "params": params,
+        "resume_attempts": int(getattr(state, "resume_attempts", 0) or 0),
         "created_at": _created_at_from_dir(dir_name),
         "updated_at": now,
     }

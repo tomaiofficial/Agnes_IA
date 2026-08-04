@@ -86,6 +86,12 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT '';
 -- (lecture possible après redéploiement, disque éphémère effacé) :
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS video_backup_url TEXT NOT NULL DEFAULT '';
 
+-- Migration idempotente (v8.14) : paramètres de génération JSON + compteur de
+-- reprises automatiques. Permettent de RELANCER une tâche simple/advanced
+-- interrompue par un redéploiement (état reconstruit depuis la base).
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS params JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS resume_attempts INT NOT NULL DEFAULT 0;
+
 -- Migration idempotente : user_id du créateur d'une publication galerie
 -- ('' = publication héritée, créée avant l'isolation par créateur).
 ALTER TABLE community_videos ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT '';
@@ -244,6 +250,23 @@ def _dir_name_to_ts(dir_name: str) -> Optional[float]:
         return dt.timestamp()
     except ValueError:
         return None
+
+
+def _norm_meta(row: dict) -> dict:
+    """Normalise une ligne `tasks` lue depuis PostgREST (JSONB → dict)."""
+    row = dict(row)
+    params = row.get("params") or {}
+    if isinstance(params, str):
+        try:
+            params = json.loads(params) or {}
+        except (ValueError, TypeError):
+            params = {}
+    row["params"] = params if isinstance(params, dict) else {}
+    try:
+        row["resume_attempts"] = int(row.get("resume_attempts") or 0)
+    except (ValueError, TypeError):
+        row["resume_attempts"] = 0
+    return row
 
 
 class SupabaseCommunityStore(CommunityStore):
@@ -533,6 +556,7 @@ class _CoalescingWriter:
                     )
 
     def _upsert(self, meta: dict):
+        params = meta.get("params") or {}
         self._client.table("tasks").upsert({
             "task_id": meta["task_id"],
             "dir_name": meta.get("dir_name", ""),
@@ -544,6 +568,8 @@ class _CoalescingWriter:
             "current_message": meta.get("current_message", ""),
             "final_video_file": meta.get("final_video_file", ""),
             "video_backup_url": meta.get("video_backup_url", ""),
+            "params": json.dumps(params, ensure_ascii=False),
+            "resume_attempts": int(meta.get("resume_attempts", 0) or 0),
             "created_at": meta.get("created_at"),
             "updated_at": meta.get("updated_at", time.time()),
         }, on_conflict="task_id").execute()
@@ -564,14 +590,16 @@ class SupabaseTaskStore(TaskStore):
             .select("*").eq("task_id", task_id).limit(1).execute()
         )
         rows = res.data or []
-        return rows[0] if rows else None
+        if not rows:
+            return None
+        return _norm_meta(dict(rows[0]))
 
     def list_meta(self) -> List[dict]:
         res = (
             _get_client().table("tasks")
             .select("*").order("updated_at", desc=True).execute()
         )
-        return [dict(r) for r in (res.data or [])]
+        return [_norm_meta(dict(r)) for r in (res.data or [])]
 
     def delete_meta(self, task_id: str) -> None:
         try:

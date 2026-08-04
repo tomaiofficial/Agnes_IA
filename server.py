@@ -1260,6 +1260,14 @@ async def serve_video(task_id: str, user_id: str = Header(default="", alias="X-U
         task_dir = safe_join(get_working_dir(), dir_name)
     except UnsafePathError:
         raise HTTPException(status_code=404, detail="Video not found")
+    # v8.11: servir le VRAI fichier final (state.final_video_file), pas
+    # systématiquement final_video.mp4 : le mode avancé produit
+    # final_video.mp4.audio.mp4.final.mp4 (postprocess + audio + compression
+    # + durée exacte) et final_video.mp4 n'y est que l'étape intermédiaire
+    # de l'API (169 frames Full HD ≈ 11 s, non compressée, sans pad).
+    final_local = _get_final_video_file(task_id, dir_name)
+    if final_local and os.path.exists(final_local):
+        return FileResponse(final_local, media_type="video/mp4")
     video_path = os.path.join(task_dir, "final_video.mp4")
     if os.path.exists(video_path):
         return FileResponse(video_path, media_type="video/mp4")
@@ -1276,6 +1284,31 @@ async def serve_video(task_id: str, user_id: str = Header(default="", alias="X-U
     if os.path.exists(target):
         return FileResponse(target, media_type="video/mp4")
     raise HTTPException(status_code=404, detail="Video not found")
+
+
+def _get_final_video_file(task_id: str, dir_name: str) -> str:
+    """Chemin local du vrai fichier final d'une tâche (state.final_video_file).
+
+    Retourne "" si indisponible. Le chemin doit être absolu (chemin conteneur
+    ou disque local) — les URL (video_backup_url) ne sont pas renvoyées ici.
+    """
+    try:
+        tm = TaskManager(task_id, dir_name=dir_name)
+        state = tm.load()
+        if state:
+            fvf = getattr(state, "final_video_file", "") or ""
+            if fvf and os.path.isabs(fvf):
+                return fvf
+    except Exception:
+        pass
+    try:
+        meta = get_task_store().get_meta(task_id)
+        fvf = (meta or {}).get("final_video_file", "") or ""
+        if fvf and os.path.isabs(fvf):
+            return fvf
+    except Exception:
+        pass
+    return ""
 
 
 def _get_published_video(task_id: str) -> Optional[dict]:

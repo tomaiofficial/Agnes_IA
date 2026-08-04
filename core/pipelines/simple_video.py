@@ -14,6 +14,7 @@ from typing import Callable, Optional
 from core.api.agnes_video import AgnesVideoAPI
 from core.audio.tts import EdgeTTSEngine, SilentTTSEngine
 from core.pipelines import BasePipeline, PipelineShutdown
+from core.video.postprocess import ensure_video_duration
 from models.task import SimpleVideoTask, StepStatus
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,16 @@ class SimpleVideoPipeline(BasePipeline):
 
             # v7.1: Qualité améliorée (post-processing sharpening + contrast)
             video_path = await self._quality_enhance(video_path)
+
+            # v8.6: Durée exacte garantie — l'API plafonne les frames en Full HD
+            # (≈11 s) ; on complète (dernière image figée) ou on tronque pour
+            # livrer EXACTEMENT la durée demandée (5/7/10/12/15 s).
+            try:
+                video_path = await asyncio.to_thread(
+                    ensure_video_duration, video_path, float(self._state.duration or 5)
+                )
+            except Exception as e:
+                logger.warning(f"[Simple] ensure_video_duration failed: {e}")
 
             self._state.status = StepStatus.COMPLETED
             self._state.final_video_file = video_path

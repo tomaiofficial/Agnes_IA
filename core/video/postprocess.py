@@ -269,3 +269,114 @@ class VideoPostProcessor:
         result = await self.process(video_path, output_path)
         # Si le traitement a échoué, result == video_path (original conservé)
         return result
+
+
+async def ensure_video_duration(
+    video_path: str, target_seconds: float, output_path: str = ""
+) -> str:
+    """Garantit la durée exacte d'une vidéo (v8.6).
+
+    L'API Agnes plafonne le nombre d'images par palier de résolution
+    (169 frames en Full HD ≈ 11,3 s à 15 fps) : une demande de 15 s peut donc
+    revenir plus courte. Cette étape finale :
+      - pad : si la vidéo est plus courte que demandé, la dernière image est
+        gelée (tpad stop_mode=clone) jusqu'à la durée cible ;
+      - trim : si la vidéo est plus longue (arrondis API), elle est coupée à
+        la durée cible ;
+      - fail-safe : si ffmpeg échoue ou si la durée est déjà correcte
+        (écart ≤ 0,3 s), le chemin d'entrée est renvoyé inchangé.
+
+    Si output_path est vide, la vidéo traitée remplace l'entrée (os.replace)
+    pour conserver un nom de fichier stable (final_video.mp4).
+
+    La durée est lue via `ffmpeg -i` (stderr) et NON via ffprobe : le conteneur
+    Render (imageio-ffmpeg) ne fournit QUE l'exécutable ffmpeg, pas ffprobe.
+
+    Returns:
+        Le chemin de la vidéo à la durée exacte demandée.
+    """
+    target = float(target_seconds)
+    if target <= 0 or not os.path.exists(video_path):
+        return video_path
+
+    actual = await _probe_duration(video_path)
+    if not actual or abs(actual - target) <= 0.3:
+        return video_path
+
+    logger.info(
+        f"[VideoPostProcess] Durée réelle {actual:.2f}s ≠ cible {target:.2f}s "
+        f"— ajustement ({'pad' if actual < target else 'trim'})"
+    )
+
+    out = output_path or (video_path + ".dur.mp4")
+    cmd = ["ffmpeg", "-y", "-i", video_path]
+    if actual > target:
+        # Trop long → tronquer (audio inclus via -t)
+        cmd += ["-t", f"{target:.3f}"]
+    cmd += [
+        "-vf",
+        f"tpad=stop_mode=clone:stop_duration={target - actual:.3f}"
+        if actual < target
+        else "null",
+        "-c:v", "libx264",
+        "-crf", "21",
+        "-preset", "ultrafast",   # RAM compatible plan Free 512 Mo
+        "-threads", "2",
+        "-c:a", "copy",
+        "-movflags", "+faststart",
+        out,
+    ]
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=180)
+        if proc.returncode != 0:
+            err = stderr.decode(errors="replace")[:500] if stderr else ""
+            logger.warning(f"[VideoPostProcess] ensure_video_duration ffmpeg failed: {err}")
+            if os.path.exists(out):
+                os.remove(out)
+            return video_path
+        if not (os.path.exists(out) and os.path.getsize(out) > 0):
+            logger.warning("[VideoPostProcess] ensure_video_duration output empty")
+            return video_path
+        if not output_path:
+            os.replace(out, video_path)
+            return video_path
+        return out
+    except Exception as e:
+        logger.warning(f"[VideoPostProcess] ensure_video_duration failed: {e}")
+        if os.path.exists(out):
+            try:
+                os.remove(out)
+            except OSError:
+                pass
+        return video_path
+
+
+async def _probe_duration(video_path: str) -> float:
+    """Lit la durée d'une vidéo SANS ffprobe.
+
+    Utilise `ffmpeg -i <fichier>` et parse la ligne « Duration: HH:MM:SS.cc »
+    émise sur stderr (ffmpeg est garanti présent dans le conteneur Render via
+    imageio-ffmpeg, contrairement à ffprobe). Retourne 0.0 si indisponible.
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-i", video_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        text = stderr.decode(errors="replace")
+        import re
+        m = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", text)
+        if m:
+            hh, mm, ss = int(m.group(1)), int(m.group(2)), float(m.group(3))
+            return hh * 3600 + mm * 60 + ss
+    except Exception as e:
+        logger.debug(f"[VideoPostProcess] _probe_duration failed: {e}")
+    return 0.0

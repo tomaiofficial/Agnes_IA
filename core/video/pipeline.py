@@ -38,7 +38,12 @@ from typing import Callable, Optional
 
 from core.api.agnes_video import AgnesVideoAPI
 from core.cache.redis_cache import get_cache
-from core.video.postprocess import VideoPostProcessor, PostProcessConfig, VIDEO_STYLES
+from core.video.postprocess import (
+    VideoPostProcessor,
+    PostProcessConfig,
+    VIDEO_STYLES,
+    ensure_video_duration,
+)
 from core.video.prompt_optimizer import PromptOptimizer
 from core.video.queue import VideoQueue, TaskPriority
 from core.video.monitoring import VideoMonitor
@@ -284,6 +289,17 @@ class AIVideoPipeline:
         final_path = await self._compress(video_path)
         self.monitor.end_stage(task_id, "compression")
 
+        # ── Étape 6 : Garantie de durée exacte (v8.6) ──
+        # L'API Agnes plafonne les frames en Full HD (≈11 s) : on complète
+        # (dernière image figée) ou on tronque pour livrer EXACTEMENT la
+        # durée demandée par l'utilisateur.
+        try:
+            final_path = await asyncio.to_thread(
+                ensure_video_duration, final_path, float(duration)
+            )
+        except Exception as e:
+            logger.warning(f"[AIVideoPipeline] ensure_video_duration failed: {e}")
+
         # ── Finalisation ──
         total_duration = time.time() - start_time
         self.monitor.finalize_task(task_id, status="completed")
@@ -367,63 +383,85 @@ class AIVideoPipeline:
         return result
 
     async def _enhance_audio(self, video_path: str, prompt: str) -> str:
-        """Améliore l'audio de la vidéo (TTS + débruitage léger + normalisation douce)."""
+        """Améliore l'audio de la vidéo (TTS + normalisation douce).
+
+        v8.6 — fail-safe : toute erreur (TTS, ffmpeg, enhancer) renvoie la
+        vidéo inchangée au lieu de faire échouer la tâche (le mode simple
+        faisait déjà ce compromis ; l'ancien code levait l'exception et le
+        mode avancé « échouait » alors que la vidéo était générée).
+
+        v8.6 — plus de troncature : l'ancien `-shortest` coupait la vidéo à la
+        durée de la narration (un prompt court = 3-4 s au lieu des 15 s
+        demandées). On muxe maintenant sans `-shortest` (la vidéo garde toute
+        sa longueur ; la durée EXACTE est garantie par ensure_video_duration).
+        """
         from core.audio.tts import EdgeTTSEngine
         from core.audio.enhancer import AudioEnhancer, AudioEnhanceConfig
 
         audio_path = video_path + ".narration.wav"
-        tts = EdgeTTSEngine()
-        await tts.generate(
-            text=prompt.strip(),
-            output_path=audio_path,
-            voice=self.config.audio_voice,
-            rate=self.config.audio_rate,
-        )
-
-        # v8.5: config audio adaptée au TTS synthétique (pas de débruitage agressif
-        # qui dégrade la voix artificielle). On garde normalisation douce + EQ vocal.
-        enhancer = AudioEnhancer(
-            config=AudioEnhanceConfig(
-                denoise=False,           # TTS = pas de bruit à enlever (afftdn crée des artefacts)
-                normalize=True,          # loudnorm doux pour niveau constant
-                reduce_breath=False,     # pas de souffle sur TTS
-                spatialize=False,
-                eq_preset="vocal",       # EQ vocal léger
-                remove_clicks=False,     # pas de clics sur TTS
-                target_lufs=-18.0,       # niveau plus naturel pour narration
-            )
-        )
-        enhanced_audio = await enhancer.enhance(audio_path, audio_path + ".enhanced.wav")
-
-        # Overlay audio amélioré avec ffmpeg
-        output_path = video_path + ".audio.mp4"
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", video_path,
-            "-i", enhanced_audio,
-            "-c:v", "copy",
-            "-c:a", "aac",
-            "-b:a", "192k",
-            "-shortest",
-            output_path,
-        ]
-
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            tts = EdgeTTSEngine()
+            await tts.generate(
+                text=prompt.strip(),
+                output_path=audio_path,
+                voice=self.config.audio_voice,
+                rate=self.config.audio_rate,
             )
-            await asyncio.wait_for(proc.communicate(), timeout=120)
-            if proc.returncode == 0 and os.path.exists(output_path):
-                # Nettoyer le fichier audio temporaire
-                if os.path.exists(audio_path):
-                    os.remove(audio_path)
-                if os.path.exists(enhanced_audio):
-                    os.remove(enhanced_audio)
-                return output_path
+
+            # v8.5: config audio adaptée au TTS synthétique (pas de débruitage agressif
+            # qui dégrade la voix artificielle). On garde normalisation douce + EQ vocal.
+            enhancer = AudioEnhancer(
+                config=AudioEnhanceConfig(
+                    denoise=False,           # TTS = pas de bruit à enlever (afftdn crée des artefacts)
+                    normalize=True,          # loudnorm doux pour niveau constant
+                    reduce_breath=False,     # pas de souffle sur TTS
+                    spatialize=False,
+                    eq_preset="vocal",       # EQ vocal léger
+                    remove_clicks=False,     # pas de clics sur TTS
+                    target_lufs=-18.0,       # niveau plus naturel pour narration
+                )
+            )
+            enhanced_audio = await enhancer.enhance(audio_path, audio_path + ".enhanced.wav")
+
+            # Overlay audio : mux SIMPLE (sans `-shortest`). Avec `-shortest`,
+            # la vidéo était tronquée à la durée de la narration (prompt court
+            # = 3-4 s au lieu des 15 s demandées). Sans `-shortest`, la sortie
+            # dure max(vidéo, audio) : la vidéo garde toute sa longueur, la
+            # narration reste au début (silence ensuite). L'étape finale
+            # ensure_video_duration garantit ensuite la durée EXACTE demandée.
+            output_path = video_path + ".audio.mp4"
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", video_path,
+                "-i", enhanced_audio,
+                "-map", "0:v", "-map", "1:a",
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                output_path,
+            ]
+
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                await asyncio.wait_for(proc.communicate(), timeout=120)
+                if proc.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                    # Nettoyer les fichiers audio temporaires
+                    for p in (audio_path, enhanced_audio):
+                        if os.path.exists(p):
+                            try:
+                                os.remove(p)
+                            except OSError:
+                                pass
+                    return output_path
+                logger.warning(f"[AIVideoPipeline] Audio overlay failed (code {proc.returncode})")
+            except Exception as e:
+                logger.warning(f"[AIVideoPipeline] Audio overlay failed: {e}")
         except Exception as e:
-            logger.warning(f"[AIVideoPipeline] Audio enhancement failed: {e}")
+            logger.warning(f"[AIVideoPipeline] Audio enhancement failed (non-fatal): {e}")
 
         return video_path
 

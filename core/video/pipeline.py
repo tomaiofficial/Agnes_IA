@@ -447,7 +447,20 @@ class AIVideoPipeline:
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
-                await asyncio.wait_for(proc.communicate(), timeout=120)
+                try:
+                    await asyncio.wait_for(proc.communicate(), timeout=120)
+                except asyncio.TimeoutError:
+                    # v8.10: tuer le process au timeout (évite un ffmpeg zombie
+                    # qui tourne en parallèle du prochain encode → OOM 512 Mo).
+                    proc.kill()
+                    await proc.wait()
+                    logger.warning(f"[AIVideoPipeline] Audio overlay timeout (120s), killed")
+                    if os.path.exists(output_path):
+                        try:
+                            os.remove(output_path)
+                        except OSError:
+                            pass
+                    return video_path
                 if proc.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                     # Nettoyer les fichiers audio temporaires
                     for p in (audio_path, enhanced_audio):
@@ -466,15 +479,25 @@ class AIVideoPipeline:
         return video_path
 
     async def _compress(self, video_path: str) -> str:
-        """Compression intelligente (qualité préservée, preset fast)."""
+        """Compression intelligente (qualité préservée, preset ultrafast).
+
+        v8.10 — deux corrections RAM (plan Free 512 Mo) :
+        1. Le timeout doit TUER le process ffmpeg : avant, wait_for(300) expirait
+           mais le process continuait de tourner en arrière-plan pendant que
+           l'étape 6 (ensure_video_duration) lançait SON propre ffmpeg →
+           2 encodages 1080p simultanés → « Ran out of memory » (tâche avancée
+           f8b15659c077, 2026-08-04 11:40).
+        2. preset ultrafast + threads 2 (comme le reste du pipeline) : le preset
+           fast est ~4-5x plus lent sur le CPU partagé de Render et timeout
+           systématiquement sur Full HD. ultrafast termine en ~1-2 min.
+        """
         output_path = video_path + ".final.mp4"
         cmd = [
             "ffmpeg", "-y",
             "-i", video_path,
             "-c:v", "libx264",
             "-crf", "21",
-            # v8.5: preset fast (meilleur qualité/taille que ultrafast, encore OK RAM)
-            "-preset", "fast",
+            "-preset", "ultrafast",
             "-threads", "2",
             "-c:a", "aac",
             "-b:a", "128k",
@@ -488,9 +511,23 @@ class AIVideoPipeline:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            await asyncio.wait_for(proc.communicate(), timeout=300)
+            try:
+                await asyncio.wait_for(proc.communicate(), timeout=240)
+            except asyncio.TimeoutError:
+                # CRITIQUE : tuer le process — sinon il continue d'encoder
+                # 1080p en arrière-plan et fait OOM avec le prochain ffmpeg.
+                proc.kill()
+                await proc.wait()
+                logger.warning(f"[AIVideoPipeline] Compression timeout (240s), killed: {video_path}")
+                if os.path.exists(output_path):
+                    try:
+                        os.remove(output_path)
+                    except OSError:
+                        pass
+                return video_path
             if proc.returncode == 0 and os.path.exists(output_path):
                 return output_path
+            logger.warning(f"[AIVideoPipeline] Compression failed (code {proc.returncode})")
         except Exception as e:
             logger.warning(f"[AIVideoPipeline] Compression failed: {e}")
 

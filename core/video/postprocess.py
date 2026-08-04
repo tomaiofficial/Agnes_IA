@@ -333,7 +333,20 @@ async def ensure_video_duration(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=180)
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=180)
+        except asyncio.TimeoutError:
+            # v8.10: tuer le process au timeout — sinon il continue d'encoder
+            # 1080p en arrière-plan et fait OOM avec le prochain ffmpeg.
+            proc.kill()
+            await proc.wait()
+            logger.warning("[VideoPostProcess] ensure_video_duration timeout (180s), killed")
+            if os.path.exists(out):
+                try:
+                    os.remove(out)
+                except OSError:
+                    pass
+            return video_path
         if proc.returncode != 0:
             err = stderr.decode(errors="replace")[:500] if stderr else ""
             logger.warning(f"[VideoPostProcess] ensure_video_duration ffmpeg failed: {err}")
@@ -370,7 +383,12 @@ async def _probe_duration(video_path: str) -> float:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        try:
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            return 0.0
         text = stderr.decode(errors="replace")
         import re
         m = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", text)

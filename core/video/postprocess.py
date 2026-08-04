@@ -310,9 +310,13 @@ async def ensure_video_duration(
 
     out = output_path or (video_path + ".dur.mp4")
     cmd = ["ffmpeg", "-y", "-i", video_path]
-    if actual > target:
-        # Trop long → tronquer (audio inclus via -t)
-        cmd += ["-t", f"{target:.3f}"]
+    # v8.14: forcer la durée de sortie à `target` dans TOUS les cas.
+    # Avec `-c:a copy`, une piste audio plus courte que la vidéo paddée
+    # (tpad) pouvait limiter la durée du conteneur → vidéo de 15 s livrée
+    # à 12 s (« se coupe 3 sec avant »). `-t` garantit la durée du conteneur
+    # ; tpad pad la vidéo, l'audio court est simplement copié (silence
+    # implicite après la fin de la piste audio).
+    cmd += ["-t", f"{target:.3f}"]
     cmd += [
         "-vf",
         f"tpad=stop_mode=clone:stop_duration={target - actual:.3f}"

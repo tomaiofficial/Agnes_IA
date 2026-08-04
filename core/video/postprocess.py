@@ -355,7 +355,63 @@ async def ensure_video_duration(
             err = stderr.decode(errors="replace")[:500] if stderr else ""
             logger.warning(f"[VideoPostProcess] ensure_video_duration ffmpeg failed: {err}")
             if os.path.exists(out):
-                os.remove(out)
+                try:
+                    os.remove(out)
+                except OSError:
+                    pass
+            # v8.15 — verrou de sûreté durée : une piste audio courte/corrompue
+            # peut faire échouer `-c:a copy` (returncode != 0). On re-tente SANS
+            # audio : la durée vidéo cible est garantie à 100 % même au prix du
+            # flux sonore (l'audio est de toute façon secondaire face à une
+            # vidéo livrée 3 s trop courte — le bug « se coupe avant la fin »).
+            cmd_an = [
+                "ffmpeg", "-y", "-i", video_path,
+                "-t", f"{target:.3f}",
+                "-vf",
+                f"tpad=stop_mode=clone:stop_duration={target - actual:.3f}"
+                if actual < target
+                else "null",
+                "-c:v", "libx264",
+                "-crf", "21",
+                "-preset", "ultrafast",
+                "-threads", "2",
+                "-an",
+                "-movflags", "+faststart",
+                out,
+            ]
+            try:
+                proc2 = await asyncio.create_subprocess_exec(
+                    *cmd_an,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                try:
+                    stdout2, stderr2 = await asyncio.wait_for(proc2.communicate(), timeout=180)
+                except asyncio.TimeoutError:
+                    proc2.kill()
+                    await proc2.wait()
+                    logger.warning("[VideoPostProcess] ensure_video_duration retry (sans audio) timeout")
+                    if os.path.exists(out):
+                        try:
+                            os.remove(out)
+                        except OSError:
+                            pass
+                    return video_path
+                if proc2.returncode == 0 and os.path.exists(out) and os.path.getsize(out) > 0:
+                    logger.warning("[VideoPostProcess] Durée garantie SANS audio (retry -an)")
+                    if not output_path:
+                        os.replace(out, video_path)
+                        return video_path
+                    return out
+                err2 = stderr2.decode(errors="replace")[:300] if stderr2 else ""
+                logger.warning(f"[VideoPostProcess] ensure_video_duration retry -an failed: {err2}")
+            except Exception as e2:
+                logger.warning(f"[VideoPostProcess] ensure_video_duration retry -an error: {e2}")
+            if os.path.exists(out):
+                try:
+                    os.remove(out)
+                except OSError:
+                    pass
             return video_path
         if not (os.path.exists(out) and os.path.getsize(out) > 0):
             logger.warning("[VideoPostProcess] ensure_video_duration output empty")

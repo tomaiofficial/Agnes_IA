@@ -70,3 +70,59 @@ async def test_ensure_duration_already_correct(tmp_path):
     _make_short_video_with_audio(src, 15.0)
     out = await ensure_video_duration(src, 15.0)
     assert out == src
+
+
+class _FakeStream:
+    def __init__(self, data: bytes):
+        self._data = data
+
+    async def read(self, *a, **k):
+        return self._data
+
+    def decode(self, errors="replace"):
+        return self._data.decode(errors=errors)
+
+
+class _FakeProc:
+    def __init__(self, returncode: int, stderr: bytes):
+        self.returncode = returncode
+        self.stdout = _FakeStream(b"")
+        self.stderr = _FakeStream(stderr)
+
+    async def communicate(self):
+        return b"", self.stderr._data
+
+
+@pytest.mark.asyncio
+async def test_ensure_duration_retries_without_audio(monkeypatch, tmp_path):
+    """v8.15 : si l'encode audio échoue (`-c:a copy`), re-tentative SANS audio
+    (`-an`) → la durée cible est garantie même au prix de la piste sonore."""
+    src = str(tmp_path / "src.mp4")
+    _make_short_video_with_audio(src, 12.0)
+    assert abs(_duration(src) - 12.0) < 0.5
+
+    calls = []
+
+    async def fake_exec(*args, **kwargs):
+        calls.append(tuple(args))
+        # Probe (`ffmpeg -i <path>`) et retry `-an` : exécuter le VRAI ffmpeg.
+        if "-an" in args or (len(args) == 3 and args[0] == "ffmpeg" and args[1] == "-i"):
+            r = await asyncio.to_thread(subprocess.run, list(args), capture_output=True)
+            return _FakeProc(r.returncode, r.stderr)
+        # 1er encode (avec `-c:a copy`) : échec simulé → déclenche le retry -an.
+        return _FakeProc(1, b"simulated copy failure")
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
+
+    out = await ensure_video_duration(src, 15.0)
+    assert abs(_duration(out) - 15.0) <= 0.5, f"durée {_duration(out)}s ≠ 15s"
+
+    retry_cmd = [a for a in calls if "-an" in a]
+    assert retry_cmd, "le retry `-an` n'a pas été déclenché après l'échec simulé"
+
+    # La sortie finale ne doit plus contenir de piste audio (retry -an).
+    probe = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-i", out],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    ).stderr
+    assert "Audio:" not in probe, "le retry -an a conservé une piste audio"

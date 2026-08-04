@@ -114,7 +114,14 @@ TASK_TYPE_WEIGHTS = {
     TaskType.POETRY: 3,       # 1 Chat(拆分) + N*Video + N*合成
     TaskType.IMAGE: 1,        # 1 image submit
 }
-MAX_CONCURRENT_WEIGHT = min(int(_AGNES_RATE_LIMIT * 0.7), 4)  # plan Free 512 Mo : ~1 pipeline lourd à la fois (manuscript=4)
+# v8.7: plan Free 512 Mo → UNE SEULE pipeline à la fois. Les pipelines
+# ré-encodent la vidéo en Full HD (watermark + ensure_video_duration /
+# postprocess) : 2 pipelines simultanés dépassent 512 Mo → OOM (événement
+# Render « Ran out of memory » du 2026-08-04, tâches c1ed251c7a23 +
+# 79155c49dfc9 en parallèle). Les tâches suivantes attendent en file
+# (statut « 任务排队中... » / « en attente ») — comportement déjà géré par
+# _run_pipeline_with_concurrency + WeightedSemaphore.
+MAX_CONCURRENT_WEIGHT = 1
 
 
 class WeightedSemaphore:

@@ -77,9 +77,13 @@ class SimpleVideoPipeline(BasePipeline):
             # v8.6: Durée exacte garantie — l'API plafonne les frames en Full HD
             # (≈11 s) ; on complète (dernière image figée) ou on tronque pour
             # livrer EXACTEMENT la durée demandée (5/7/10/12/15 s).
+            # v8.9: ensure_video_duration est async (coroutine) — il faut `await`
+            # DIRECTEMENT, pas via asyncio.to_thread (qui renverrait la coroutine
+            # non exécutée → final_video_file = coroutine → TypeError
+            # « coroutine is not JSON serializable » au _save du state).
             try:
-                video_path = await asyncio.to_thread(
-                    ensure_video_duration, video_path, float(self._state.duration or 5)
+                video_path = await ensure_video_duration(
+                    video_path, float(self._state.duration or 5)
                 )
             except Exception as e:
                 logger.warning(f"[Simple] ensure_video_duration failed: {e}")

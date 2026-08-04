@@ -293,10 +293,10 @@ class AIVideoPipeline:
         # L'API Agnes plafonne les frames en Full HD (≈11 s) : on complète
         # (dernière image figée) ou on tronque pour livrer EXACTEMENT la
         # durée demandée par l'utilisateur.
+        # v8.9: ensure_video_duration est async — `await` direct, jamais via
+        # asyncio.to_thread (retournerait la coroutine non exécutée).
         try:
-            final_path = await asyncio.to_thread(
-                ensure_video_duration, final_path, float(duration)
-            )
+            final_path = await ensure_video_duration(final_path, float(duration))
         except Exception as e:
             logger.warning(f"[AIVideoPipeline] ensure_video_duration failed: {e}")
 

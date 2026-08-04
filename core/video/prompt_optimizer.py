@@ -30,6 +30,8 @@ from core.video.postprocess import VIDEO_STYLES
 logger = logging.getLogger(__name__)
 
 # Mots-clés cinématiques ajoutés automatiquement
+# v8.13: enrichis des garde-fous du blueprint « Cinéma Professionnel »
+# (zéro déformation / zéro flicker / zéro morphing / aucun artifact / peau naturelle)
 CINEMATIC_SUFFIXES = [
     "cinematic lighting",
     "volumetric lighting",
@@ -41,6 +43,13 @@ CINEMATIC_SUFFIXES = [
     "sharp focus",
     "depth of field",
     "film grain",
+    # v8.13 — garde-fous blueprint cinéma
+    "zero deformation",
+    "no flicker",
+    "no morphing",
+    "no artifacts",
+    "natural skin texture",
+    "consistent lighting",
 ]
 
 # Corrections orthographiques courantes (français)

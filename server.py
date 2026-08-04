@@ -35,7 +35,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Hea
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 
-from core.config import get_api_key, set_api_key, delete_api_key, get_api_key_source, get_working_dir, DURATION_FRAME_MAP, get_workspaces, add_workspace, remove_workspace, set_active_workspace, get_active_workspace, REGRESSION_WORKING_DIR_ENV, get_watermark_config, set_watermark_config, WATERMARK_PROMO_TEXT_ZH, WATERMARK_PROMO_TEXT_EN, get_selected_models, set_selected_models, get_agnes_domain, set_agnes_domain, AGNES_DOMAIN_MAP, get_agnes_api_root
+from core.config import get_api_key, set_api_key, delete_api_key, get_api_key_source, get_working_dir, DURATION_FRAME_MAP, get_workspaces, add_workspace, remove_workspace, set_active_workspace, get_active_workspace, REGRESSION_WORKING_DIR_ENV, get_watermark_config, set_watermark_config, WATERMARK_PROMO_TEXT_ZH, WATERMARK_PROMO_TEXT_EN, get_selected_models, set_selected_models, get_agnes_domain, set_agnes_domain, AGNES_DOMAIN_MAP, get_agnes_api_root, DEFAULT_NEGATIVE_PROMPT
 from core.path_security import safe_join, safe_workspace_path, UnsafePathError
 from core.audio.voices import (
     get_voice_catalog,
@@ -1842,6 +1842,9 @@ async def create_simple_task(
     if len(prompt) > 5000:
         raise HTTPException(status_code=422, detail="prompt 最多 5000 字符")
 
+    # v8.13: negative prompt cinéma par défaut si l'utilisateur n'en fournit pas
+    negative_prompt = (negative_prompt or "").strip() or DEFAULT_NEGATIVE_PROMPT
+
     # v8.0: Validation de sécurité (prompt + rate limit IP)
     if _security_validator:
         # Rate limit par IP (protection DDoS)
@@ -1942,7 +1945,7 @@ async def create_advanced_task(
     denoise: bool = Form(True),
     face_enhance: bool = Form(True),
     motion_enhance: bool = Form(False),
-    hdr: bool = Form(False),
+    hdr: bool = Form(True),
     color_correct: bool = Form(True),
     compress: bool = Form(True),
     # Audio
@@ -1993,6 +1996,9 @@ async def create_advanced_task(
         )
     if len(prompt) > 5000:
         raise HTTPException(status_code=422, detail="prompt最多5000字符")
+
+    # v8.13: negative prompt cinéma par défaut si l'utilisateur n'en fournit pas
+    negative_prompt = (negative_prompt or "").strip() or DEFAULT_NEGATIVE_PROMPT
 
     task_id = uuid.uuid4().hex[:12]
     dir_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{task_id}"

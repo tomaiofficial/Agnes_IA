@@ -510,12 +510,12 @@
           <summary class="text-[11px] sm:text-xs text-gray-500 cursor-pointer hover:text-gray-300 py-1">Paramètres avancés</summary>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
             <div>
-              <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Seed (optionnel)</label>
-              <input id="s_seed" type="number" placeholder="Aléatoire si vide" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+              <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Seed fixe (reproductibilité)</label>
+              <input id="s_seed" type="number" value="42" placeholder="42" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
             </div>
             <div>
               <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Negative prompt</label>
-              <input id="s_negative" placeholder="Éléments à exclure" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+              <textarea id="s_negative" rows="3" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm resize-y text-gray-100 placeholder-gray-500">deformation, morphing, flicker, ghosting, distortion, blur, noise, pixelation, artifacts, wobble, shaking, unnatural, jitter, tremor, plastic, fake, doll, melting, stretching, aliasing, banding, compression, oversaturated, cartoon, low quality, dull, halo, lens flare, grain, shimmer, papillonnement, pixelise, smooth plastic skin, oversaturated colors, unnatural proportions, floating objects, discontinuous movement, frame inconsistency</textarea>
             </div>
           </div>
           <div class="mt-3">
@@ -573,7 +573,7 @@
          <div class="border-t border-white/5 pt-3 mt-3">
            <div class="flex items-center gap-2 min-h-[44px]">
              <label class="relative inline-flex items-center cursor-pointer">
-               <input id="s_advanced_mode" type="checkbox" class="sr-only peer">
+               <input id="s_advanced_mode" type="checkbox" class="sr-only peer" checked>
                <div class="w-10 sm:w-9 h-6 sm:h-5 bg-gray-700 rounded-full peer peer-checked:bg-purple-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-1 after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
              </label>
              <span class="text-[11px] sm:text-xs text-gray-400">🚀 Mode avancé (pipeline IA complet : upscaling, débruitage, amélioration visage, HDR)</span>
@@ -613,22 +613,23 @@
                  <option value="false">Non</option>
                </select>
              </div>
-             <div>
-               <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">HDR</label>
-               <select id="s_hdr" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
-                 <option value="false" selected>Non</option>
-                 <option value="true">Oui</option>
-               </select>
-             </div>
-             <div>
-               <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Optimisation prompt IA</label>
-               <select id="s_optimize_prompt" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
-                 <option value="true" selected>Oui</option>
-                 <option value="false">Non</option>
-               </select>
-             </div>
-           </div>
-         </div>
+              <div>
+                <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">HDR</label>
+                <select id="s_hdr" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+                  <option value="true" selected>Oui</option>
+                  <option value="false">Non</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Optimisation prompt IA</label>
+                <select id="s_optimize_prompt" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+                  <option value="true" selected>Oui</option>
+                  <option value="false">Non</option>
+                </select>
+              </div>
+            </div>
+            <p class="text-[10px] sm:text-[11px] text-purple-300/80 mt-2 leading-relaxed">🎬 <strong>Réglages Cinéma Pro</strong> : seed fixe (42), negative prompt cinéma, HDR Oui. Pour un rendu optimal : prompt détaillé (250+ mots), éclairage nommé (three-point/key/fill/backlight), caméra immobile, textures explicites, finir par « ultra-réaliste 4K, zéro déformation, zéro flicker ».</p>
+          </div>
        </div>
        <button id="btn-simple" onclick="submitSimple()" class="w-full py-4 sm:py-3.5 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 rounded-xl text-base font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed glow-btn min-h-[50px]">
          🎬 Générer la vidéo
@@ -2026,6 +2027,8 @@ document.addEventListener('DOMContentLoaded', () => {
     advancedToggle.addEventListener('change', () => {
       advancedOptions.classList.toggle('hidden', !advancedToggle.checked);
     });
+    // v8.13: le mode avancé est activé par défaut → afficher les options dès le chargement
+    advancedOptions.classList.toggle('hidden', !advancedToggle.checked);
   }
 });
 

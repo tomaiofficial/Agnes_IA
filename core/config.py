@@ -405,6 +405,22 @@ def get_default_audio_config() -> AudioConfig:
 # 水印配置
 # ═══════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════
+# 质量守卫：默认 Negative Prompt（v8.13 Cinéma Pro）
+# 用户提供的「Cinéma Professionnel」蓝图负面词，自动附加到
+# advanced / simple 的生成请求，除非用户显式提供自己的负面词。
+# ═══════════════════════════════════════════════════
+
+DEFAULT_NEGATIVE_PROMPT = (
+    "deformation, morphing, flicker, ghosting, distortion, blur, noise, "
+    "pixelation, artifacts, wobble, shaking, unnatural, jitter, tremor, "
+    "plastic, fake, doll, melting, stretching, aliasing, banding, compression, "
+    "oversaturated, cartoon, low quality, dull, halo, lens flare, grain, "
+    "shimmer, papillonnement, pixelise, smooth plastic skin, oversaturated "
+    "colors, unnatural proportions, floating objects, discontinuous movement, "
+    "frame inconsistency"
+)
+
 DEFAULT_WATERMARK_ENABLED = False
 DEFAULT_WATERMARK_LANGUAGE = "auto"  # "auto" | "zh" | "en"
 

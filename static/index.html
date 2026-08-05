@@ -811,6 +811,7 @@
                <option value="kwaivgi/kling-1.6-standard">Kling 1.6 Standard</option>
                 <option value="sora-2">Sora 2 (OpenAI)</option>
                 <option value="veo-3.0-fast-generate-001">Veo 3.0 (Google)</option>
+                <option value="tencent/hunyuan-video">HunyuanVideo (Tencent)</option>
              </select>
            </div>
            <div>
@@ -1415,9 +1416,10 @@ async function submitSimplePuter(prompt) {
     markStep('signin', true);
     const model = document.getElementById('p_model') ? document.getElementById('p_model').value : 'kwaivgi/kling-2.1-master';
     let seconds = parseInt(document.getElementById('s_duration').value, 10) || 5;
-    // Durées supportées par modèle (doc Puter) : Sora 4/8/12s, Veo 4/6/8s, Kling 5/10s
+    // Durées supportées par modèle (doc Puter) : Sora 4/8/12s, Veo 4/6/8s, Hunyuan 5s, Kling 5/10s
     if (model.indexOf('sora') !== -1) seconds = seconds <= 4 ? 4 : seconds <= 8 ? 8 : 12;
     else if (model.indexOf('veo') !== -1) seconds = seconds <= 4 ? 4 : seconds <= 6 ? 6 : 8;
+    else if (model.indexOf('hunyuan') !== -1) seconds = 5;
     else seconds = seconds <= 5 ? 5 : 10;
     const res = parseResolution(document.getElementById('s_resolution').value);
     // Sora 2 impose des tailles fixes documentées (720x1280 / 1280x720 / 1024x1792 / 1792x1024) ;

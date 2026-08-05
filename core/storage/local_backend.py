@@ -74,8 +74,13 @@ class LocalCommunityStore(CommunityStore):
 
     def list_videos(self, page=1, per_page=20) -> dict:
         index = self._load_index()
+        profiles = self._load_profiles()
         videos = []
         for vid, meta in (index.get("videos") or {}).items():
+            uid = meta.get("user_id", "")
+            avatar_url = ""
+            if uid and (profiles.get(uid) or {}).get("avatar_path"):
+                avatar_url = f"/api/community/profiles/{uid}/avatar"
             videos.append({
                 "id": vid,
                 "title": meta["prompt"][:80] if meta.get("prompt") else "Untitled",
@@ -84,7 +89,8 @@ class LocalCommunityStore(CommunityStore):
                 "duration": meta.get("duration", 0),
                 "resolution": meta.get("resolution", ""),
                 "published_at": meta.get("published_at", 0),
-                "user_id": meta.get("user_id", ""),
+                "user_id": uid,
+                "avatar_url": avatar_url,
                 "likes": len(meta.get("likes", [])),
                 "comments_count": len(meta.get("comments", [])),
                 "video_url": f"/api/community/videos/{vid}/video",
@@ -156,6 +162,118 @@ class LocalCommunityStore(CommunityStore):
                 "video_url": f"/api/community/videos/{vid}/video",
                 "video_target": video_path,
             }
+        return None
+
+    # ── Profils utilisateurs (façon TikTok/Instagram) ─────────────────────
+
+    def _profiles_file(self) -> str:
+        return os.path.join(self._get_community_dir(), "profiles.json")
+
+    def _load_profiles(self) -> dict:
+        path = self._profiles_file()
+        if not os.path.exists(path):
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"[CommunityStore] profiles.json illisible: {e}")
+            return {}
+
+    def _save_profiles(self, profiles: dict) -> None:
+        path = self._profiles_file()
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(profiles, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+
+    def get_profile(self, user_id: str) -> Optional[dict]:
+        if not user_id:
+            return None
+        p = self._load_profiles().get(user_id)
+        if not p:
+            return None
+        avatar_url = ""
+        if p.get("avatar_path") and os.path.exists(p["avatar_path"]):
+            avatar_url = f"/api/community/profiles/{user_id}/avatar"
+        return {
+            "user_id": user_id,
+            "pseudo": p.get("pseudo", ""),
+            "bio": p.get("bio", ""),
+            "avatar_url": avatar_url,
+            "created_at": p.get("created_at", 0),
+            "updated_at": p.get("updated_at", 0),
+        }
+
+    def save_profile(
+        self,
+        user_id: str,
+        pseudo: str = "",
+        bio: str = "",
+        avatar_bytes: Optional[bytes] = None,
+        avatar_content_type: str = "",
+    ) -> dict:
+        profiles = self._load_profiles()
+        existing = profiles.get(user_id) or {}
+        now = time.time()
+        avatar_path = ""
+        if avatar_bytes:
+            ext = {"image/jpeg": "jpg", "image/webp": "webp",
+                   "image/gif": "gif"}.get(avatar_content_type or "", "png")
+            avatar_path = os.path.join(self._get_community_dir(), f"avatar_{user_id}.{ext}")
+            with open(avatar_path, "wb") as f:
+                f.write(avatar_bytes)
+            old = existing.get("avatar_path") or ""
+            if old and os.path.abspath(old) != os.path.abspath(avatar_path) and os.path.exists(old):
+                try:
+                    os.remove(old)
+                except OSError:
+                    pass
+        profiles[user_id] = {
+            "pseudo": (pseudo or "").strip()[:30],
+            "bio": (bio or "").strip()[:160],
+            "avatar_path": avatar_path or existing.get("avatar_path", ""),
+            "created_at": existing.get("created_at", now),
+            "updated_at": now,
+        }
+        self._save_profiles(profiles)
+        return self.get_profile(user_id)
+
+    def get_user_videos(self, user_id: str, page: int = 1, per_page: int = 50) -> dict:
+        index = self._load_index()
+        profiles = self._load_profiles()
+        videos = []
+        for vid, meta in (index.get("videos") or {}).items():
+            if (meta.get("user_id") or "") != user_id:
+                continue
+            avatar_url = ""
+            if (profiles.get(user_id) or {}).get("avatar_path"):
+                avatar_url = f"/api/community/profiles/{user_id}/avatar"
+            videos.append({
+                "id": vid,
+                "title": meta["prompt"][:80] if meta.get("prompt") else "Untitled",
+                "author": meta.get("author", "Anonyme"),
+                "prompt": meta.get("prompt", ""),
+                "duration": meta.get("duration", 0),
+                "resolution": meta.get("resolution", ""),
+                "published_at": meta.get("published_at", 0),
+                "user_id": user_id,
+                "avatar_url": avatar_url,
+                "likes": len(meta.get("likes", [])),
+                "comments_count": len(meta.get("comments", [])),
+                "video_url": f"/api/community/videos/{vid}/video",
+                "thumbnail": f"/api/community/videos/{vid}/video",
+            })
+        videos.sort(key=lambda v: v["published_at"], reverse=True)
+        start = (page - 1) * per_page
+        end = start + per_page
+        return {"videos": videos[start:end], "total": len(videos)}
+
+    def get_avatar_path(self, user_id: str) -> Optional[str]:
+        p = self._load_profiles().get(user_id)
+        path = (p or {}).get("avatar_path") or ""
+        if path and os.path.exists(path):
+            return path
         return None
 
     def delete(self, video_id: str, user_id: str = "") -> None:

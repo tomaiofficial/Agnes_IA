@@ -105,6 +105,58 @@ class CommunityStore(ABC):
         """
         return None
 
+    # ── Profils utilisateurs (façon TikTok/Instagram) ────────────────────
+    # Méthodes concrètes (non abstraites) pour préserver la rétrocompatibilité :
+    # un backend qui ne les implémente pas retombe sur le comportement "sans
+    # profil" (pseudo dérivé des publications, aucun avatar, aucune persistance).
+
+    def get_profile(self, user_id: str) -> Optional[dict]:
+        """Retourne le profil enregistré d'un utilisateur, ou None.
+
+        Returns:
+            {"user_id", "pseudo", "bio", "avatar_url", "created_at", "updated_at"}
+        """
+        return None
+
+    def save_profile(
+        self,
+        user_id: str,
+        pseudo: str = "",
+        bio: str = "",
+        avatar_bytes: Optional[bytes] = None,
+        avatar_content_type: str = "",
+    ) -> dict:
+        """Crée ou met à jour le profil d'un utilisateur (upsert).
+
+        avatar_bytes : si fourni, uploadé comme photo de profil (le chemin
+        stocké devient `avatars/{user_id}.{ext}`). Returns : profil à jour
+        (même format que get_profile).
+        """
+        return {
+            "user_id": user_id,
+            "pseudo": pseudo,
+            "bio": bio,
+            "avatar_url": "",
+            "created_at": 0,
+            "updated_at": 0,
+        }
+
+    def get_user_videos(self, user_id: str, page: int = 1, per_page: int = 50) -> dict:
+        """Liste les vidéos publiées par un utilisateur (les plus récentes d'abord).
+
+        Returns:
+            {"videos": [dict], "total": int} — mêmes champs que list_videos.
+        """
+        return {"videos": [], "total": 0}
+
+    def get_avatar_path(self, user_id: str) -> Optional[str]:
+        """Chemin/URL de l'avatar d'un utilisateur (pour l'endpoint de service).
+
+        Retourne une URL publique (mode distant) ou un chemin local (mode
+        local), ou None si l'utilisateur n'a pas d'avatar.
+        """
+        return None
+
 
 class TaskStore(ABC):
     """Persistance des métadonnées de tâches (survit aux redéploiements)."""

@@ -64,6 +64,17 @@ CREATE TABLE IF NOT EXISTS community_comments (
     created_at DOUBLE PRECISION NOT NULL
 );
 
+-- Profils utilisateurs (façon TikTok/Instagram) : pseudo/bio/avatar persistés
+-- par user_id (le même identifiant opaque X-User-Id que les publications).
+CREATE TABLE IF NOT EXISTS user_profiles (
+    user_id     TEXT PRIMARY KEY,
+    pseudo      TEXT NOT NULL DEFAULT '',
+    bio         TEXT NOT NULL DEFAULT '',
+    avatar_path TEXT NOT NULL DEFAULT '',
+    created_at  DOUBLE PRECISION NOT NULL,
+    updated_at  DOUBLE PRECISION NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS tasks (
     task_id          TEXT PRIMARY KEY,
     dir_name         TEXT NOT NULL DEFAULT '',
@@ -114,6 +125,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_user             ON tasks(user_id);
 ALTER TABLE community_videos   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE community_likes    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE community_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_profiles     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tasks              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_config         ENABLE ROW LEVEL SECURITY;
 """
@@ -334,9 +346,11 @@ class SupabaseCommunityStore(CommunityStore):
             logger.warning(f"[CommunityStore] Échec sauvegarde vidéo {task_id}: {e}")
             return None
 
-    def _row_to_video(self, row: dict, like_counts: dict, comment_counts: dict) -> dict:
+    def _row_to_video(self, row: dict, like_counts: dict, comment_counts: dict,
+                      avatars: Optional[dict] = None) -> dict:
         vid = row["id"]
         prompt = row.get("prompt", "") or ""
+        avatars = avatars or {}
         return {
             "id": vid,
             "title": prompt[:80] if prompt else "Untitled",
@@ -346,11 +360,64 @@ class SupabaseCommunityStore(CommunityStore):
             "resolution": row.get("resolution", "") or "",
             "published_at": row.get("published_at", 0) or 0,
             "user_id": row.get("user_id", "") or "",
+            "avatar_url": avatars.get(row.get("user_id") or "", "") or "",
             "likes": like_counts.get(vid, 0),
             "comments_count": comment_counts.get(vid, 0),
             "video_url": self._public_url(row.get("storage_path") or f"videos/{vid}.mp4"),
             "thumbnail": self._public_url(row.get("storage_path") or f"videos/{vid}.mp4"),
         }
+
+    def _avatars_by_user(self, user_ids: list) -> dict:
+        """Avatar (URL publique) par user_id, en une seule requête groupée."""
+        ids = sorted({uid for uid in (user_ids or []) if uid and uid.strip()})
+        if not ids:
+            return {}
+        try:
+            res = (
+                _get_client().table("user_profiles")
+                .select("user_id", "avatar_path")
+                .in_("user_id", ids)
+                .execute()
+            )
+        except Exception as e:
+            logger.warning(f"[CommunityStore] Lecture des avatars impossible: {e}")
+            return {}
+        out = {}
+        for row in res.data or []:
+            path = (row.get("avatar_path") or "").strip()
+            if path:
+                out[row["user_id"]] = self._public_url(path)
+        return out
+
+    def _videos_with_counts(self, rows: list, avatars: Optional[dict] = None) -> list:
+        """Attache likes/commentaires/avatars à des lignes community_videos."""
+        client = _get_client()
+        ids = [r["id"] for r in rows]
+        like_counts: dict = {}
+        comment_counts: dict = {}
+        if ids:
+            try:
+                likes_res = (
+                    client.table("community_likes").select("video_id").in_("video_id", ids).execute()
+                )
+                for like in likes_res.data or []:
+                    like_counts[like["video_id"]] = like_counts.get(like["video_id"], 0) + 1
+            except Exception as e:
+                logger.warning(f"[CommunityStore] Lecture des likes impossible: {e}")
+            try:
+                comments_res = (
+                    client.table("community_comments").select("video_id").in_("video_id", ids).execute()
+                )
+                for c in comments_res.data or []:
+                    comment_counts[c["video_id"]] = comment_counts.get(c["video_id"], 0) + 1
+            except Exception as e:
+                logger.warning(f"[CommunityStore] Lecture des commentaires impossible: {e}")
+        if avatars is None:
+            avatars = self._avatars_by_user([r.get("user_id", "") for r in rows])
+        return [
+            self._row_to_video(r, like_counts, comment_counts, avatars)
+            for r in rows
+        ]
 
     def list_videos(self, page=1, per_page=20) -> dict:
         client = _get_client()
@@ -372,28 +439,8 @@ class SupabaseCommunityStore(CommunityStore):
             total = total_res.count or 0
         except Exception:
             total = len(rows)
-        ids = [r["id"] for r in rows]
-        like_counts: dict = {}
-        comment_counts: dict = {}
-        if ids:
-            try:
-                likes_res = (
-                    client.table("community_likes").select("video_id").in_("video_id", ids).execute()
-                )
-                for like in likes_res.data or []:
-                    like_counts[like["video_id"]] = like_counts.get(like["video_id"], 0) + 1
-            except Exception as e:
-                logger.warning(f"[CommunityStore] Lecture des likes impossible: {e}")
-            try:
-                comments_res = (
-                    client.table("community_comments").select("video_id").in_("video_id", ids).execute()
-                )
-                for c in comments_res.data or []:
-                    comment_counts[c["video_id"]] = comment_counts.get(c["video_id"], 0) + 1
-            except Exception as e:
-                logger.warning(f"[CommunityStore] Lecture des commentaires impossible: {e}")
         return {
-            "videos": [self._row_to_video(r, like_counts, comment_counts) for r in rows],
+            "videos": self._videos_with_counts(rows),
             "total": total,
         }
 
@@ -496,6 +543,126 @@ class SupabaseCommunityStore(CommunityStore):
         storage_path = row.get("storage_path") or f"videos/{row['id']}.mp4"
         url = self._public_url(storage_path)
         return {"video_id": row["id"], "video_url": url, "video_target": url}
+
+    # ── Profils utilisateurs (façon TikTok/Instagram) ─────────────────────
+
+    def get_profile(self, user_id: str) -> Optional[dict]:
+        if not user_id:
+            return None
+        res = (
+            _get_client().table("user_profiles")
+            .select("*").eq("user_id", user_id).limit(1).execute()
+        )
+        rows = res.data or []
+        if not rows:
+            return None
+        row = rows[0]
+        avatar_path = (row.get("avatar_path") or "").strip()
+        return {
+            "user_id": row["user_id"],
+            "pseudo": row.get("pseudo") or "",
+            "bio": row.get("bio") or "",
+            "avatar_url": self._public_url(avatar_path) if avatar_path else "",
+            "created_at": row.get("created_at", 0) or 0,
+            "updated_at": row.get("updated_at", 0) or 0,
+        }
+
+    def save_profile(
+        self,
+        user_id: str,
+        pseudo: str = "",
+        bio: str = "",
+        avatar_bytes: Optional[bytes] = None,
+        avatar_content_type: str = "",
+    ) -> dict:
+        client = _get_client()
+        now = time.time()
+        existing_res = (
+            client.table("user_profiles").select("*").eq("user_id", user_id).limit(1).execute()
+        )
+        existing = (existing_res.data or [None])[0]
+        avatar_path = ""
+        if avatar_bytes:
+            ext = {"image/jpeg": "jpg", "image/webp": "webp",
+                   "image/gif": "gif"}.get(avatar_content_type or "", "png")
+            avatar_path = f"avatars/{user_id}.{ext}"
+            if existing and (existing.get("avatar_path") or "") != avatar_path:
+                old = (existing.get("avatar_path") or "").strip()
+                if old:
+                    try:
+                        self._storage().remove([old])
+                    except Exception as e:
+                        logger.warning(f"[CommunityStore] Suppression ancien avatar {old}: {e}")
+            self._storage().upload(
+                avatar_path, avatar_bytes,
+                {"content-type": avatar_content_type or "image/png"},
+            )
+        if existing:
+            updates = {
+                "pseudo": (pseudo or "").strip()[:30],
+                "bio": (bio or "").strip()[:160],
+                "updated_at": now,
+            }
+            if avatar_path:
+                updates["avatar_path"] = avatar_path
+            client.table("user_profiles").update(updates).eq("user_id", user_id).execute()
+        else:
+            client.table("user_profiles").insert({
+                "user_id": user_id,
+                "pseudo": (pseudo or "").strip()[:30],
+                "bio": (bio or "").strip()[:160],
+                "avatar_path": avatar_path,
+                "created_at": now,
+                "updated_at": now,
+            }).execute()
+        logger.info(f"[CommunityStore] Profil enregistré pour {user_id} "
+                    f"(pseudo={pseudo!r}, avatar={'oui' if avatar_path else 'non'})")
+        return self.get_profile(user_id)
+
+    def get_user_videos(self, user_id: str, page: int = 1, per_page: int = 50) -> dict:
+        if not user_id:
+            return {"videos": [], "total": 0}
+        client = _get_client()
+        start = (page - 1) * per_page
+        res = (
+            client.table("community_videos")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("published_at", desc=True)
+            .limit(per_page)
+            .offset(start)
+            .execute()
+        )
+        rows = res.data or []
+        total = 0
+        try:
+            total_res = (
+                client.table("community_videos").select("id", count="exact")
+                .eq("user_id", user_id).limit(1).execute()
+            )
+            total = total_res.count or 0
+        except Exception:
+            total = len(rows)
+        avatars = self._avatars_by_user([user_id])
+        return {"videos": self._videos_with_counts(rows, avatars=avatars), "total": total}
+
+    def get_avatar_path(self, user_id: str) -> Optional[str]:
+        if not user_id:
+            return None
+        try:
+            res = (
+                _get_client().table("user_profiles")
+                .select("avatar_path").eq("user_id", user_id).limit(1).execute()
+            )
+            rows = res.data or []
+        except Exception:
+            return None
+        if not rows:
+            return None
+        path = (rows[0].get("avatar_path") or "").strip()
+        if not path:
+            return None
+        return self._public_url(path)
 
     def delete(self, video_id: str, user_id: str = "") -> None:
         meta = self.get_meta(video_id)

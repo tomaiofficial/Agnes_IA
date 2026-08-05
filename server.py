@@ -3321,6 +3321,110 @@ async def delete_community_video(video_id: str, user_id: str = Header(default=""
 
 
 # ═══════════════════════════════════════════════════
+# Profils utilisateurs (façon TikTok/Instagram)
+# ═══════════════════════════════════════════════════
+
+_MAX_AVATAR_BYTES = 5 * 1024 * 1024  # 5 Mo
+
+
+@app.get("/api/community/profiles/{user_id}")
+async def get_user_profile(user_id: str):
+    """Profil public d'un utilisateur : identité + stats + ses vidéos.
+
+    Fallback élégant : sans profil enregistré, le pseudo est dérivé de la
+    publication la plus récente de l'utilisateur (et 'Anonyme' en dernier recours).
+    """
+    store = get_community_store()
+    try:
+        profile = store.get_profile(user_id)
+        videos_res = store.get_user_videos(user_id, page=1, per_page=50)
+    except Exception as e:
+        raise _community_error(e, "Chargement du profil impossible")
+    pseudo = (profile or {}).get("pseudo") or ""
+    if not pseudo:
+        for v in videos_res.get("videos", []):
+            if v.get("author"):
+                pseudo = v["author"]
+                break
+    if not pseudo:
+        pseudo = "Anonyme"
+    total_likes = sum(int(v.get("likes") or 0) for v in videos_res.get("videos", []))
+    return {
+        "ok": True,
+        "profile": {
+            "user_id": user_id,
+            "pseudo": pseudo,
+            "bio": (profile or {}).get("bio", ""),
+            "avatar_url": (profile or {}).get("avatar_url", ""),
+            "has_profile": profile is not None,
+        },
+        "stats": {"videos": int(videos_res.get("total", 0)), "likes": total_likes},
+        "videos": videos_res.get("videos", []),
+    }
+
+
+@app.get("/api/community/profile")
+async def get_my_profile(user_id: str = Header(default="", alias="X-User-Id")):
+    """Profil de l'utilisateur courant (pour l'édition dans l'UI)."""
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Utilisateur non identifié")
+    store = get_community_store()
+    try:
+        profile = store.get_profile(user_id)
+    except Exception as e:
+        raise _community_error(e, "Chargement du profil impossible")
+    if not profile:
+        profile = {"user_id": user_id, "pseudo": "", "bio": "", "avatar_url": "",
+                   "created_at": 0, "updated_at": 0}
+    return {"ok": True, "profile": profile}
+
+
+@app.post("/api/community/profile")
+async def save_my_profile(
+    pseudo: str = Form(""),
+    bio: str = Form(""),
+    avatar: UploadFile = File(None),
+    user_id: str = Header(default="", alias="X-User-Id"),
+):
+    """Crée/met à jour le profil courant : pseudo, bio, photo de profil (option)."""
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Utilisateur non identifié")
+    avatar_bytes = None
+    avatar_content_type = ""
+    if avatar is not None and (avatar.filename or ""):
+        try:
+            avatar_bytes = await avatar.read()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Lecture de l'avatar impossible")
+        if len(avatar_bytes) > _MAX_AVATAR_BYTES:
+            raise HTTPException(status_code=413, detail="Avatar trop volumineux (max 5 Mo)")
+        avatar_content_type = avatar.content_type or "image/png"
+    try:
+        profile = get_community_store().save_profile(
+            user_id,
+            pseudo=pseudo or "",
+            bio=bio or "",
+            avatar_bytes=avatar_bytes,
+            avatar_content_type=avatar_content_type,
+        )
+    except Exception as e:
+        raise _community_error(e, "Enregistrement du profil impossible")
+    logger.info(f"[Community] Profil mis à jour pour {user_id} (storage={storage_mode()})")
+    return {"ok": True, "profile": profile}
+
+
+@app.get("/api/community/profiles/{user_id}/avatar")
+async def serve_profile_avatar(user_id: str):
+    """Sert l'avatar : redirection (mode Supabase) ou fichier local (mode dev)."""
+    target = get_community_store().get_avatar_path(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Avatar not found")
+    if target.startswith("http://") or target.startswith("https://"):
+        return RedirectResponse(target, status_code=307)
+    return FileResponse(target)
+
+
+# ═══════════════════════════════════════════════════
 # Créateurs IA autonomes (agents)
 # ═══════════════════════════════════════════════════
 

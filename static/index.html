@@ -380,6 +380,79 @@
     flex-direction: column;
   }
   .feed-comments-panel.open { transform: translateX(0); }
+  /* ═══════ Profils utilisateurs (façon TikTok/Instagram) ═══════ */
+  .feed-profile-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+    padding: 4px;
+  }
+  .feed-profile-tile {
+    position: relative;
+    aspect-ratio: 9 / 16;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #0b0b10;
+    cursor: pointer;
+  }
+  .feed-profile-tile video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .feed-profile-tile-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.75), transparent 45%);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 8px;
+  }
+  .feed-profile-tile-overlay p {
+    font-size: 10px;
+    color: #e5e7eb;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  }
+  .feed-profile-tile-overlay .tile-duration {
+    flex-shrink: 0;
+    font-size: 9px;
+    color: #9ca3af;
+    background: rgba(0,0,0,0.55);
+    border-radius: 6px;
+    padding: 2px 5px;
+    white-space: nowrap;
+  }
+  .feed-author-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    border-radius: 9999px;
+    padding: 2px 8px 2px 2px;
+    background: rgba(0,0,0,0.25);
+    transition: background 0.15s ease;
+    max-width: 100%;
+  }
+  .feed-author-btn:hover { background: rgba(255,255,255,0.12); }
+  .feed-author-btn .author-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .profile-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 9999px;
+    background: #1f2937;
+  }
 </style>
 </head>
 <body class="text-gray-100 min-h-screen font-sans overflow-x-hidden" style="touch-action: manipulation; background: radial-gradient(ellipse at 50% 0%, rgba(30,64,175,0.12) 0%, transparent 60%), radial-gradient(ellipse at 80% 100%, rgba(245,158,11,0.06) 0%, transparent 50%), #030712;">
@@ -402,7 +475,8 @@
           <div id="pseudo-popover" class="absolute right-0 sm:right-0 left-auto sm:left-auto top-full mt-2 hidden w-56 p-3 rounded-xl bg-gray-900 border border-white/10 shadow-xl backdrop-blur-xl z-50 mobile-pseudo-popover">
             <label class="block text-[11px] text-gray-500 mb-1.5">Ton pseudo ou prénom</label>
             <input id="pseudo-input" type="text" maxlength="30" placeholder="ex: JeanDupont" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500/50 mb-2">
-            <button onclick="savePseudo()" class="w-full py-2.5 rounded-lg text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition">Enregistrer</button>
+            <button onclick="savePseudo()" class="w-full py-2.5 rounded-lg text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition mb-2">Enregistrer</button>
+            <button onclick="openMyProfileEdit()" class="w-full py-2.5 rounded-lg text-xs font-medium bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition">✨ Mon profil</button>
           </div>
         </div>
       </nav>
@@ -779,6 +853,43 @@
         <div class="flex gap-2 p-3 border-t border-white/10">
           <input id="feed-comment-input" type="text" placeholder="Ajouter un commentaire..." class="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500/50 min-h-[44px]">
           <button id="feed-comment-btn" onclick="addFeedComment(feedCommentsOpen)" class="px-4 rounded-lg text-xs font-medium bg-blue-600/80 text-white hover:bg-blue-500 transition disabled:opacity-40 min-h-[44px]">Envoyer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overlay profil utilisateur (façon TikTok/Instagram) -->
+    <div id="feed-profile-overlay" class="hidden fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm">
+      <div class="absolute inset-0 overflow-y-auto" onclick="if (event.target === this) closeFeedProfile()">
+        <div class="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-6 pointer-events-none">
+          <div id="feed-profile-panel" class="pointer-events-auto w-full max-w-md bg-gray-900/95 border border-white/10 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-xl"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Viewer vidéo (lecture plein écran depuis le profil) -->
+    <div id="feed-video-viewer" class="hidden fixed inset-0 z-[65] bg-black flex items-center justify-center" onclick="closeFeedVideoViewer()">
+      <video id="feed-viewer-video" class="w-full h-full object-contain" controls autoplay loop playsinline></video>
+      <button class="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white text-xl flex items-center justify-center hover:bg-white/20 z-10 min-h-[44px] min-w-[44px]" onclick="closeFeedVideoViewer()">&times;</button>
+    </div>
+
+    <!-- Modal édition du profil courant (accessible depuis le header) -->
+    <div id="profile-edit-overlay" class="hidden fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) closeProfileEdit()">
+      <div class="w-full max-w-sm bg-gray-900 border border-white/10 rounded-2xl p-5 shadow-2xl">
+        <h3 class="text-sm font-semibold text-gray-100 mb-4">✨ Mon profil</h3>
+        <div class="flex flex-col items-center mb-4">
+          <div id="profile-edit-avatar" class="w-20 h-20 rounded-full overflow-hidden mb-2 bg-gray-800 flex items-center justify-center text-2xl text-white font-bold"></div>
+          <label class="text-[11px] text-blue-400 cursor-pointer hover:text-blue-300">
+            Changer la photo
+            <input id="profile-edit-avatar-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden">
+          </label>
+        </div>
+        <label class="block text-[11px] text-gray-500 mb-1">Pseudo (30 car. max)</label>
+        <input id="profile-edit-pseudo" type="text" maxlength="30" placeholder="Ton pseudo" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500/50 mb-3 min-h-[44px]">
+        <label class="block text-[11px] text-gray-500 mb-1">Bio (160 car. max)</label>
+        <textarea id="profile-edit-bio" maxlength="160" rows="3" placeholder="Décris-toi en quelques mots..." class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500/50 mb-4 resize-none"></textarea>
+        <div class="flex gap-2">
+          <button onclick="closeProfileEdit()" class="flex-1 py-2.5 rounded-lg text-xs font-medium bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition min-h-[44px]">Annuler</button>
+          <button id="profile-edit-save" onclick="saveMyProfile()" class="flex-1 py-2.5 rounded-lg text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition min-h-[44px]">Enregistrer</button>
         </div>
       </div>
     </div>
@@ -1668,6 +1779,8 @@ function openGalleryFeed() {
 }
 
 function closeGalleryFeed() {
+  closeFeedProfile();
+  closeFeedVideoViewer();
   if (feedObserver) { feedObserver.disconnect(); feedObserver = null; }
   document.querySelectorAll('.feed-video').forEach(v => { v.pause(); v.removeAttribute('src'); });
   const panel = document.getElementById('panel-gallery');
@@ -1724,11 +1837,27 @@ function buildFeedSlide(v, index, total) {
   grad.className = 'feed-gradient';
   slide.appendChild(grad);
 
-  // Info bas-gauche (auteur + prompt + temps)
+  // Info bas-gauche (auteur cliquable → profil + prompt + temps)
   const info = document.createElement('div');
   info.className = 'absolute bottom-0 left-0 right-0 p-4 pb-6 z-10';
-  info.innerHTML = '<div class="flex items-center gap-2 mb-1.5"><span class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-xs text-white font-bold flex-shrink-0">' + escapeHtml((v.author || 'A').charAt(0).toUpperCase()) + '</span><span class="text-sm font-semibold text-white drop-shadow">' + escapeHtml(v.author || 'Anonyme') + '</span><span class="text-[10px] text-gray-400 ml-1">' + timeAgo(v.published_at) + '</span></div>' +
-    (v.prompt ? '<p class="feed-prompt text-[11px] text-gray-200/90 max-w-[60%] drop-shadow" title="' + escapeHtml(v.prompt) + '">' + escapeHtml(v.prompt) + '</p>' : '');
+  const authorBtn = document.createElement('button');
+  authorBtn.className = 'feed-author-btn mb-1.5';
+  authorBtn.title = 'Voir le profil';
+  authorBtn.innerHTML = avatarHtml(v.avatar_url, (v.author || 'A').charAt(0), 'w-8 h-8 text-xs') +
+    '<span class="author-name text-sm font-semibold text-white drop-shadow">' + escapeHtml(v.author || 'Anonyme') + '</span>';
+  authorBtn.onclick = (e) => { e.stopPropagation(); openFeedProfile(v.user_id || '', v.author || 'Anonyme'); };
+  info.appendChild(authorBtn);
+  const meta = document.createElement('div');
+  meta.className = 'flex items-center gap-2 mb-1.5';
+  meta.innerHTML = '<span class="text-[10px] text-gray-400">' + timeAgo(v.published_at) + '</span>';
+  info.appendChild(meta);
+  if (v.prompt) {
+    const pr = document.createElement('p');
+    pr.className = 'feed-prompt text-[11px] text-gray-200/90 max-w-[60%] drop-shadow';
+    pr.title = v.prompt;
+    pr.textContent = v.prompt;
+    info.appendChild(pr);
+  }
   slide.appendChild(info);
 
   // Barre d'actions droite (side rail, comme Reels/TikTok)
@@ -1772,9 +1901,9 @@ function buildFeedSlide(v, index, total) {
   playBadge.innerHTML = '<div class="feed-play-badge hidden">▶</div>';
   slide.appendChild(playBadge);
 
-  // Tap = lecture / pause ; actions = stopPropagation
+  // Tap = lecture / pause ; actions + auteur = stopPropagation
   slide.addEventListener('click', (e) => {
-    if (e.target.closest('.feed-actions')) return;
+    if (e.target.closest('.feed-actions') || e.target.closest('.feed-author-btn')) return;
     if (video.paused) { feedActivateVideo(video); } else { video.pause(); }
   });
   video.addEventListener('play', () => { const b = playBadge.querySelector('.feed-play-badge'); if (b) b.classList.add('hidden'); });
@@ -1824,6 +1953,200 @@ function closeFeedComments() {
   const panel = document.getElementById('feed-comments-panel');
   if (panel) panel.classList.remove('open');
 }
+
+// ═══════════════════════════════════════════════════
+// Profils utilisateurs (façon TikTok/Instagram)
+// ═══════════════════════════════════════════════════
+
+function escapeJs(s) {
+  return String(s == null ? '' : s)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r');
+}
+
+// Avatar : image réelle si uploadée, sinon initiale en dégradé
+function avatarHtml(avatarUrl, initiale, sizeClass) {
+  const sz = sizeClass || 'w-8 h-8';
+  if (avatarUrl) {
+    return '<span class="flex-shrink-0 ' + sz + ' rounded-full overflow-hidden inline-block bg-gray-800"><img class="profile-avatar-img" src="' + escapeHtml(avatarUrl) + '" alt="" loading="lazy"></span>';
+  }
+  return '<span class="' + sz + ' rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold flex-shrink-0">' + escapeHtml((initiale || 'A').charAt(0).toUpperCase()) + '</span>';
+}
+
+function pauseFeedVideo() {
+  document.querySelectorAll('.feed-video').forEach(v => { if (!v.paused) v.pause(); });
+}
+
+async function openFeedProfile(userId, author) {
+  if (!userId) { showToast('Profil non disponible (publication héritée)', 2500); return; }
+  feedUserInteracted = true;
+  pauseFeedVideo();
+  const panel = document.getElementById('feed-profile-panel');
+  panel.innerHTML = '<div class="flex items-center justify-center p-10"><div class="w-6 h-6 border-2 border-gray-600 border-t-transparent rounded-full animate-spin"></div></div>';
+  document.getElementById('feed-profile-overlay').classList.remove('hidden');
+  try {
+    const r = await fetchWithAuth(API_BASE + '/api/community/profiles/' + encodeURIComponent(userId));
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.detail || 'Erreur');
+    renderFeedProfile(d);
+  } catch (e) {
+    panel.innerHTML = '<div class="p-6"><p class="text-sm text-red-400 text-center mb-4">Erreur : ' + escapeHtml(e.message) + '</p><button onclick="closeFeedProfile()" class="w-full py-2.5 rounded-lg text-xs font-medium bg-white/10 text-gray-200 hover:bg-white/20 min-h-[44px]">Fermer</button></div>';
+  }
+}
+
+function closeFeedProfile() {
+  document.getElementById('feed-profile-overlay').classList.add('hidden');
+  const panel = document.getElementById('feed-profile-panel');
+  panel.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); });
+  panel.innerHTML = '';
+}
+
+function renderFeedProfile(d) {
+  const p = d.profile || {};
+  const stats = d.stats || {};
+  const videos = d.videos || [];
+  const isMe = p.user_id && p.user_id === agnesUserId;
+  const initiale = (p.pseudo || 'A').charAt(0).toUpperCase();
+  const panel = document.getElementById('feed-profile-panel');
+
+  const header = '<div class="flex items-center justify-between px-4 pt-4"><span class="text-[10px] uppercase tracking-wider text-gray-500">Profil</span><button onclick="closeFeedProfile()" class="w-9 h-9 rounded-full bg-white/10 text-white text-lg flex items-center justify-center hover:bg-white/20 min-h-[44px] min-w-[44px]">&times;</button></div>';
+
+  const identity = '<div class="flex flex-col items-center px-5 pb-4 pt-2">' +
+    '<div class="w-20 h-20 mb-3">' + avatarHtml(p.avatar_url, initiale, 'w-20 h-20 text-2xl') + '</div>' +
+    '<h2 class="text-base font-semibold text-white flex items-center gap-2">' + escapeHtml(p.pseudo) +
+      (isMe ? '<span class="text-[10px] bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-full px-2 py-0.5">Toi</span>' : '') +
+    '</h2>' +
+    (p.bio ? '<p class="text-xs text-gray-400 text-center mt-1.5 leading-relaxed max-w-[90%]">' + escapeHtml(p.bio) + '</p>' : '') +
+    '<div class="flex items-center gap-6 mt-3 text-center">' +
+      '<div><p class="text-sm font-bold text-white">' + (stats.videos || 0) + '</p><p class="text-[10px] text-gray-500">vidéos</p></div>' +
+      '<div><p class="text-sm font-bold text-white">' + (stats.likes || 0) + '</p><p class="text-[10px] text-gray-500">likes</p></div>' +
+    '</div>' +
+    (isMe ? '<button onclick="openMyProfileEdit()" class="mt-3 px-4 py-2 rounded-lg text-xs font-medium bg-white/5 border border-white/10 text-gray-200 hover:bg-white/10 transition min-h-[44px]">✏️ Modifier mon profil</button>' : '') +
+  '</div>';
+
+  let grid = '<div class="px-4 pb-4">';
+  if (videos.length === 0) {
+    grid += '<p class="text-xs text-gray-500 text-center py-6">Aucune vidéo publiée pour le moment.</p>';
+  } else {
+    grid += '<div class="feed-profile-grid">';
+    videos.forEach(v => {
+      grid += '<div class="feed-profile-tile" onclick="openFeedVideoViewer(\'' + escapeJs(v.video_url) + '\')">' +
+        '<video muted playsinline preload="metadata" src="' + escapeHtml(v.video_url) + '"></video>' +
+        '<div class="feed-profile-tile-overlay">' +
+          '<p>' + escapeHtml((v.prompt || 'Vidéo').slice(0, 60)) + '</p>' +
+          (v.duration ? '<span class="tile-duration">' + fmtDuration(v.duration) + '</span>' : '') +
+        '</div>' +
+      '</div>';
+    });
+    grid += '</div>';
+  }
+  grid += '</div>';
+
+  panel.innerHTML = header + identity + grid;
+  // Première frame de chaque tuile comme vignette
+  panel.querySelectorAll('.feed-profile-tile video').forEach(v => {
+    v.addEventListener('loadedmetadata', () => { if (v.paused) v.currentTime = 0.5; });
+  });
+}
+
+function openFeedVideoViewer(url) {
+  document.getElementById('feed-viewer-video').src = url;
+  document.getElementById('feed-video-viewer').classList.remove('hidden');
+}
+
+function closeFeedVideoViewer() {
+  const viewer = document.getElementById('feed-video-viewer');
+  const v = document.getElementById('feed-viewer-video');
+  v.pause();
+  v.removeAttribute('src');
+  viewer.classList.add('hidden');
+}
+
+// ── Édition de son propre profil ─────────────────────
+let profileEditAvatarFile = null;
+
+function avatarPreviewHtml(url) {
+  const box = document.getElementById('profile-edit-avatar');
+  if (url) {
+    box.innerHTML = '<img class="profile-avatar-img" src="' + escapeHtml(url) + '" alt="">';
+  } else {
+    box.innerHTML = '<span class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-xl text-white font-bold">' + escapeHtml((getPseudo() === 'Anonyme' ? 'A' : getPseudo().charAt(0).toUpperCase())) + '</span>';
+  }
+}
+
+async function openMyProfileEdit() {
+  const pop = document.getElementById('pseudo-popover');
+  if (pop) pop.classList.add('hidden');
+  profileEditAvatarFile = null;
+  document.getElementById('profile-edit-avatar-input').value = '';
+  const localPseudo = getPseudo() === 'Anonyme' ? '' : getPseudo();
+  document.getElementById('profile-edit-pseudo').value = localPseudo;
+  document.getElementById('profile-edit-bio').value = '';
+  avatarPreviewHtml('');
+  document.getElementById('profile-edit-overlay').classList.remove('hidden');
+  try {
+    const r = await fetchWithAuth(API_BASE + '/api/community/profile');
+    const d = await r.json();
+    if (r.ok && d.ok && d.profile) {
+      document.getElementById('profile-edit-pseudo').value = d.profile.pseudo || localPseudo;
+      document.getElementById('profile-edit-bio').value = d.profile.bio || '';
+      avatarPreviewHtml(d.profile.avatar_url || '');
+    }
+  } catch (e) { /* silencieux : on garde le pré-remplissage local */ }
+}
+
+function closeProfileEdit() {
+  document.getElementById('profile-edit-overlay').classList.add('hidden');
+  document.getElementById('profile-edit-avatar-input').value = '';
+}
+
+async function saveMyProfile() {
+  const btn = document.getElementById('profile-edit-save');
+  const pseudo = document.getElementById('profile-edit-pseudo').value.trim();
+  const bio = document.getElementById('profile-edit-bio').value.trim();
+  if (!pseudo && !bio && !profileEditAvatarFile) {
+    showToast('Renseigne au moins le pseudo ou une photo', 2500);
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    const fd = new FormData();
+    fd.append('pseudo', pseudo);
+    fd.append('bio', bio);
+    if (profileEditAvatarFile) fd.append('avatar', profileEditAvatarFile);
+    const r = await fetchWithAuth(API_BASE + '/api/community/profile', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.detail || 'Échec');
+    if (pseudo) {
+      localStorage.setItem('agnes_pseudo', pseudo);
+      const disp = document.getElementById('pseudo-display');
+      if (disp) disp.textContent = '👤 ' + pseudo;
+    }
+    showToast('✅ Profil enregistré', 2500);
+    closeProfileEdit();
+    // Si l'overlay profil affiche son propre profil → recharger
+    if (!document.getElementById('feed-profile-overlay').classList.contains('hidden')) {
+      openFeedProfile(agnesUserId, pseudo);
+    }
+  } catch (e) {
+    showToast('Erreur : ' + e.message, 3000);
+  }
+  btn.disabled = false;
+  btn.textContent = 'Enregistrer';
+}
+
+document.getElementById('profile-edit-avatar-input').addEventListener('change', (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  profileEditAvatarFile = f;
+  const reader = new FileReader();
+  reader.onload = () => avatarPreviewHtml(reader.result);
+  reader.readAsDataURL(f);
+});
 
 async function loadFeedComments(videoId) {
   const list = document.getElementById('feed-comments-list');

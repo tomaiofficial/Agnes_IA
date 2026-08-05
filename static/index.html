@@ -795,34 +795,15 @@
             <p class="text-[10px] sm:text-[11px] text-purple-300/80 mt-2 leading-relaxed">🎬 <strong>Réglages Cinéma Pro</strong> : seed fixe (42), negative prompt cinéma, HDR Oui. Pour un rendu optimal : prompt détaillé (250+ mots), éclairage nommé (three-point/key/fill/backlight), caméra immobile, textures explicites, finir par « ultra-réaliste 4K, zéro déformation, zéro flicker ».</p>
           </div>
        </div>
-       <!-- v8.19: Moteur de génération — Agnes (illimité) ou Puter (IA ultra-réaliste en test) -->
-       <div class="mt-3">
-         <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Moteur de génération</label>
-         <div class="grid grid-cols-2 gap-2">
-           <button type="button" id="engine-agnes" onclick="selectEngine('agnes')" class="w-full rounded-lg px-3 py-2 text-sm font-medium min-h-[44px] transition border" style="background:rgba(59,130,246,0.18); border-color:rgba(96,165,250,0.5); color:#93bbfc;">🧠 Agnes — illimité</button>
-           <button type="button" id="engine-puter" onclick="selectEngine('puter')" class="w-full rounded-lg px-3 py-2 text-sm font-medium min-h-[44px] transition border" style="background:rgba(31,41,55,0.6); border-color:rgba(255,255,255,0.08); color:#9ca3af;">🎬 Puter — ultra-réaliste</button>
-         </div>
-         <div id="puter-options" class="hidden mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
-           <div>
-             <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Modèle (test)</label>
-             <select id="p_model" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
-               <option value="kwaivgi/kling-2.1-master" selected>Kling 2.1 Master (recommandé)</option>
-               <option value="kwaivgi/kling-2.0-master">Kling 2.0 Master</option>
-               <option value="kwaivgi/kling-1.6-standard">Kling 1.6 Standard</option>
-                <option value="sora-2">Sora 2 (OpenAI)</option>
-                <option value="veo-3.0-fast-generate-001">Veo 3.0 (Google)</option>
-                <option value="tencent/hunyuan-video">HunyuanVideo (Tencent)</option>
-                <option value="wan-2.1">Wan 2.1 (10s, illimité)</option>
-                <option value="tencent/hunyuan-video">HunyuanVideo (Tencent)</option>
-             </select>
-           </div>
-           <div>
-             <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Compte Puter (gratuit)</label>
-             <button id="btn-puter-signin" onclick="puterSignIn()" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px] text-left">🔑 Se connecter / vérifier</button>
-           </div>
-         </div>
-           <p class="text-[10px] sm:text-[11px] text-emerald-300/80 mt-2 leading-relaxed">🧪 <strong>Test en cours :</strong> je teste des IA encore plus réelles (Kling 2.1, Sora 2, Veo 3, Wan 2.1) via Puter — génération réelle, sans clé API (compte Puter gratuit). Si le solde est insuffisant, bascule automatique sur Agnes (illimité). Wan 2.1 est 100% gratuit et illimité via Hugging Face. Les vidéos sont publiées directement dans Vibes.</p>
-       </div>
+        <!-- v8.19: Moteur de génération — Agnes (illimité) ou Wan 2.1 (Hugging Face, 10s, gratuit) -->
+        <div class="mt-3">
+          <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Moteur de génération</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" id="engine-agnes" onclick="selectEngine('agnes')" class="w-full rounded-lg px-3 py-2 text-sm font-medium min-h-[44px] transition border" style="background:rgba(59,130,246,0.18); border-color:rgba(96,165,250,0.5); color:#93bbfc;">🧠 Agnes — illimité</button>
+            <button type="button" id="engine-wan" onclick="selectEngine('wan')" class="w-full rounded-lg px-3 py-2 text-sm font-medium min-h-[44px] transition border" style="background:rgba(31,41,55,0.6); border-color:rgba(255,255,255,0.08); color:#9ca3af;">🎬 Wan 2.1 — 10s gratuit</button>
+          </div>
+          <p class="text-[10px] sm:text-[11px] text-emerald-300/80 mt-2 leading-relaxed">🧪 <strong>Wan 2.1</strong> — génération vidéo 10s via Hugging Face (gratuit, illimité). Pas de clé API. Bascule automatique sur Agnes si indisponible.</p>
+        </div>
        <button id="btn-simple" onclick="submitSimple()" class="w-full py-4 sm:py-3.5 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 rounded-xl text-base font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed glow-btn min-h-[50px]">
          🎬 Générer la vidéo
        </button>
@@ -1264,8 +1245,6 @@ async function submitSimple() {
   const model = document.getElementById('p_model') ? document.getElementById('p_model').value : 'agnes';
   // Wan 2.1 utilise Hugging Face (pas Puter) — toujours, quel que soit le moteur sélectionné
   if (model.indexOf('wan') !== -1) return submitSimpleWan(prompt);
-  // v8.19: choix du moteur — Puter (IA ultra-réaliste en test) ou Agnes (illimité)
-  if (currentEngine === 'puter') return submitSimplePuter(prompt);
   return submitSimpleAgnes(prompt);
 }
 
@@ -1365,20 +1344,17 @@ async function submitSimpleAgnes(prompt) {
 }
 
 // ═══════════════════════════════════════════════════
-// v8.19: Moteur Puter — génération vidéo côté client (Kling / Sora / Veo)
-// Sans clé API : le compte gratuit de chaque visiteur couvre ses coûts.
+// v8.19: Moteur Agnes (illimité) — Wan 2.1 utilise Hugging Face directement
 // ═══════════════════════════════════════════════════
 
 function selectEngine(name) {
   currentEngine = name;
   const ag = document.getElementById('engine-agnes');
-  const pu = document.getElementById('engine-puter');
-  const opts = document.getElementById('puter-options');
+  const wn = document.getElementById('engine-wan');
   const active = 'background:rgba(59,130,246,0.18); border-color:rgba(96,165,250,0.5); color:#93bbfc;';
   const idle = 'background:rgba(31,41,55,0.6); border-color:rgba(255,255,255,0.08); color:#9ca3af;';
   if (ag) ag.style.cssText = name === 'agnes' ? active : idle;
-  if (pu) pu.style.cssText = name === 'puter' ? active : idle;
-  if (opts) opts.classList.toggle('hidden', name !== 'puter');
+  if (wn) wn.style.cssText = name === 'wan' ? active : idle;
 }
 
 async function puterSignIn() {

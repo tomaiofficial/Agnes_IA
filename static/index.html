@@ -1272,16 +1272,11 @@ async function submitSimple() {
 async function submitSimpleWan(prompt) {
   const btn = document.getElementById('btn-simple');
   btn.disabled = true;
-  const panel = document.getElementById('progress-panel');
-  panel.classList.remove('hidden');
   const model = document.getElementById('p_model') ? document.getElementById('p_model').value : 'wan-2.1';
   const seconds = 10;
   const res = parseResolution(document.getElementById('s_resolution').value);
   const size = res.width + 'x' + res.height;
-  markStep('signin', true);
-  markStep('video_gen', false);
-  puterStatusMsg(`Génération Wan 2.1 (10s, ${size})…`);
-  showToast('🎬 Génération Wan 2.1 en cours (1-5 min, gratuit)…', 6000);
+  showToast('🎬 Génération Wan 2.1 en cours (1-5 min, gratuit)…', 8000);
   try {
     const fd = new FormData();
     fd.append('prompt', prompt);
@@ -1291,18 +1286,9 @@ async function submitSimpleWan(prompt) {
     const r = await fetchWithAuth(API_BASE + '/api/community/videos/publish-external-wan', { method: 'POST', body: fd });
     const d = await r.json();
     if (!d.ok) throw new Error(d.detail || 'Génération Wan 2.1 impossible');
-    markStep('video_gen', true);
-    markStep('publish', true);
     const resultVideo = document.getElementById('result-video');
     resultVideo.src = d.video_url;
     resultVideo.load();
-    document.getElementById('progress-ring-icon').textContent = '✅';
-    document.getElementById('progress-step-name').textContent = 'Terminé !';
-    document.getElementById('progress-state-label').textContent = 'Terminé';
-    document.getElementById('progress-state-dot').className = 'w-1.5 h-1.5 rounded-full bg-green-400';
-    document.getElementById('progress-bar').style.width = '100%';
-    document.getElementById('progress-pct').textContent = '100%';
-    document.getElementById('progress-remaining').textContent = 'Publié dans Vibes ✓';
     document.getElementById('result-area').classList.remove('hidden');
     const pubBtn = document.getElementById('btn-publish');
     pubBtn.textContent = '✅ Publié dans Vibes';
@@ -1316,7 +1302,6 @@ async function submitSimpleWan(prompt) {
     showToast('Wan 2.1 indisponible (' + e.message + ') → bascule automatique sur Agnes', 7000);
     currentEngine = 'agnes';
     selectEngine('agnes');
-    panel.classList.add('hidden');
     await submitSimpleAgnes(prompt);
   }
 }

@@ -819,7 +819,7 @@
              <button id="btn-puter-signin" onclick="puterSignIn()" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px] text-left">🔑 Se connecter / vérifier</button>
            </div>
          </div>
-          <p class="text-[10px] sm:text-[11px] text-emerald-300/80 mt-2 leading-relaxed">🧪 <strong>Test en cours :</strong> je teste des IA encore plus réelles (Kling 2.1, Sora 2, Veo 3) via Puter — échantillon de test 100&nbsp;% gratuit, sans clé API ni crédit. Les vidéos sont publiées directement dans Vibes. En cas de problème, bascule automatique sur Agnes.</p>
+          <p class="text-[10px] sm:text-[11px] text-emerald-300/80 mt-2 leading-relaxed">🧪 <strong>Test en cours :</strong> je teste des IA encore plus réelles (Kling 2.1, Sora 2, Veo 3) via Puter — génération réelle, sans clé API (compte Puter gratuit). Si le solde est insuffisant, bascule automatique sur Agnes (illimité). Les vidéos sont publiées directement dans Vibes.</p>
        </div>
        <button id="btn-simple" onclick="submitSimple()" class="w-full py-4 sm:py-3.5 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 rounded-xl text-base font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed glow-btn min-h-[50px]">
          🎬 Générer la vidéo
@@ -1429,10 +1429,11 @@ async function submitSimplePuter(prompt) {
           : (res.height >= 1280 ? '1024x1792' : '720x1280'))
       : res.width + 'x' + res.height;
     markStep('video_gen', false);
-    puterStatusMsg(`Génération (échantillon test) avec <strong>${model}</strong> (${seconds}s, ${size})...`);
+    puterStatusMsg(`Génération réelle avec <strong>${model}</strong> (${seconds}s, ${size})...`);
     showToast('🎬 Génération Puter en cours...', 4000);
-    // test_mode (alias camelCase testMode pour compat) = échantillon gratuit sans consommer de crédits
-    const video = await puter.ai.txt2vid(prompt, { model: model, seconds: seconds, size: size, test_mode: true, testMode: true });
+    // Génération réelle : consomme des crédits du compte Puter.
+    // Si le solde est insuffisant → erreur Low Balance → fallback automatique sur Agnes (illimité).
+    const video = await puter.ai.txt2vid(prompt, { model: model, seconds: seconds, size: size });
     const blob = await puterResultBlob(video);
     markStep('video_gen', true);
     markStep('publish', false);
@@ -2705,7 +2706,7 @@ document.addEventListener('DOMContentLoaded', () => {
   autoReconnectRunningTask();
   // v8.19: annonce au lancement — nouveaux modèles vidéo en test (Puter)
   setTimeout(() => {
-    showToast('🧪 Nouveaux modèles vidéo en test : Kling 2.1, Sora 2, Veo 3.0 — moteur « Puter », 100 % gratuit !', 6000);
+    showToast('🧪 Nouveaux modèles vidéo en test : Kling 2.1, Sora 2, Veo 3.0 — moteur « Puter » (génération réelle, fallback Agnes si solde insuffisant) !', 6000);
   }, 1000);
 })();
 </script>

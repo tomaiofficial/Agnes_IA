@@ -157,6 +157,39 @@ class CommunityStore(ABC):
         """
         return None
 
+    # ── Abonnements (follow) ─────────────────────────────────────────────
+    # Méthodes concrètes (non abstraites) pour préserver la rétrocompatibilité :
+    # un backend qui ne les implémente pas retombe sur un comportement neutre
+    # (jamais abonné, compteurs à zéro, abonnement non persisté).
+
+    def follow_user(self, follower_id: str, followed_id: str) -> dict:
+        """Abonne `follower_id` à `followed_id` (idempotent).
+
+        Returns:
+            {"following": bool, "follower_count": int}
+        """
+        return {"following": True, "follower_count": 0}
+
+    def unfollow_user(self, follower_id: str, followed_id: str) -> dict:
+        """Désabonne `follower_id` de `followed_id` (idempotent).
+
+        Returns:
+            {"following": bool, "follower_count": int}
+        """
+        return {"following": False, "follower_count": 0}
+
+    def is_following(self, follower_id: str, followed_id: str) -> bool:
+        """True si `follower_id` est abonné à `followed_id`."""
+        return False
+
+    def get_follower_count(self, user_id: str) -> int:
+        """Nombre d'abonnés de `user_id`."""
+        return 0
+
+    def get_following_count(self, user_id: str) -> int:
+        """Nombre de profils suivis par `user_id`."""
+        return 0
+
 
 class TaskStore(ABC):
     """Persistance des métadonnées de tâches (survit aux redéploiements)."""

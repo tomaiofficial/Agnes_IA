@@ -75,6 +75,14 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     updated_at  DOUBLE PRECISION NOT NULL
 );
 
+-- Abonnements entre profils (follower → followed), dédoublonnés par PK.
+CREATE TABLE IF NOT EXISTS profile_follows (
+    follower_id TEXT NOT NULL,
+    followed_id TEXT NOT NULL,
+    created_at  DOUBLE PRECISION NOT NULL,
+    PRIMARY KEY (follower_id, followed_id)
+);
+
 CREATE TABLE IF NOT EXISTS tasks (
     task_id          TEXT PRIMARY KEY,
     dir_name         TEXT NOT NULL DEFAULT '',
@@ -119,6 +127,7 @@ CREATE INDEX IF NOT EXISTS idx_community_likes_video   ON community_likes(video_
 CREATE INDEX IF NOT EXISTS idx_community_comments_video ON community_comments(video_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_updated           ON tasks(updated_at);
 CREATE INDEX IF NOT EXISTS idx_tasks_user             ON tasks(user_id);
+CREATE INDEX IF NOT EXISTS idx_profile_follows_followed ON profile_follows(followed_id);
 
 -- RLS activé sur toutes les tables (idempotent) : seules les clés de rôle
 -- service/postgres y accèdent (l'application n'utilise jamais la clé anon).
@@ -126,6 +135,7 @@ ALTER TABLE community_videos   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE community_likes    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE community_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_profiles     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profile_follows   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tasks              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_config         ENABLE ROW LEVEL SECURITY;
 """
@@ -347,10 +357,12 @@ class SupabaseCommunityStore(CommunityStore):
             return None
 
     def _row_to_video(self, row: dict, like_counts: dict, comment_counts: dict,
-                      avatars: Optional[dict] = None) -> dict:
+                      avatars: Optional[dict] = None,
+                      verified: Optional[dict] = None) -> dict:
         vid = row["id"]
         prompt = row.get("prompt", "") or ""
         avatars = avatars or {}
+        verified = verified or {}
         return {
             "id": vid,
             "title": prompt[:80] if prompt else "Untitled",
@@ -361,6 +373,7 @@ class SupabaseCommunityStore(CommunityStore):
             "published_at": row.get("published_at", 0) or 0,
             "user_id": row.get("user_id", "") or "",
             "avatar_url": avatars.get(row.get("user_id") or "", "") or "",
+            "author_verified": bool(verified.get(row.get("user_id") or "")),
             "likes": like_counts.get(vid, 0),
             "comments_count": comment_counts.get(vid, 0),
             "video_url": self._public_url(row.get("storage_path") or f"videos/{vid}.mp4"),
@@ -389,8 +402,9 @@ class SupabaseCommunityStore(CommunityStore):
                 out[row["user_id"]] = self._public_url(path)
         return out
 
-    def _videos_with_counts(self, rows: list, avatars: Optional[dict] = None) -> list:
-        """Attache likes/commentaires/avatars à des lignes community_videos."""
+    def _videos_with_counts(self, rows: list, avatars: Optional[dict] = None,
+                            verified: Optional[dict] = None) -> list:
+        """Attache likes/commentaires/avatars/certification à des lignes community_videos."""
         client = _get_client()
         ids = [r["id"] for r in rows]
         like_counts: dict = {}
@@ -414,8 +428,10 @@ class SupabaseCommunityStore(CommunityStore):
                 logger.warning(f"[CommunityStore] Lecture des commentaires impossible: {e}")
         if avatars is None:
             avatars = self._avatars_by_user([r.get("user_id", "") for r in rows])
+        if verified is None:
+            verified = self._verified_by_user([r.get("user_id", "") for r in rows])
         return [
-            self._row_to_video(r, like_counts, comment_counts, avatars)
+            self._row_to_video(r, like_counts, comment_counts, avatars, verified)
             for r in rows
         ]
 
@@ -644,7 +660,9 @@ class SupabaseCommunityStore(CommunityStore):
         except Exception:
             total = len(rows)
         avatars = self._avatars_by_user([user_id])
-        return {"videos": self._videos_with_counts(rows, avatars=avatars), "total": total}
+        verified = self._verified_by_user([user_id])
+        return {"videos": self._videos_with_counts(rows, avatars=avatars, verified=verified),
+                "total": total}
 
     def get_avatar_path(self, user_id: str) -> Optional[str]:
         if not user_id:
@@ -663,6 +681,87 @@ class SupabaseCommunityStore(CommunityStore):
         if not path:
             return None
         return self._public_url(path)
+
+    # ── Abonnements (follow) ─────────────────────────────────────────────
+
+    def follow_user(self, follower_id: str, followed_id: str) -> dict:
+        """Abonne `follower_id` à `followed_id` (idempotent grâce à la PK)."""
+        if not follower_id or not followed_id or follower_id == followed_id:
+            return {"following": False,
+                    "follower_count": self.get_follower_count(followed_id)}
+        try:
+            _get_client().table("profile_follows").insert({
+                "follower_id": follower_id,
+                "followed_id": followed_id,
+                "created_at": time.time(),
+            }).execute()
+        except Exception:
+            pass  # déjà abonné (violation de PK) — état idempotent
+        return {"following": True,
+                "follower_count": self.get_follower_count(followed_id)}
+
+    def unfollow_user(self, follower_id: str, followed_id: str) -> dict:
+        if not follower_id or not followed_id:
+            return {"following": False,
+                    "follower_count": self.get_follower_count(followed_id)}
+        try:
+            (_get_client().table("profile_follows").delete()
+             .eq("follower_id", follower_id)
+             .eq("followed_id", followed_id).execute())
+        except Exception:
+            pass
+        return {"following": False,
+                "follower_count": self.get_follower_count(followed_id)}
+
+    def is_following(self, follower_id: str, followed_id: str) -> bool:
+        if not follower_id or not followed_id:
+            return False
+        res = (
+            _get_client().table("profile_follows").select("follower_id")
+            .eq("follower_id", follower_id)
+            .eq("followed_id", followed_id).limit(1).execute()
+        )
+        return bool(res.data)
+
+    def get_follower_count(self, user_id: str) -> int:
+        if not user_id:
+            return 0
+        res = (
+            _get_client().table("profile_follows").select("follower_id", count="exact")
+            .eq("followed_id", user_id).limit(1).execute()
+        )
+        return res.count or 0
+
+    def get_following_count(self, user_id: str) -> int:
+        if not user_id:
+            return 0
+        res = (
+            _get_client().table("profile_follows").select("followed_id", count="exact")
+            .eq("follower_id", user_id).limit(1).execute()
+        )
+        return res.count or 0
+
+    # ── Certification (badge bleu à partir de 5 vidéos publiées) ─────────
+
+    def _verified_by_user(self, user_ids: list) -> dict:
+        """user_id → True si l'utilisateur a publié ≥ 5 vidéos (requête groupée)."""
+        ids = sorted({uid for uid in (user_ids or []) if uid and uid.strip()})
+        if not ids:
+            return {}
+        try:
+            res = (
+                _get_client().table("community_videos")
+                .select("user_id").in_("user_id", ids).execute()
+            )
+        except Exception as e:
+            logger.warning(f"[CommunityStore] Lecture des compteurs vidéo impossible: {e}")
+            return {}
+        counts: dict = {}
+        for row in res.data or []:
+            uid = (row.get("user_id") or "").strip()
+            if uid:
+                counts[uid] = counts.get(uid, 0) + 1
+        return {uid: counts.get(uid, 0) >= 5 for uid in ids}
 
     def delete(self, video_id: str, user_id: str = "") -> None:
         meta = self.get_meta(video_id)

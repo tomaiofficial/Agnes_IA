@@ -453,6 +453,82 @@
     border-radius: 9999px;
     background: #1f2937;
   }
+  /* ═══════ v8.18 : overlay TikTok fullscreen noir opaque + animations ═══════ */
+  body.vibes-modal-open { overflow: hidden !important; }
+  .vibes-modal-overlay { animation: vibesFadeIn 0.25s ease-out; }
+  .vibes-modal-panel { animation: vibesSlideUp 0.35s cubic-bezier(0.35, 0, 0.25, 1); }
+  @keyframes vibesFadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes vibesSlideUp {
+    from { transform: translateY(40px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+  .vibes-modal-close {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 10002;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+    font-size: 24px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+  }
+  .vibes-modal-close:hover { background: rgba(255, 255, 255, 0.28); transform: scale(1.08); }
+  .vibes-modal-close:active { transform: scale(0.95); }
+  /* Badge bleu de certification (comme Instagram/TikTok) */
+  .feed-verified-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 9999px;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #1d9bf0, #2563eb);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.25);
+  }
+  .feed-verified-badge-lg {
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+  }
+  /* Bouton Suivre / Abonné */
+  .feed-follow-btn {
+    margin-top: 12px;
+    padding: 8px 24px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+    min-height: 40px;
+    color: #fff;
+    background: linear-gradient(135deg, #ef4444, #db2777);
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+  }
+  .feed-follow-btn:hover { transform: scale(1.04); }
+  .feed-follow-btn.following {
+    background: rgba(255, 255, 255, 0.12);
+    color: #e5e7eb;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .feed-follow-btn:disabled { opacity: 0.6; cursor: wait; }
+  @media (max-width: 480px) {
+    .vibes-modal-close { top: 12px; right: 12px; width: 40px; height: 40px; min-width: 40px; min-height: 40px; font-size: 20px; }
+  }
 </style>
 </head>
 <body class="text-gray-100 min-h-screen font-sans overflow-x-hidden" style="touch-action: manipulation; background: radial-gradient(ellipse at 50% 0%, rgba(30,64,175,0.12) 0%, transparent 60%), radial-gradient(ellipse at 80% 100%, rgba(245,158,11,0.06) 0%, transparent 50%), #030712;">
@@ -858,23 +934,24 @@
     </div>
 
     <!-- Overlay profil utilisateur (façon TikTok/Instagram) -->
-    <div id="feed-profile-overlay" class="hidden fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm">
+    <div id="feed-profile-overlay" class="hidden fixed inset-0 z-[60] bg-black vibes-modal-overlay">
       <div class="absolute inset-0 overflow-y-auto" onclick="if (event.target === this) closeFeedProfile()">
         <div class="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-6 pointer-events-none">
-          <div id="feed-profile-panel" class="pointer-events-auto w-full max-w-md bg-gray-900/95 border border-white/10 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-xl"></div>
+          <div id="feed-profile-panel" class="pointer-events-auto w-full max-w-md bg-gray-900 border border-white/10 rounded-2xl overflow-hidden shadow-2xl vibes-modal-panel"></div>
         </div>
       </div>
+      <button class="vibes-modal-close" onclick="closeFeedProfile()" aria-label="Fermer">&times;</button>
     </div>
 
     <!-- Viewer vidéo (lecture plein écran depuis le profil) -->
-    <div id="feed-video-viewer" class="hidden fixed inset-0 z-[65] bg-black flex items-center justify-center" onclick="closeFeedVideoViewer()">
+    <div id="feed-video-viewer" class="hidden fixed inset-0 z-[65] bg-black vibes-modal-overlay flex items-center justify-center" onclick="closeFeedVideoViewer()">
       <video id="feed-viewer-video" class="w-full h-full object-contain" controls autoplay loop playsinline></video>
-      <button class="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white text-xl flex items-center justify-center hover:bg-white/20 z-10 min-h-[44px] min-w-[44px]" onclick="closeFeedVideoViewer()">&times;</button>
+      <button class="vibes-modal-close" onclick="closeFeedVideoViewer()" aria-label="Fermer">&times;</button>
     </div>
 
     <!-- Modal édition du profil courant (accessible depuis le header) -->
-    <div id="profile-edit-overlay" class="hidden fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) closeProfileEdit()">
-      <div class="w-full max-w-sm bg-gray-900 border border-white/10 rounded-2xl p-5 shadow-2xl">
+    <div id="profile-edit-overlay" class="hidden fixed inset-0 z-[70] bg-black vibes-modal-overlay flex items-center justify-center p-4" onclick="if (event.target === this) closeProfileEdit()">
+      <div class="w-full max-w-sm bg-gray-900 border border-white/10 rounded-2xl p-5 shadow-2xl vibes-modal-panel">
         <h3 class="text-sm font-semibold text-gray-100 mb-4">✨ Mon profil</h3>
         <div class="flex flex-col items-center mb-4">
           <div id="profile-edit-avatar" class="w-20 h-20 rounded-full overflow-hidden mb-2 bg-gray-800 flex items-center justify-center text-2xl text-white font-bold"></div>
@@ -1844,7 +1921,8 @@ function buildFeedSlide(v, index, total) {
   authorBtn.className = 'feed-author-btn mb-1.5';
   authorBtn.title = 'Voir le profil';
   authorBtn.innerHTML = avatarHtml(v.avatar_url, (v.author || 'A').charAt(0), 'w-8 h-8 text-xs') +
-    '<span class="author-name text-sm font-semibold text-white drop-shadow">' + escapeHtml(v.author || 'Anonyme') + '</span>';
+    '<span class="author-name text-sm font-semibold text-white drop-shadow">' + escapeHtml(v.author || 'Anonyme') + '</span>' +
+    (v.author_verified ? '<span class="feed-verified-badge" title="Créateur certifié">✓</span>' : '');
   authorBtn.onclick = (e) => { e.stopPropagation(); openFeedProfile(v.user_id || '', v.author || 'Anonyme'); };
   info.appendChild(authorBtn);
   const meta = document.createElement('div');
@@ -1984,6 +2062,7 @@ async function openFeedProfile(userId, author) {
   if (!userId) { showToast('Profil non disponible (publication héritée)', 2500); return; }
   feedUserInteracted = true;
   pauseFeedVideo();
+  vibesSyncBodyLock(true);
   const panel = document.getElementById('feed-profile-panel');
   panel.innerHTML = '<div class="flex items-center justify-center p-10"><div class="w-6 h-6 border-2 border-gray-600 border-t-transparent rounded-full animate-spin"></div></div>';
   document.getElementById('feed-profile-overlay').classList.remove('hidden');
@@ -1999,9 +2078,21 @@ async function openFeedProfile(userId, author) {
 
 function closeFeedProfile() {
   document.getElementById('feed-profile-overlay').classList.add('hidden');
+  vibesSyncBodyLock(false);
   const panel = document.getElementById('feed-profile-panel');
   panel.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); });
   panel.innerHTML = '';
+}
+
+// Verrouille le scroll du body tant qu'un overlay Vibes est ouvert
+// (l'ordre d'empilement est géré : on ne déverrouille que si plus aucun overlay)
+function vibesSyncBodyLock(opening) {
+  if (opening) { document.body.classList.add('vibes-modal-open'); return; }
+  const anyOpen =
+    !document.getElementById('feed-profile-overlay').classList.contains('hidden') ||
+    !document.getElementById('feed-video-viewer').classList.contains('hidden') ||
+    !document.getElementById('profile-edit-overlay').classList.contains('hidden');
+  document.body.classList.toggle('vibes-modal-open', anyOpen);
 }
 
 function renderFeedProfile(d) {
@@ -2012,19 +2103,30 @@ function renderFeedProfile(d) {
   const initiale = (p.pseudo || 'A').charAt(0).toUpperCase();
   const panel = document.getElementById('feed-profile-panel');
 
-  const header = '<div class="flex items-center justify-between px-4 pt-4"><span class="text-[10px] uppercase tracking-wider text-gray-500">Profil</span><button onclick="closeFeedProfile()" class="w-9 h-9 rounded-full bg-white/10 text-white text-lg flex items-center justify-center hover:bg-white/20 min-h-[44px] min-w-[44px]">&times;</button></div>';
+  const header = '<div class="flex items-center justify-between px-4 pt-4"><span class="text-[10px] uppercase tracking-wider text-gray-500">Profil</span></div>';
+
+  // Badge bleu de certification (comme Instagram/TikTok) : automatique dès 5 vidéos
+  const verifiedBadge = p.is_verified
+    ? '<span class="feed-verified-badge feed-verified-badge-lg" title="Créateur certifié">✓</span>'
+    : '';
+
+  const actionBtn = isMe
+    ? '<button onclick="openMyProfileEdit()" class="mt-3 px-4 py-2 rounded-lg text-xs font-medium bg-white/5 border border-white/10 text-gray-200 hover:bg-white/10 transition min-h-[44px]">✏️ Modifier mon profil</button>'
+    : '<button id="feed-follow-btn" class="feed-follow-btn' + (p.following ? ' following' : '') + '" onclick="toggleFollow(\'' + escapeJs(p.user_id) + '\')">' + (p.following ? '✅ Abonné' : '➕ Suivre') + '</button>';
 
   const identity = '<div class="flex flex-col items-center px-5 pb-4 pt-2">' +
     '<div class="w-20 h-20 mb-3">' + avatarHtml(p.avatar_url, initiale, 'w-20 h-20 text-2xl') + '</div>' +
-    '<h2 class="text-base font-semibold text-white flex items-center gap-2">' + escapeHtml(p.pseudo) +
+    '<h2 class="text-base font-semibold text-white flex items-center gap-2">' + escapeHtml(p.pseudo) + verifiedBadge +
       (isMe ? '<span class="text-[10px] bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-full px-2 py-0.5">Toi</span>' : '') +
     '</h2>' +
     (p.bio ? '<p class="text-xs text-gray-400 text-center mt-1.5 leading-relaxed max-w-[90%]">' + escapeHtml(p.bio) + '</p>' : '') +
-    '<div class="flex items-center gap-6 mt-3 text-center">' +
+    '<div class="flex items-center gap-5 mt-3 text-center">' +
       '<div><p class="text-sm font-bold text-white">' + (stats.videos || 0) + '</p><p class="text-[10px] text-gray-500">vidéos</p></div>' +
       '<div><p class="text-sm font-bold text-white">' + (stats.likes || 0) + '</p><p class="text-[10px] text-gray-500">likes</p></div>' +
+      '<div><p class="text-sm font-bold text-white" id="feed-profile-followers">' + (stats.followers || 0) + '</p><p class="text-[10px] text-gray-500">abonnés</p></div>' +
+      '<div><p class="text-sm font-bold text-white">' + (stats.following || 0) + '</p><p class="text-[10px] text-gray-500">abonnements</p></div>' +
     '</div>' +
-    (isMe ? '<button onclick="openMyProfileEdit()" class="mt-3 px-4 py-2 rounded-lg text-xs font-medium bg-white/5 border border-white/10 text-gray-200 hover:bg-white/10 transition min-h-[44px]">✏️ Modifier mon profil</button>' : '') +
+    actionBtn +
   '</div>';
 
   let grid = '<div class="px-4 pb-4">';
@@ -2052,17 +2154,40 @@ function renderFeedProfile(d) {
   });
 }
 
+// Suivre / ne plus suivre un profil (POST = suivre, DELETE = ne plus suivre)
+async function toggleFollow(userId) {
+  const btn = document.getElementById('feed-follow-btn');
+  if (!btn || !userId) return;
+  const wasFollowing = btn.classList.contains('following');
+  const method = wasFollowing ? 'DELETE' : 'POST';
+  btn.disabled = true;
+  try {
+    const r = await fetchWithAuth(API_BASE + '/api/community/profiles/' + encodeURIComponent(userId) + '/follow', { method });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.detail || 'Échec');
+    btn.classList.toggle('following', !!d.following);
+    btn.textContent = d.following ? '✅ Abonné' : '➕ Suivre';
+    const countEl = document.getElementById('feed-profile-followers');
+    if (countEl) countEl.textContent = d.follower_count;
+    showToast(d.following ? '✅ Abonné à ce profil' : 'Abonnement retiré', 1800);
+  } catch (e) {
+    showToast('Erreur : ' + e.message, 3000);
+  }
+  btn.disabled = false;
+}
+
 function openFeedVideoViewer(url) {
+  vibesSyncBodyLock(true);
   document.getElementById('feed-viewer-video').src = url;
   document.getElementById('feed-video-viewer').classList.remove('hidden');
 }
 
 function closeFeedVideoViewer() {
-  const viewer = document.getElementById('feed-video-viewer');
+  document.getElementById('feed-video-viewer').classList.add('hidden');
+  vibesSyncBodyLock(false);
   const v = document.getElementById('feed-viewer-video');
   v.pause();
   v.removeAttribute('src');
-  viewer.classList.add('hidden');
 }
 
 // ── Édition de son propre profil ─────────────────────
@@ -2081,6 +2206,7 @@ async function openMyProfileEdit() {
   const pop = document.getElementById('pseudo-popover');
   if (pop) pop.classList.add('hidden');
   profileEditAvatarFile = null;
+  vibesSyncBodyLock(true);
   document.getElementById('profile-edit-avatar-input').value = '';
   const localPseudo = getPseudo() === 'Anonyme' ? '' : getPseudo();
   document.getElementById('profile-edit-pseudo').value = localPseudo;
@@ -2100,6 +2226,7 @@ async function openMyProfileEdit() {
 
 function closeProfileEdit() {
   document.getElementById('profile-edit-overlay').classList.add('hidden');
+  vibesSyncBodyLock(false);
   document.getElementById('profile-edit-avatar-input').value = '';
 }
 

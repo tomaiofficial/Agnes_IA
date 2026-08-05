@@ -133,17 +133,21 @@ class _FakeQuery:
         self._client = client
         self._table = table
         self._result_rows = result_rows or []
-        self._count = None
+        self._filters = []
 
     def select(self, *cols, **kwargs):
+        if kwargs.get("count") == "exact":
+            self._exact = True
         return self
 
     def eq(self, key, value):
         self._client.calls.append(("eq", self._table, key, value))
+        self._filters.append((key, value))
         return self
 
     def in_(self, key, values):
         self._client.calls.append(("in", self._table, key, values))
+        self._filters.append((key, list(values)))
         return self
 
     def order(self, col, desc=False):
@@ -157,8 +161,18 @@ class _FakeQuery:
 
     def execute(self):
         self._client.calls.append(("execute", self._table))
-        return SimpleNamespace(data=self._result_rows,
-                               count=getattr(self._client, "_count", None))
+        rows = self._result_rows
+        for key, values in self._filters:
+            if isinstance(values, list):
+                rows = [r for r in rows if r.get(key) in values]
+            else:
+                rows = [r for r in rows if r.get(key) == values]
+        count = None
+        if getattr(self, "_exact", False):
+            # Nombre de lignes filtrées (surchargable via client._count)
+            count = (len(rows) if self._client._count is None
+                     else self._client._count)
+        return SimpleNamespace(data=rows, count=count)
 
 
 class _FakeTable:
@@ -168,7 +182,10 @@ class _FakeTable:
         self._rows = rows or []
 
     def select(self, *cols, **kwargs):
-        return _FakeQuery(self._client, self._name, self._rows)
+        q = _FakeQuery(self._client, self._name, self._rows)
+        if kwargs.get("count") == "exact":
+            q._exact = True
+        return q
 
     def insert(self, row):
         self._client.calls.append(("insert", self._name, row))
@@ -179,6 +196,7 @@ class _FakeTable:
         return _FakeQuery(self._client, self._name)
 
     def delete(self):
+        self._client.calls.append(("delete", self._name))
         return _FakeQuery(self._client, self._name)
 
 
@@ -202,6 +220,7 @@ class _FakeClient:
         self.tables = tables or {}
         self.calls = []
         self.storage = _FakeStorage(self)
+        self._count = None
 
     def table(self, name):
         return _FakeTable(self, name, self.tables.get(name) or [])
@@ -293,3 +312,156 @@ def test_supabase_get_avatar_path(monkeypatch):
     client2 = _FakeClient()
     store2 = _make_supabase_store(monkeypatch, client2)
     assert store2.get_avatar_path("ghost") is None
+
+
+# ── Abonnements (follow) — backend local ─────────────────────────────────
+
+def test_local_follow_unfollow_roundtrip(tmp_workdir):
+    store = LocalCommunityStore()
+    assert store.is_following("u1", "u2") is False
+    assert store.get_follower_count("u2") == 0
+    r = store.follow_user("u1", "u2")
+    assert r["following"] is True and r["follower_count"] == 1
+    assert store.is_following("u1", "u2") is True
+    assert store.get_follower_count("u2") == 1
+    assert store.get_following_count("u1") == 1
+    assert store.get_follower_count("u1") == 0
+    # Idempotent : re-suivre ne double pas le compteur
+    r2 = store.follow_user("u1", "u2")
+    assert r2["follower_count"] == 1
+    r3 = store.unfollow_user("u1", "u2")
+    assert r3["following"] is False and r3["follower_count"] == 0
+    assert store.is_following("u1", "u2") is False
+    assert store.get_following_count("u1") == 0
+
+
+def test_local_follow_self_ignored(tmp_workdir):
+    store = LocalCommunityStore()
+    r = store.follow_user("u1", "u1")
+    assert r["following"] is False
+    assert store.get_follower_count("u1") == 0
+    assert store.follow_user("", "u2")["following"] is False
+    assert store.follow_user("u1", "")["following"] is False
+
+
+def test_local_verified_after_5_videos(tmp_workdir):
+    store = LocalCommunityStore()
+    for _ in range(4):
+        _publish_local(store, user_id="u1", author="Alice")
+    listed = store.list_videos(per_page=50)["videos"]
+    assert all(v["author_verified"] is False for v in listed if v["user_id"] == "u1")
+    _publish_local(store, user_id="u1", author="Alice")  # 5e vidéo → certifié
+    listed = store.list_videos(per_page=50)["videos"]
+    assert all(v["author_verified"] is True for v in listed if v["user_id"] == "u1")
+    # Un autre utilisateur (1 vidéo) reste non certifié
+    _publish_local(store, user_id="u2", author="Bob")
+    listed = store.list_videos(per_page=50)["videos"]
+    assert all(v["author_verified"] is False for v in listed if v["user_id"] == "u2")
+    # get_user_videos porte aussi la certification
+    res = store.get_user_videos("u1")
+    assert res["videos"] and all(v["author_verified"] is True for v in res["videos"])
+
+
+# ── Abonnements (follow) — backend Supabase ──────────────────────────────
+
+def test_supabase_follow_and_counts(monkeypatch):
+    client = _FakeClient({"profile_follows": [
+        {"follower_id": "u1", "followed_id": "u2", "created_at": 1.0},
+    ]})
+    store = _make_supabase_store(monkeypatch, client)
+    assert store.is_following("u1", "u2") is True
+    assert store.is_following("u1", "u3") is False
+    assert store.get_follower_count("u2") == 1
+    assert store.get_following_count("u1") == 1
+    assert store.get_following_count("u2") == 0
+    # Suivre → insert
+    r = store.follow_user("u1", "u3")
+    inserts = [c for c in client.calls if c[0] == "insert"]
+    assert inserts and inserts[-1][2]["followed_id"] == "u3"
+    assert r["following"] is True
+    # Ne plus suivre → delete
+    r = store.unfollow_user("u1", "u2")
+    deletes = [c for c in client.calls if c[0] == "delete"]
+    assert deletes
+    assert r["following"] is False
+
+
+def test_supabase_follow_self_ignored(monkeypatch):
+    client = _FakeClient()
+    store = _make_supabase_store(monkeypatch, client)
+    r = store.follow_user("u1", "u1")
+    assert r["following"] is False
+    assert not [c for c in client.calls if c[0] == "insert"]
+
+
+def test_supabase_verified_by_user(monkeypatch):
+    rows = [{"id": f"v{i}", "user_id": "u1"} for i in range(6)] + \
+           [{"id": "x", "user_id": "u2"}]
+    client = _FakeClient({"community_videos": rows})
+    store = _make_supabase_store(monkeypatch, client)
+    verified = store._verified_by_user(["u1", "u2"])
+    assert verified["u1"] is True
+    assert verified["u2"] is False
+    assert store._verified_by_user([]) == {}
+    # Injection dans list_videos
+    listed = store.list_videos(per_page=50)["videos"]
+    by_user = {v["user_id"]: v for v in listed}
+    assert by_user["u1"]["author_verified"] is True
+    assert by_user["u2"]["author_verified"] is False
+
+
+# ── Endpoints (TestClient, backend local) ────────────────────────────────
+
+@pytest.fixture
+def community_client(tmp_workdir, monkeypatch):
+    import server
+    from fastapi.testclient import TestClient
+    store = LocalCommunityStore()
+    monkeypatch.setattr(server, "get_community_store", lambda: store)
+    return TestClient(server.app), store
+
+
+def test_api_follow_requires_identity(community_client):
+    client, _ = community_client
+    r = client.post("/api/community/profiles/u1/follow")
+    assert r.status_code == 401
+    r = client.delete("/api/community/profiles/u1/follow")
+    assert r.status_code == 401
+
+
+def test_api_follow_self_forbidden(community_client):
+    client, _ = community_client
+    r = client.post("/api/community/profiles/u1/follow", headers={"X-User-Id": "u1"})
+    assert r.status_code == 400
+
+
+def test_api_follow_unfollow_roundtrip(community_client):
+    client, _ = community_client
+    r = client.post("/api/community/profiles/u2/follow", headers={"X-User-Id": "u1"})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["following"] is True and d["follower_count"] == 1
+    # Le profil reflète l'état d'abonnement du visiteur
+    r = client.get("/api/community/profiles/u2", headers={"X-User-Id": "u1"})
+    d = r.json()
+    assert d["profile"]["following"] is True
+    assert d["stats"]["followers"] == 1
+    # Sans header, following est False
+    r = client.get("/api/community/profiles/u2")
+    assert r.json()["profile"]["following"] is False
+    # Désabonnement
+    r = client.delete("/api/community/profiles/u2/follow", headers={"X-User-Id": "u1"})
+    d = r.json()
+    assert d["following"] is False and d["follower_count"] == 0
+
+
+def test_api_profile_verified_and_stats(community_client):
+    client, store = community_client
+    for i in range(5):
+        _publish_local(store, user_id="u1", author="Alice")
+    d = client.get("/api/community/profiles/u1").json()
+    assert d["profile"]["is_verified"] is True
+    assert d["stats"]["videos"] == 5
+    d4 = client.get("/api/community/profiles/u2").json()
+    assert d4["profile"]["is_verified"] is False
+    assert d4["stats"]["followers"] == 0

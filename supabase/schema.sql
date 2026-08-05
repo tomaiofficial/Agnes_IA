@@ -36,6 +36,24 @@ CREATE TABLE IF NOT EXISTS community_comments (
     created_at DOUBLE PRECISION NOT NULL
 );
 
+-- Profils utilisateurs (pseudo/bio/avatar persistés par user_id)
+CREATE TABLE IF NOT EXISTS user_profiles (
+    user_id     TEXT PRIMARY KEY,
+    pseudo      TEXT NOT NULL DEFAULT '',
+    bio         TEXT NOT NULL DEFAULT '',
+    avatar_path TEXT NOT NULL DEFAULT '',
+    created_at  DOUBLE PRECISION NOT NULL,
+    updated_at  DOUBLE PRECISION NOT NULL
+);
+
+-- Abonnements entre profils (follower → followed), dédoublonnés par PK
+CREATE TABLE IF NOT EXISTS profile_follows (
+    follower_id TEXT NOT NULL,
+    followed_id TEXT NOT NULL,
+    created_at  DOUBLE PRECISION NOT NULL,
+    PRIMARY KEY (follower_id, followed_id)
+);
+
 -- Métadonnées de tâches (survit aux redéploiements Render)
 -- user_id : propriétaire de la tâche ('' = tâche héritée, créée avant l'isolation)
 CREATE TABLE IF NOT EXISTS tasks (
@@ -71,12 +89,15 @@ CREATE INDEX IF NOT EXISTS idx_community_likes_video    ON community_likes(video
 CREATE INDEX IF NOT EXISTS idx_community_comments_video ON community_comments(video_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_updated            ON tasks(updated_at);
 CREATE INDEX IF NOT EXISTS idx_tasks_user              ON tasks(user_id);
+CREATE INDEX IF NOT EXISTS idx_profile_follows_followed ON profile_follows(followed_id);
 
 -- RLS activé sur toutes les tables (idempotent) : seules les clés de rôle
 -- service/postgres y accèdent (l'application n'utilise jamais la clé anon).
 ALTER TABLE community_videos   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE community_likes    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE community_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_profiles      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profile_follows    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tasks              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_config         ENABLE ROW LEVEL SECURITY;
 

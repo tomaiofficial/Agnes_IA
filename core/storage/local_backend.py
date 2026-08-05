@@ -75,6 +75,7 @@ class LocalCommunityStore(CommunityStore):
     def list_videos(self, page=1, per_page=20) -> dict:
         index = self._load_index()
         profiles = self._load_profiles()
+        verified = self._verified_by_user()
         videos = []
         for vid, meta in (index.get("videos") or {}).items():
             uid = meta.get("user_id", "")
@@ -91,6 +92,7 @@ class LocalCommunityStore(CommunityStore):
                 "published_at": meta.get("published_at", 0),
                 "user_id": uid,
                 "avatar_url": avatar_url,
+                "author_verified": bool(verified.get(uid, False)),
                 "likes": len(meta.get("likes", [])),
                 "comments_count": len(meta.get("comments", [])),
                 "video_url": f"/api/community/videos/{vid}/video",
@@ -242,6 +244,7 @@ class LocalCommunityStore(CommunityStore):
     def get_user_videos(self, user_id: str, page: int = 1, per_page: int = 50) -> dict:
         index = self._load_index()
         profiles = self._load_profiles()
+        verified = self._verified_by_user()
         videos = []
         for vid, meta in (index.get("videos") or {}).items():
             if (meta.get("user_id") or "") != user_id:
@@ -259,6 +262,7 @@ class LocalCommunityStore(CommunityStore):
                 "published_at": meta.get("published_at", 0),
                 "user_id": user_id,
                 "avatar_url": avatar_url,
+                "author_verified": bool(verified.get(user_id, False)),
                 "likes": len(meta.get("likes", [])),
                 "comments_count": len(meta.get("comments", [])),
                 "video_url": f"/api/community/videos/{vid}/video",
@@ -275,6 +279,78 @@ class LocalCommunityStore(CommunityStore):
         if path and os.path.exists(path):
             return path
         return None
+
+    # ── Abonnements (follow) ─────────────────────────────────────────────
+
+    def _follows_file(self) -> str:
+        return os.path.join(self._get_community_dir(), "follows.json")
+
+    def _load_follows(self) -> dict:
+        """{"follower_id|followed_id": created_at}"""
+        path = self._follows_file()
+        if not os.path.exists(path):
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"[CommunityStore] follows.json illisible: {e}")
+            return {}
+
+    def _save_follows(self, data: dict) -> None:
+        path = self._follows_file()
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+
+    def follow_user(self, follower_id: str, followed_id: str) -> dict:
+        if not follower_id or not followed_id or follower_id == followed_id:
+            return {"following": False,
+                    "follower_count": self.get_follower_count(followed_id)}
+        data = self._load_follows()
+        data[f"{follower_id}|{followed_id}"] = time.time()
+        self._save_follows(data)
+        return {"following": True,
+                "follower_count": self.get_follower_count(followed_id)}
+
+    def unfollow_user(self, follower_id: str, followed_id: str) -> dict:
+        if not follower_id or not followed_id:
+            return {"following": False,
+                    "follower_count": self.get_follower_count(followed_id)}
+        data = self._load_follows()
+        data.pop(f"{follower_id}|{followed_id}", None)
+        self._save_follows(data)
+        return {"following": False,
+                "follower_count": self.get_follower_count(followed_id)}
+
+    def is_following(self, follower_id: str, followed_id: str) -> bool:
+        if not follower_id or not followed_id:
+            return False
+        return f"{follower_id}|{followed_id}" in self._load_follows()
+
+    def get_follower_count(self, user_id: str) -> int:
+        if not user_id:
+            return 0
+        suffix = "|" + user_id
+        return sum(1 for k in self._load_follows() if k.endswith(suffix))
+
+    def get_following_count(self, user_id: str) -> int:
+        if not user_id:
+            return 0
+        prefix = user_id + "|"
+        return sum(1 for k in self._load_follows() if k.startswith(prefix))
+
+    # ── Certification (badge bleu à partir de 5 vidéos publiées) ─────────
+
+    def _verified_by_user(self) -> dict:
+        """user_id → True si l'utilisateur a publié ≥ 5 vidéos."""
+        counts: dict = {}
+        for meta in (self._load_index().get("videos") or {}).values():
+            uid = (meta.get("user_id") or "").strip()
+            if uid:
+                counts[uid] = counts.get(uid, 0) + 1
+        return {uid: c >= 5 for uid, c in counts.items()}
 
     def delete(self, video_id: str, user_id: str = "") -> None:
         index = self._load_index()

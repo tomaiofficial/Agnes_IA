@@ -3328,16 +3328,22 @@ _MAX_AVATAR_BYTES = 5 * 1024 * 1024  # 5 Mo
 
 
 @app.get("/api/community/profiles/{user_id}")
-async def get_user_profile(user_id: str):
+async def get_user_profile(user_id: str, viewer: str = Header(default="", alias="X-User-Id")):
     """Profil public d'un utilisateur : identité + stats + ses vidéos.
 
     Fallback élégant : sans profil enregistré, le pseudo est dérivé de la
     publication la plus récente de l'utilisateur (et 'Anonyme' en dernier recours).
+    Certification : badge bleu automatique dès 5 vidéos publiées.
     """
     store = get_community_store()
     try:
         profile = store.get_profile(user_id)
         videos_res = store.get_user_videos(user_id, page=1, per_page=50)
+        follower_count = store.get_follower_count(user_id)
+        following_count = store.get_following_count(user_id)
+        is_following = bool(
+            viewer and viewer != user_id and store.is_following(viewer, user_id)
+        )
     except Exception as e:
         raise _community_error(e, "Chargement du profil impossible")
     pseudo = (profile or {}).get("pseudo") or ""
@@ -3348,6 +3354,7 @@ async def get_user_profile(user_id: str):
                 break
     if not pseudo:
         pseudo = "Anonyme"
+    total_videos = int(videos_res.get("total", 0))
     total_likes = sum(int(v.get("likes") or 0) for v in videos_res.get("videos", []))
     return {
         "ok": True,
@@ -3357,10 +3364,45 @@ async def get_user_profile(user_id: str):
             "bio": (profile or {}).get("bio", ""),
             "avatar_url": (profile or {}).get("avatar_url", ""),
             "has_profile": profile is not None,
+            "is_verified": total_videos >= 5,
+            "following": is_following,
         },
-        "stats": {"videos": int(videos_res.get("total", 0)), "likes": total_likes},
+        "stats": {
+            "videos": total_videos,
+            "likes": total_likes,
+            "followers": follower_count,
+            "following": following_count,
+        },
         "videos": videos_res.get("videos", []),
     }
+
+
+@app.post("/api/community/profiles/{user_id}/follow")
+async def follow_user_profile(user_id: str, viewer: str = Header(default="", alias="X-User-Id")):
+    """Abonne le visiteur (X-User-Id) au profil {user_id} (idempotent)."""
+    if not viewer:
+        raise HTTPException(status_code=401, detail="Utilisateur non identifié")
+    if viewer == user_id:
+        raise HTTPException(status_code=400, detail="Impossible de s'abonner à son propre profil")
+    try:
+        result = get_community_store().follow_user(viewer, user_id)
+    except Exception as e:
+        raise _community_error(e, "Abonnement impossible")
+    logger.info(f"[Community] {viewer} suit désormais {user_id} (storage={storage_mode()})")
+    return {"ok": True, **result}
+
+
+@app.delete("/api/community/profiles/{user_id}/follow")
+async def unfollow_user_profile(user_id: str, viewer: str = Header(default="", alias="X-User-Id")):
+    """Retire l'abonnement du visiteur (X-User-Id) au profil {user_id}."""
+    if not viewer:
+        raise HTTPException(status_code=401, detail="Utilisateur non identifié")
+    try:
+        result = get_community_store().unfollow_user(viewer, user_id)
+    except Exception as e:
+        raise _community_error(e, "Désabonnement impossible")
+    logger.info(f"[Community] {viewer} ne suit plus {user_id} (storage={storage_mode()})")
+    return {"ok": True, **result}
 
 
 @app.get("/api/community/profile")

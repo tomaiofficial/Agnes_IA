@@ -1262,9 +1262,10 @@ async function submitSimple() {
   const prompt = document.getElementById('s_prompt').value.trim();
   if (!prompt) return alert('Veuillez décrire la vidéo');
   const model = document.getElementById('p_model') ? document.getElementById('p_model').value : 'agnes';
-  // v8.19: choix du moteur — Puter (IA ultra-réaliste en test), Wan 2.1 (Hugging Face, illimité) ou Agnes (illimité)
-  if (currentEngine === 'puter') return submitSimplePuter(prompt);
+  // Wan 2.1 utilise Hugging Face (pas Puter) — toujours, quel que soit le moteur sélectionné
   if (model.indexOf('wan') !== -1) return submitSimpleWan(prompt);
+  // v8.19: choix du moteur — Puter (IA ultra-réaliste en test) ou Agnes (illimité)
+  if (currentEngine === 'puter') return submitSimplePuter(prompt);
   return submitSimpleAgnes(prompt);
 }
 

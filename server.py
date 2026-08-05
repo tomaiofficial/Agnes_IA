@@ -3320,6 +3320,74 @@ async def delete_community_video(video_id: str, user_id: str = Header(default=""
     return {"ok": True}
 
 
+_MAX_EXTERNAL_VIDEO_BYTES = 50 * 1024 * 1024  # 50 Mo
+
+
+@app.post("/api/community/videos/publish-external")
+async def publish_external_video(request: Request, user_id: str = Header(default="", alias="X-User-Id")):
+    """Publier dans Vibes une vidéo générée côté client (ex. Puter.ai txt2vid).
+
+    v8.19 : le front génère la vidéo avec le SDK client Puter (Kling/Sora/Veo),
+    puis upload le fichier ici. Multipart : `video` (fichier), `prompt`,
+    `duration` (secondes, optionnel), `resolution` (optionnel), `engine`
+    (optionnel), `author` (optionnel). Réutilise le même store communautaire
+    que les tâches Agnes.
+    """
+    try:
+        form = await request.form()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Corps multipart invalide")
+    file = form.get("video")
+    if file is None or not getattr(file, "filename", ""):
+        raise HTTPException(status_code=400, detail="Fichier vidéo manquant")
+    prompt = (form.get("prompt") or "").strip()
+    if not prompt:
+        raise HTTPException(status_code=422, detail="Prompt manquant")
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Fichier vidéo vide")
+    if len(data) > _MAX_EXTERNAL_VIDEO_BYTES:
+        raise HTTPException(status_code=413, detail="Vidéo trop volumineuse (max 50 Mo)")
+    content_type = (getattr(file, "content_type", "") or "").lower()
+    if content_type and not content_type.startswith("video/"):
+        raise HTTPException(status_code=415, detail="Le fichier doit être une vidéo")
+    try:
+        duration = float(form.get("duration") or 0) or 0
+    except (TypeError, ValueError):
+        duration = 0
+    engine = (form.get("engine") or "puter").strip() or "puter"
+    author = (form.get("author") or "").strip() or "Anonyme"
+    resolution = (form.get("resolution") or "").strip()
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+            f.write(data)
+            tmp_path = f.name
+        task_id = "external-" + uuid.uuid4().hex[:12]
+        result = get_community_store().publish(
+            task_id=task_id,
+            author=author,
+            prompt=prompt,
+            duration=duration,
+            resolution=resolution,
+            video_path=tmp_path,
+            user_id=user_id,
+        )
+    except Exception as e:
+        raise _community_error(e, "Publication impossible")
+    finally:
+        if tmp_path:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+    logger.info(
+        f"[Community] Published external video {result['video_id']} "
+        f"(engine={engine!r}, storage={storage_mode()}, prompt={prompt[:60]!r})"
+    )
+    return {"ok": True, "video_id": result["video_id"], "video_url": result["video_url"]}
+
+
 # ═══════════════════════════════════════════════════
 # Profils utilisateurs (façon TikTok/Instagram)
 # ═══════════════════════════════════════════════════

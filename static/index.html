@@ -795,6 +795,31 @@
             <p class="text-[10px] sm:text-[11px] text-purple-300/80 mt-2 leading-relaxed">🎬 <strong>Réglages Cinéma Pro</strong> : seed fixe (42), negative prompt cinéma, HDR Oui. Pour un rendu optimal : prompt détaillé (250+ mots), éclairage nommé (three-point/key/fill/backlight), caméra immobile, textures explicites, finir par « ultra-réaliste 4K, zéro déformation, zéro flicker ».</p>
           </div>
        </div>
+       <!-- v8.19: Moteur de génération — Agnes (illimité) ou Puter (IA ultra-réaliste en test) -->
+       <div class="mt-3">
+         <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Moteur de génération</label>
+         <div class="grid grid-cols-2 gap-2">
+           <button type="button" id="engine-agnes" onclick="selectEngine('agnes')" class="w-full rounded-lg px-3 py-2 text-sm font-medium min-h-[44px] transition border" style="background:rgba(59,130,246,0.18); border-color:rgba(96,165,250,0.5); color:#93bbfc;">🧠 Agnes — illimité</button>
+           <button type="button" id="engine-puter" onclick="selectEngine('puter')" class="w-full rounded-lg px-3 py-2 text-sm font-medium min-h-[44px] transition border" style="background:rgba(31,41,55,0.6); border-color:rgba(255,255,255,0.08); color:#9ca3af;">🎬 Puter — ultra-réaliste</button>
+         </div>
+         <div id="puter-options" class="hidden mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+           <div>
+             <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Modèle (test)</label>
+             <select id="p_model" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+               <option value="kwaivgi/kling-2.1-master" selected>Kling 2.1 Master (recommandé)</option>
+               <option value="kwaivgi/kling-2.0-master">Kling 2.0 Master</option>
+               <option value="kwaivgi/kling-1.6-standard">Kling 1.6 Standard</option>
+               <option value="sora-2">Sora 2 (OpenAI)</option>
+               <option value="veo-3.0-fast-generate-001">Veo 3.0 (Google)</option>
+             </select>
+           </div>
+           <div>
+             <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Compte Puter (gratuit)</label>
+             <button id="btn-puter-signin" onclick="puterSignIn()" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px] text-left">🔑 Se connecter / vérifier</button>
+           </div>
+         </div>
+         <p class="text-[10px] sm:text-[11px] text-emerald-300/80 mt-2 leading-relaxed">🧪 <strong>Test en cours :</strong> je teste des IA encore plus réelles (Kling 2.1, Sora 2, Veo 3) via Puter — 100&nbsp;% gratuit, sans clé API. Les vidéos sont publiées directement dans Vibes. En cas de problème, bascule automatique sur Agnes.</p>
+       </div>
        <button id="btn-simple" onclick="submitSimple()" class="w-full py-4 sm:py-3.5 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 rounded-xl text-base font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed glow-btn min-h-[50px]">
          🎬 Générer la vidéo
        </button>
@@ -981,6 +1006,8 @@
   </div>
 </footer>
 
+<!-- v8.19: Puter.js — moteur de génération vidéo bonus (Kling / Sora / Veo), zéro clé API -->
+<script src="https://js.puter.com/v2/"></script>
 <script>
 
 function showComingSoon(mode) {
@@ -1052,6 +1079,8 @@ let pollTimer = null;
 let isTaskRunning = false;
 let taskListTimer = null;
 let currentMode = 'video';
+// v8.19: moteur de génération — 'agnes' (serveur, illimité) ou 'puter' (SDK client)
+let currentEngine = 'agnes';
 
 const POLL_INTERVAL = 2000;
 let _lastPolledStep = '';
@@ -1229,6 +1258,12 @@ function parseResolution(val) {
 async function submitSimple() {
   const prompt = document.getElementById('s_prompt').value.trim();
   if (!prompt) return alert('Veuillez décrire la vidéo');
+  // v8.19: choix du moteur — Puter (IA ultra-réaliste en test) ou Agnes (illimité)
+  if (currentEngine === 'puter') return submitSimplePuter(prompt);
+  return submitSimpleAgnes(prompt);
+}
+
+async function submitSimpleAgnes(prompt) {
   const btn = document.getElementById('btn-simple');
   btn.disabled = true;
 
@@ -1283,6 +1318,155 @@ async function submitSimple() {
   } catch(e) {
     alert('Échec : ' + e.message);
     btn.disabled = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// v8.19: Moteur Puter — génération vidéo côté client (Kling / Sora / Veo)
+// Sans clé API : le compte gratuit de chaque visiteur couvre ses coûts.
+// ═══════════════════════════════════════════════════
+
+function selectEngine(name) {
+  currentEngine = name;
+  const ag = document.getElementById('engine-agnes');
+  const pu = document.getElementById('engine-puter');
+  const opts = document.getElementById('puter-options');
+  const active = 'background:rgba(59,130,246,0.18); border-color:rgba(96,165,250,0.5); color:#93bbfc;';
+  const idle = 'background:rgba(31,41,55,0.6); border-color:rgba(255,255,255,0.08); color:#9ca3af;';
+  if (ag) ag.style.cssText = name === 'agnes' ? active : idle;
+  if (pu) pu.style.cssText = name === 'puter' ? active : idle;
+  if (opts) opts.classList.toggle('hidden', name !== 'puter');
+}
+
+async function puterSignIn() {
+  try {
+    if (!window.puter || !puter.auth) throw new Error('Puter.js non chargé (réseau ?)');
+    if (!puter.auth.isSignedIn()) await puter.auth.signIn();
+    showToast('✅ Connecté à Puter !', 3000);
+  } catch(e) {
+    showToast('Connexion Puter : ' + e.message, 4000);
+  }
+}
+
+async function puterResultBlob(video) {
+  if (video instanceof Blob) return video;
+  if (video && video.source && video.source.blob instanceof Blob) return video.source.blob;
+  const src = video && (video.src || video.url);
+  if (src) {
+    const res = await fetch(src);
+    if (!res.ok) throw new Error('Lecture du résultat Puter impossible');
+    return res.blob();
+  }
+  throw new Error('Résultat Puter illisible');
+}
+
+function puterStatusMsg(html) {
+  const box = document.getElementById('progress-message');
+  if (box) box.innerHTML = `<div class="sora-status-text" style="color:rgba(156,163,175,0.6); font-size:13px;">${html}</div>`;
+}
+
+async function submitSimplePuter(prompt) {
+  const btn = document.getElementById('btn-simple');
+  btn.disabled = true;
+  const panel = document.getElementById('progress-panel');
+  panel.classList.remove('hidden');
+  document.querySelectorAll('.sora-form-collapse').forEach(el => el.classList.add('collapsed'));
+  document.getElementById('result-area').classList.add('hidden');
+  document.getElementById('btn-stop').classList.add('hidden');
+  document.getElementById('progress-state-label').textContent = 'Puter — IA ultra-réaliste';
+  document.getElementById('progress-state-dot').className = 'w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse';
+  document.getElementById('progress-ring-icon').textContent = '🎬';
+  document.getElementById('progress-step-name').textContent = 'Préparation...';
+  document.getElementById('progress-bar').style.width = '0%';
+  document.getElementById('progress-pct').textContent = '0%';
+  document.getElementById('progress-elapsed').textContent = '0s écoulé';
+  document.getElementById('progress-remaining').textContent = '~calcul...';
+  const steps = [
+    { key: 'signin', label: 'Connexion Puter' },
+    { key: 'video_gen', label: 'Génération vidéo (Kling/Sora/Veo)' },
+    { key: 'publish', label: 'Publication Vibes' },
+  ];
+  document.getElementById('steps-container').innerHTML = steps.map((s, i) =>
+    `<div class="sora-step flex items-center gap-3 text-sm" data-step="${s.key}" style="animation-delay:${i * 0.1}s;">` +
+    `<span class="sora-step-dot" style="background:rgba(255,255,255,0.08);"></span>` +
+    `<span class="step-label" style="color:rgba(156,163,175,0.4);">${s.label}</span></div>`
+  ).join('');
+  setTimeout(() => {
+    document.querySelectorAll('.sora-step').forEach(el => { el.style.opacity = '1'; });
+  }, 100);
+  const markStep = (key, done) => {
+    const el = document.querySelector(`.sora-step[data-step="${key}"]`);
+    if (!el) return;
+    if (done) {
+      el.querySelector('.sora-step-dot').style.cssText = 'background: rgba(34,197,94,0.5);';
+      el.querySelector('.step-label').style.color = 'rgba(34,197,94,0.5)';
+    } else {
+      el.querySelector('.sora-step-dot').style.cssText = 'background: #a855f7; box-shadow: 0 0 8px rgba(168,85,247,0.5);';
+      el.querySelector('.step-label').style.color = '#d8b4fe';
+    }
+  };
+  try {
+    if (!window.puter || !puter.ai) throw new Error("Le SDK Puter.js n'a pas pu être chargé");
+    markStep('signin', false);
+    if (!puter.auth.isSignedIn()) {
+      puterStatusMsg('Connexion à votre compte Puter (gratuit, sans carte)...');
+      await puter.auth.signIn();
+    }
+    markStep('signin', true);
+    const model = document.getElementById('p_model') ? document.getElementById('p_model').value : 'kwaivgi/kling-2.1-master';
+    let seconds = parseInt(document.getElementById('s_duration').value, 10) || 5;
+    // Durées supportées par modèle : Kling 5/10s, Sora 4/8/12s
+    if (model === 'sora-2') seconds = seconds <= 4 ? 4 : seconds <= 8 ? 8 : 12;
+    else if (model.indexOf('kwaivgi') !== -1) seconds = seconds <= 5 ? 5 : 10;
+    const res = parseResolution(document.getElementById('s_resolution').value);
+    const size = res.width + 'x' + res.height;
+    markStep('video_gen', false);
+    puterStatusMsg(`Génération avec <strong>${model}</strong> (${seconds}s, ${size}) — testMode gratuit...`);
+    showToast('🎬 Génération Puter en cours...', 4000);
+    const video = await puter.ai.txt2vid(prompt, { model: model, seconds: seconds, size: size, testMode: true });
+    const blob = await puterResultBlob(video);
+    markStep('video_gen', true);
+    markStep('publish', false);
+    puterStatusMsg('Publication dans Vibes...');
+    document.getElementById('progress-pct').textContent = '85%';
+    document.getElementById('progress-bar').style.width = '85%';
+    const fd = new FormData();
+    fd.append('video', blob, 'puter_' + Date.now() + '.mp4');
+    fd.append('prompt', prompt);
+    fd.append('engine', model);
+    fd.append('duration', String(seconds));
+    fd.append('resolution', size);
+    const r = await fetchWithAuth(API_BASE + '/api/community/videos/publish-external', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.detail || 'Publication impossible');
+    markStep('publish', true);
+    // Résultat : lecture directe de l'URL publique (déjà publiée dans Vibes)
+    const resultVideo = document.getElementById('result-video');
+    resultVideo.src = d.video_url;
+    resultVideo.load();
+    document.getElementById('progress-ring-icon').textContent = '✅';
+    document.getElementById('progress-step-name').textContent = 'Terminé !';
+    document.getElementById('progress-state-label').textContent = 'Terminé';
+    document.getElementById('progress-state-dot').className = 'w-1.5 h-1.5 rounded-full bg-green-400';
+    document.getElementById('progress-bar').style.width = '100%';
+    document.getElementById('progress-pct').textContent = '100%';
+    document.getElementById('progress-remaining').textContent = 'Publié dans Vibes ✓';
+    document.getElementById('result-area').classList.remove('hidden');
+    const pubBtn = document.getElementById('btn-publish');
+    pubBtn.textContent = '✅ Publié dans Vibes';
+    pubBtn.disabled = true;
+    pubBtn.className = 'mt-3 w-full py-3 sm:py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-green-600 to-green-500 text-white transition-all min-h-[44px]';
+    if (currentMode === 'gallery') loadGallery();
+    showToast('🎉 Vidéo Puter publiée dans Vibes !', 5000);
+    btn.disabled = false;
+  } catch(e) {
+    console.warn('[Puter] Échec, bascule automatique sur Agnes:', e);
+    showToast('Puter indisponible (' + e.message + ') → bascule automatique sur Agnes', 7000);
+    currentEngine = 'agnes';
+    selectEngine('agnes');
+    document.querySelectorAll('.sora-form-collapse').forEach(el => el.classList.remove('collapsed'));
+    panel.classList.add('hidden');
+    await submitSimpleAgnes(prompt);
   }
 }
 

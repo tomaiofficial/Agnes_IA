@@ -452,16 +452,30 @@
 
     <!-- v8.6: Bandeau lancement — fonctionnalités en cours de finition
          (affichage #1 dans le mode Vidéo ; la carte « bientôt disponible » de
-         l'onglet Image est l'affichage #2 — pas plus, volontairement) -->
-    <div id="wip-banner" class="mb-4 rounded-xl p-3 sm:p-4 text-[11px] sm:text-xs" style="background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.25);color:#fcd34d;">
+         l'onglet Image est l'affichage #2 — pas plus, volontairement)
+         v8.16: affiché UNE SEULE FOIS — la fermeture est mémorisée dans
+         localStorage ; aux chargements suivants le bandeau reste masqué. -->
+    <div id="wip-banner" class="mb-4 rounded-xl p-3 sm:p-4 text-[11px] sm:text-xs" style="display:none;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.25);color:#fcd34d;">
       <div class="flex items-start justify-between gap-3">
         <div>
           <span class="font-semibold">🚧 Application en cours de finition</span>
           <p class="mt-1 text-gray-400 leading-relaxed">Certaines fonctionnalités ne sont pas encore finalisées : <b class="text-gray-300">génération d'images</b> (à venir), <b class="text-gray-300">vidéos longues multi-scènes</b> (créatif, manuscrit, voix IA, poésie). Le <b class="text-gray-300">mode avancé</b> et la <b class="text-gray-300">durée exacte</b> fonctionnent — le reste arrive progressivement.</p>
         </div>
-        <button onclick="document.getElementById('wip-banner').style.display='none'" class="shrink-0 text-gray-500 hover:text-gray-300 text-lg leading-none" aria-label="Fermer le bandeau">✕</button>
+        <button onclick="dismissWipBanner()" class="shrink-0 text-gray-500 hover:text-gray-300 text-lg leading-none" aria-label="Fermer le bandeau">✕</button>
       </div>
     </div>
+    <script>
+      // v8.16: le bandeau 🚧 ne s'affiche qu'une seule fois (premier chargement).
+      // La fermeture (✕) est mémorisée dans localStorage — plus de rappel à
+      // chaque rechargement de page.
+      if (!localStorage.getItem('wip_banner_dismissed')) {
+        document.getElementById('wip-banner').style.display = '';
+      }
+      function dismissWipBanner() {
+        localStorage.setItem('wip_banner_dismissed', '1');
+        document.getElementById('wip-banner').style.display = 'none';
+      }
+    </script>
 
     <!-- Video Form -->
     <div id="form-video" class="sora-form-collapse">

@@ -299,7 +299,7 @@ async def ensure_video_duration(
     if target <= 0 or not os.path.exists(video_path):
         return video_path
 
-    actual = await _probe_duration(video_path)
+    actual, has_audio = await _probe_video(video_path)
     if not actual or abs(actual - target) <= 0.3:
         return video_path
 
@@ -313,9 +313,14 @@ async def ensure_video_duration(
     # v8.14: forcer la durée de sortie à `target` dans TOUS les cas.
     # Avec `-c:a copy`, une piste audio plus courte que la vidéo paddée
     # (tpad) pouvait limiter la durée du conteneur → vidéo de 15 s livrée
-    # à 12 s (« se coupe 3 sec avant »). `-t` garantit la durée du conteneur
-    # ; tpad pad la vidéo, l'audio court est simplement copié (silence
+    # à 12 s (« se coupe 3 sec avant »). `-t` garantit la durée du conteneur ;
+    # tpad pad la vidéo, l'audio court est simplement copié (silence
     # implicite après la fin de la piste audio).
+    # v8.16: on ne copie PLUS l'audio : on le ré-encode (aac) avec `apad` pour
+    # que la piste audio dure AUSSI exactement `target` (silence après la
+    # narration). Certains lecteurs (téléphones, etc.) coupent la lecture à la
+    # fin de la piste audio la plus courte : audio 12 s + vidéo 15 s = lecture
+    # bloquée à 12 s malgré un fichier de 15 s.
     cmd += ["-t", f"{target:.3f}"]
     cmd += [
         "-vf",
@@ -326,10 +331,15 @@ async def ensure_video_duration(
         "-crf", "21",
         "-preset", "ultrafast",   # RAM compatible plan Free 512 Mo
         "-threads", "2",
-        "-c:a", "copy",
-        "-movflags", "+faststart",
-        out,
     ]
+    if has_audio:
+        # Ré-encode aac + silence de complément jusqu'à la durée cible :
+        # apad génère du silence, `-t target` coupe la sortie pile à la cible.
+        cmd += ["-af", "apad"]
+        cmd += ["-c:a", "aac", "-b:a", "128k"]
+    else:
+        cmd += ["-an"]
+    cmd += ["-movflags", "+faststart", out]
 
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -437,6 +447,12 @@ async def _probe_duration(video_path: str) -> float:
     émise sur stderr (ffmpeg est garanti présent dans le conteneur Render via
     imageio-ffmpeg, contrairement à ffprobe). Retourne 0.0 si indisponible.
     """
+    dur, _ = await _probe_video(video_path)
+    return dur
+
+
+async def _probe_video(video_path: str):
+    """Probe durée + présence d'une piste audio (retourne (duration, has_audio))."""
     try:
         proc = await asyncio.create_subprocess_exec(
             "ffmpeg", "-i", video_path,
@@ -448,13 +464,18 @@ async def _probe_duration(video_path: str) -> float:
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
-            return 0.0
+            return 0.0, False
         text = stderr.decode(errors="replace")
+        duration = 0.0
         import re
         m = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", text)
         if m:
             hh, mm, ss = int(m.group(1)), int(m.group(2)), float(m.group(3))
-            return hh * 3600 + mm * 60 + ss
+            duration = hh * 3600 + mm * 60 + ss
+        # « Stream #0:1: Audio: » (après l'en-tête « Stream mapping ») indique
+        # une piste audio présente dans le fichier.
+        has_audio = bool(re.search(r"Stream\s+#\d+:\d+.*Audio:", text))
+        return duration, has_audio
     except Exception as e:
-        logger.debug(f"[VideoPostProcess] _probe_duration failed: {e}")
-    return 0.0
+        logger.debug(f"[VideoPostProcess] _probe_video failed: {e}")
+    return 0.0, False

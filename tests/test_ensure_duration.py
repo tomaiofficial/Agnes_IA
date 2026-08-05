@@ -41,9 +41,33 @@ def _duration(path: str) -> float:
     return hh * 3600 + mm * 60 + ss
 
 
+def _audio_duration(path: str) -> float:
+    """Durée de la piste audio seule (décodage `-map 0:a` — compatible avec le
+    ffmpeg du conteneur, qui n'a PAS ffprobe ; retourne 0.0 si pas d'audio)."""
+    out = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-i", path, "-map", "0:a", "-f", "null", "-"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    ).stderr
+    m = re.findall(r"time=(\d+):(\d+):(\d+(?:\.\d+)?)", out)
+    if not m:
+        return 0.0
+    hh, mm, ss = int(m[-1][0]), int(m[-1][1]), float(m[-1][2])
+    return hh * 3600 + mm * 60 + ss
+
+
+def _has_audio(path: str) -> bool:
+    out = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-i", path],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    ).stderr
+    return bool(re.search(r"Stream\s+#\d+:\d+.*Audio:", out))
+
+
 @pytest.mark.asyncio
 async def test_ensure_duration_pads_short_video_with_audio(tmp_path):
-    """v8.14 : vidéo 12 s + audio 12 s → padrée à 15 s (bug 3 s avant)."""
+    """v8.14 : vidéo 12 s + audio 12 s → padrée à 15 s (bug 3 s avant).
+    v8.16 : la piste audio doit AUSSI durer 15 s (apad) — sinon certains
+    lecteurs coupent la lecture à la fin de l'audio (12 s)."""
     src = str(tmp_path / "short.mp4")
     _make_short_video_with_audio(src, 12.0)
     assert abs(_duration(src) - 12.0) < 0.5
@@ -51,6 +75,8 @@ async def test_ensure_duration_pads_short_video_with_audio(tmp_path):
     out = await ensure_video_duration(src, 15.0)
     dur = _duration(out)
     assert abs(dur - 15.0) <= 0.5, f"durée {dur}s ≠ 15s (bug 3s avant non corrigé)"
+    a_dur = _audio_duration(out)
+    assert abs(a_dur - 15.0) <= 0.6, f"piste audio {a_dur}s ≠ 15s (lecture coupée à 12s)"
 
 
 @pytest.mark.asyncio
@@ -70,6 +96,27 @@ async def test_ensure_duration_already_correct(tmp_path):
     _make_short_video_with_audio(src, 15.0)
     out = await ensure_video_duration(src, 15.0)
     assert out == src
+
+
+@pytest.mark.asyncio
+async def test_ensure_duration_pads_video_without_audio(tmp_path):
+    """v8.16 : vidéo SANS piste audio (audio désactivé) → 15 s, sans audio."""
+    src = str(tmp_path / "noaudio.mp4")
+    subprocess.run(
+        [
+            "ffmpeg", "-y",
+            "-f", "lavfi", "-i", "testsrc2=duration=12:size=320x240:rate=15",
+            "-c:v", "libx264", "-preset", "ultrafast",
+            src,
+        ],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
+    )
+    assert abs(_duration(src) - 12.0) < 0.5
+    assert not _has_audio(src)
+
+    out = await ensure_video_duration(src, 15.0)
+    assert abs(_duration(out) - 15.0) <= 0.5
+    assert not _has_audio(out), "une vidéo sans audio ne doit pas gagner de piste audio"
 
 
 class _FakeStream:

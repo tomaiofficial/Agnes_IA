@@ -225,7 +225,7 @@
   /* Form collapse */
   .sora-form-collapse {
     transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    max-height: 1200px;
+    max-height: 9999px;
     opacity: 1;
     overflow: hidden;
   }
@@ -2690,6 +2690,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (d.api_key) setApiKeyConfiguredUI(d.source, d.can_clear);
   } catch(e) {}
   autoReconnectRunningTask();
+  // v8.19: annonce au lancement — nouveaux modèles vidéo en test (Puter)
+  setTimeout(() => {
+    showToast('🧪 Nouveaux modèles vidéo en test : Kling 2.1, Sora 2, Veo 3.0 — moteur « Puter », 100 % gratuit !', 6000);
+  }, 1000);
 })();
 </script>
 </body>

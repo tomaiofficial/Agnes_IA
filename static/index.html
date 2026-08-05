@@ -812,6 +812,8 @@
                 <option value="sora-2">Sora 2 (OpenAI)</option>
                 <option value="veo-3.0-fast-generate-001">Veo 3.0 (Google)</option>
                 <option value="tencent/hunyuan-video">HunyuanVideo (Tencent)</option>
+                <option value="wan-2.1">Wan 2.1 (10s, illimité)</option>
+                <option value="tencent/hunyuan-video">HunyuanVideo (Tencent)</option>
              </select>
            </div>
            <div>
@@ -819,7 +821,7 @@
              <button id="btn-puter-signin" onclick="puterSignIn()" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px] text-left">🔑 Se connecter / vérifier</button>
            </div>
          </div>
-          <p class="text-[10px] sm:text-[11px] text-emerald-300/80 mt-2 leading-relaxed">🧪 <strong>Test en cours :</strong> je teste des IA encore plus réelles (Kling 2.1, Sora 2, Veo 3) via Puter — génération réelle, sans clé API (compte Puter gratuit). Si le solde est insuffisant, bascule automatique sur Agnes (illimité). Les vidéos sont publiées directement dans Vibes.</p>
+           <p class="text-[10px] sm:text-[11px] text-emerald-300/80 mt-2 leading-relaxed">🧪 <strong>Test en cours :</strong> je teste des IA encore plus réelles (Kling 2.1, Sora 2, Veo 3, Wan 2.1) via Puter — génération réelle, sans clé API (compte Puter gratuit). Si le solde est insuffisant, bascule automatique sur Agnes (illimité). Wan 2.1 est 100% gratuit et illimité via Hugging Face. Les vidéos sont publiées directement dans Vibes.</p>
        </div>
        <button id="btn-simple" onclick="submitSimple()" class="w-full py-4 sm:py-3.5 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 rounded-xl text-base font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed glow-btn min-h-[50px]">
          🎬 Générer la vidéo
@@ -1259,9 +1261,63 @@ function parseResolution(val) {
 async function submitSimple() {
   const prompt = document.getElementById('s_prompt').value.trim();
   if (!prompt) return alert('Veuillez décrire la vidéo');
-  // v8.19: choix du moteur — Puter (IA ultra-réaliste en test) ou Agnes (illimité)
+  const model = document.getElementById('p_model') ? document.getElementById('p_model').value : 'agnes';
+  // v8.19: choix du moteur — Puter (IA ultra-réaliste en test), Wan 2.1 (Hugging Face, illimité) ou Agnes (illimité)
   if (currentEngine === 'puter') return submitSimplePuter(prompt);
+  if (model.indexOf('wan') !== -1) return submitSimpleWan(prompt);
   return submitSimpleAgnes(prompt);
+}
+
+async function submitSimpleWan(prompt) {
+  const btn = document.getElementById('btn-simple');
+  btn.disabled = true;
+  const panel = document.getElementById('progress-panel');
+  panel.classList.remove('hidden');
+  const model = document.getElementById('p_model') ? document.getElementById('p_model').value : 'wan-2.1';
+  const seconds = 10;
+  const res = parseResolution(document.getElementById('s_resolution').value);
+  const size = res.width + 'x' + res.height;
+  markStep('signin', true);
+  markStep('video_gen', false);
+  puterStatusMsg(`Génération Wan 2.1 (10s, ${size})…`);
+  showToast('🎬 Génération Wan 2.1 en cours (1-5 min, gratuit)…', 6000);
+  try {
+    const fd = new FormData();
+    fd.append('prompt', prompt);
+    fd.append('engine', model);
+    fd.append('duration', String(seconds));
+    fd.append('resolution', size);
+    const r = await fetchWithAuth(API_BASE + '/api/community/videos/publish-external-wan', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.detail || 'Génération Wan 2.1 impossible');
+    markStep('video_gen', true);
+    markStep('publish', true);
+    const resultVideo = document.getElementById('result-video');
+    resultVideo.src = d.video_url;
+    resultVideo.load();
+    document.getElementById('progress-ring-icon').textContent = '✅';
+    document.getElementById('progress-step-name').textContent = 'Terminé !';
+    document.getElementById('progress-state-label').textContent = 'Terminé';
+    document.getElementById('progress-state-dot').className = 'w-1.5 h-1.5 rounded-full bg-green-400';
+    document.getElementById('progress-bar').style.width = '100%';
+    document.getElementById('progress-pct').textContent = '100%';
+    document.getElementById('progress-remaining').textContent = 'Publié dans Vibes ✓';
+    document.getElementById('result-area').classList.remove('hidden');
+    const pubBtn = document.getElementById('btn-publish');
+    pubBtn.textContent = '✅ Publié dans Vibes';
+    pubBtn.disabled = true;
+    pubBtn.className = 'mt-3 w-full py-3 sm:py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-green-600 to-green-500 text-white transition-all min-h-[44px]';
+    if (currentMode === 'gallery') loadGallery();
+    showToast('🎉 Vidéo Wan 2.1 publiée dans Vibes !', 5000);
+    btn.disabled = false;
+  } catch (e) {
+    console.warn('[Wan] Échec:', e);
+    showToast('Wan 2.1 indisponible (' + e.message + ') → bascule automatique sur Agnes', 7000);
+    currentEngine = 'agnes';
+    selectEngine('agnes');
+    panel.classList.add('hidden');
+    await submitSimpleAgnes(prompt);
+  }
 }
 
 async function submitSimpleAgnes(prompt) {
@@ -1416,10 +1472,11 @@ async function submitSimplePuter(prompt) {
     markStep('signin', true);
     const model = document.getElementById('p_model') ? document.getElementById('p_model').value : 'kwaivgi/kling-2.1-master';
     let seconds = parseInt(document.getElementById('s_duration').value, 10) || 5;
-    // Durées supportées par modèle (doc Puter) : Sora 4/8/12s, Veo 4/6/8s, Hunyuan 5s, Kling 5/10s
+    // Durées supportées par modèle (doc Puter) : Sora 4/8/12s, Veo 4/6/8s, Hunyuan 5s, Wan 10s, Kling 5/10s
     if (model.indexOf('sora') !== -1) seconds = seconds <= 4 ? 4 : seconds <= 8 ? 8 : 12;
     else if (model.indexOf('veo') !== -1) seconds = seconds <= 4 ? 4 : seconds <= 6 ? 6 : 8;
     else if (model.indexOf('hunyuan') !== -1) seconds = 5;
+    else if (model.indexOf('wan') !== -1) seconds = 10;
     else seconds = seconds <= 5 ? 5 : 10;
     const res = parseResolution(document.getElementById('s_resolution').value);
     // Sora 2 impose des tailles fixes documentées (720x1280 / 1280x720 / 1024x1792 / 1792x1024) ;
@@ -2707,7 +2764,7 @@ document.addEventListener('DOMContentLoaded', () => {
   autoReconnectRunningTask();
   // v8.19: annonce au lancement — nouveaux modèles vidéo en test (Puter)
   setTimeout(() => {
-    showToast('🧪 Nouveaux modèles vidéo en test : Kling 2.1, Sora 2, Veo 3.0 — moteur « Puter » (génération réelle, fallback Agnes si solde insuffisant) !', 6000);
+    showToast('🧪 Nouveaux modèles vidéo en test : Kling 2.1, Sora 2, Veo 3, Wan 2.1 — moteur « Puter » + Hugging Face (Wan 2.1 100% gratuit et illimité) !', 6000);
   }, 1000);
 })();
 </script>

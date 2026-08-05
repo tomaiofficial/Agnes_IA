@@ -1,21 +1,25 @@
-"""tests.test_community_puter — endpoint de publication de vidéos générées côté client.
+"""tests.test_community_puter — endpoints de publication de vidéos générées côté client.
 
 v8.19 : le front génère la vidéo avec le SDK Puter (Kling/Sora/Veo) puis upload
 le fichier sur POST /api/community/videos/publish-external, qui réutilise le
 même store communautaire que les tâches Agnes (Vibes).
+
+v8.19.6 : ajout de Wan 2.1 via Hugging Face (POST /api/community/videos/publish-external-wan).
 """
 
 import pytest
 from fastapi.testclient import TestClient
+from unittest.mock import patch
 
+import server
 from core.storage.local_backend import LocalCommunityStore
 
 FAKE_MP4 = b"\x00\x00\x00\x18ftypmp42" + b"fake-video-bytes"
+FAKE_WAN_MP4 = b"\x00\x00\x00\x18ftypmp42" + b"fake-wan-video-bytes" * 200
 
 
 @pytest.fixture
 def community_client(tmp_path, monkeypatch):
-    import server
     from core.storage import local_backend as lb
 
     monkeypatch.setattr(lb, "get_working_dir", lambda: str(tmp_path))
@@ -23,6 +27,8 @@ def community_client(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "get_community_store", lambda: store)
     return TestClient(server.app), store
 
+
+# ── publish-external (Puter) ──────────────────────────────────────────────
 
 def test_publish_external_requires_prompt_and_video(community_client):
     client, _ = community_client
@@ -93,5 +99,63 @@ def test_publish_external_author_and_delete(community_client):
     r = client.delete(f"/api/community/videos/{vid}", headers={"X-User-Id": "someone-else"})
     assert r.status_code == 403
     r = client.delete(f"/api/community/videos/{vid}", headers={"X-User-Id": "owner-puter"})
+    assert r.status_code == 200
+    assert store.list_videos()["total"] == 0
+
+
+# ── publish-external-wan (Wan 2.1 via Hugging Face) ──────────────────────
+
+def test_publish_external_wan_requires_prompt(community_client):
+    """422 si prompt manquant pour Wan 2.1."""
+    client, _ = community_client
+    r = client.post(
+        "/api/community/videos/publish-external-wan",
+        data={},
+    )
+    assert r.status_code == 422
+
+
+def test_publish_external_wan_roundtrip(community_client):
+    """Roundtrip Wan 2.1 : prompt → mock Hugging Face → publication Vibes."""
+    client, store = community_client
+    with patch("server._hf_wan_generate", return_value=FAKE_WAN_MP4):
+        r = client.post(
+            "/api/community/videos/publish-external-wan",
+            data={
+                "prompt": "Un dragon volant au-dessus des nuages",
+                "author": "WanUser",
+            },
+            headers={"X-User-Id": "u-wan"},
+        )
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["ok"] is True
+    assert d["video_id"]
+    assert d["video_url"]
+
+    listed = store.list_videos()
+    assert listed["total"] == 1
+    v = listed["videos"][0]
+    assert v["user_id"] == "u-wan"
+    assert v["author"] == "WanUser"
+    assert v["duration"] == 10.0
+    assert v["resolution"] == "720x1280"
+    assert v["prompt"] == "Un dragon volant au-dessus des nuages"
+
+
+def test_publish_external_wan_author_and_delete(community_client):
+    """Le créateur peut supprimer, un autre user reçoit 403."""
+    client, store = community_client
+    with patch("server._hf_wan_generate", return_value=FAKE_WAN_MP4):
+        r = client.post(
+            "/api/community/videos/publish-external-wan",
+            data={"prompt": "Océan au coucher du soleil", "author": "WanAuthor"},
+            headers={"X-User-Id": "owner-wan"},
+        )
+    assert r.status_code == 200, r.text
+    vid = r.json()["video_id"]
+    r = client.delete(f"/api/community/videos/{vid}", headers={"X-User-Id": "someone-else"})
+    assert r.status_code == 403
+    r = client.delete(f"/api/community/videos/{vid}", headers={"X-User-Id": "owner-wan"})
     assert r.status_code == 200
     assert store.list_videos()["total"] == 0

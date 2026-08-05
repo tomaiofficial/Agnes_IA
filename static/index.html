@@ -2762,10 +2762,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (d.api_key) setApiKeyConfiguredUI(d.source, d.can_clear);
   } catch(e) {}
   autoReconnectRunningTask();
-  // v8.19: annonce au lancement — nouveaux modèles vidéo en test (Puter)
-  setTimeout(() => {
-    showToast('🧪 Nouveaux modèles vidéo en test : Kling 2.1, Sora 2, Veo 3, Wan 2.1 — moteur « Puter » + Hugging Face (Wan 2.1 100% gratuit et illimité) !', 6000);
-  }, 1000);
 })();
 </script>
 </body>

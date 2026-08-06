@@ -3391,14 +3391,25 @@ async def publish_external_video(request: Request, user_id: str = Header(default
 # ═══════════════════════════════════════════════════
 # Wan 2.1 via Hugging Face (gratuit, illimité, 10s)
 # ═══════════════════════════════════════════════════
+#
+# NOTE 2026-08 : l'API Inference « legacy » (api-inference.huggingface.co)
+# a été supprimée par Hugging Face lors de la migration « Inference
+# Providers » (nov. 2025). Le domaine ne résout plus dans le DNS →
+# NameResolutionError / MaxRetryError sur le serveur Render. Le nouvel
+# endpoint officiel est https://router.huggingface.co/hf-inference/models/<model>
+# (même format de requête que l'ancienne API).
 
-_HF_WAN_MODEL = "Wan-AI/Wan2.1"
-_HF_API_URL = f"https://api-inference.huggingface.co/models/{_HF_WAN_MODEL}"
+_HF_API_BASE = "https://router.huggingface.co/hf-inference"
+# Candidats testés dans l'ordre : le sous-modèle T2V 1.3B (diffusers) est le
+# plus léger et routable via le router ; on retombe sur le dépôt principal
+# en dernier recours. Si un candidat n'est pas servi (404/400), on passe au
+# suivant au lieu d'abandonner.
+_HF_WAN_MODELS = ["Wan-AI/Wan2.1-T2V-1.3B", "Wan-AI/Wan2.1"]
 _HF_WAN_DURATION = 10  # secondes (fixe pour Wan 2.1)
 
 
 def _hf_wan_generate(prompt: str) -> bytes:
-    """Génère une vidéo Wan 2.1 via l'API Hugging Face Inference.
+    """Génère une vidéo Wan 2.1 via le router Hugging Face (Inference Providers).
 
     Retourne les octets vidéo (mp4). Lève une exception en cas d'échec.
     """
@@ -3418,48 +3429,67 @@ def _hf_wan_generate(prompt: str) -> bytes:
         },
     }
 
-    # Soumettre la requête
-    resp = requests.post(
-        _HF_API_URL,
-        headers=headers,
-        json=payload,
-        timeout=300,  # 5 min max pour la génération
-    )
-
-    if resp.status_code == 503:
-        # Modèle en cours de chargement (cold start) — attendre et réessayer
-        raise RuntimeError(
-            "Wan 2.1 est en cours de chargement sur Hugging Face, "
-            "veuillez réessayer dans quelques instants"
-        )
-
-    if resp.status_code != 200:
-        raise RuntimeError(
-            f"Erreur Hugging Face ({resp.status_code}): {resp.text[:200]}"
-        )
-
-    content_type = resp.headers.get("content-type", "")
-    if "application/json" in content_type:
-        # Le modèle a retourné un URL (pas du binaire direct)
+    last_error = None
+    for model_id in _HF_WAN_MODELS:
+        url = f"{_HF_API_BASE}/models/{model_id}"
         try:
-            data = resp.json()
-            video_url = data.get("url") or data.get("output")
-            if not video_url:
-                raise RuntimeError("Pas d'URL de vidéo dans la réponse HF")
-            # Télécharger la vidéo depuis l'URL
-            video_resp = requests.get(video_url, timeout=120)
-            if video_resp.status_code != 200:
-                raise RuntimeError(
-                    f"Impossible de télécharger la vidéo ({video_resp.status_code})"
-                )
-            return video_resp.content
-        except (ValueError, KeyError) as e:
-            raise RuntimeError(f"Réponse HF invalide: {e}")
+            resp = requests.post(
+                url,
+                headers=headers,
+                json=payload,
+                timeout=300,  # 5 min max pour la génération
+            )
+        except requests.RequestException as e:
+            logger.warning("[Wan2.1] Échec réseau %s: %s", model_id, e)
+            last_error = e
+            continue
 
-    # Réponse binaire (vidéo mp4)
-    if not resp.content:
-        raise RuntimeError("Hugging Face a retourné une réponse vide")
-    return resp.content
+        if resp.status_code == 503:
+            # Modèle en cours de chargement (cold start) — attendre et réessayer
+            raise RuntimeError(
+                "Wan 2.1 est en cours de chargement sur Hugging Face, "
+                "veuillez réessayer dans quelques instants"
+            )
+
+        if resp.status_code in (400, 404):
+            # Modèle non servi par le router (ou paramètres rejetés) →
+            # essayer le candidat suivant
+            logger.warning("[Wan2.1] %s indisponible (HTTP %s): %s",
+                           model_id, resp.status_code, resp.text[:150])
+            last_error = RuntimeError(
+                f"Hugging Face ({resp.status_code}) pour {model_id}: {resp.text[:200]}"
+            )
+            continue
+
+        if resp.status_code != 200:
+            raise RuntimeError(
+                f"Erreur Hugging Face ({resp.status_code}): {resp.text[:200]}"
+            )
+
+        content_type = resp.headers.get("content-type", "")
+        if "application/json" in content_type:
+            # Le modèle a retourné un URL (pas du binaire direct)
+            try:
+                data = resp.json()
+                video_url = data.get("url") or data.get("output")
+                if not video_url:
+                    raise RuntimeError("Pas d'URL de vidéo dans la réponse HF")
+                # Télécharger la vidéo depuis l'URL
+                video_resp = requests.get(video_url, timeout=120)
+                if video_resp.status_code != 200:
+                    raise RuntimeError(
+                        f"Impossible de télécharger la vidéo ({video_resp.status_code})"
+                    )
+                return video_resp.content
+            except (ValueError, KeyError) as e:
+                raise RuntimeError(f"Réponse HF invalide: {e}")
+
+        # Réponse binaire (vidéo mp4)
+        if not resp.content:
+            raise RuntimeError("Hugging Face a retourné une réponse vide")
+        return resp.content
+
+    raise RuntimeError(f"Tous les modèles Wan 2.1 ont échoué: {last_error}")
 
 
 @app.post("/api/community/videos/publish-external-wan")

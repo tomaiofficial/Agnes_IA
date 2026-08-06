@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import tempfile
+import time
 from typing import Optional
 
 from core.config import get_working_dir
@@ -51,6 +52,23 @@ class TaskManager:
             os.path.join(self.task_dir, "task_state.json") if self.task_dir else None
         )
         self._state: Optional[BaseTaskState] = None
+
+    def _atomic_replace(self, tmp_path: str, dest_path: str) -> None:
+        """os.replace avec petites reprises (Windows local).
+
+        Sous Windows, os.replace lève PermissionError (WinError 5) si le fichier
+        de destination est ouvert par un lecteur concurrent (ex. GET /api/tasks
+        qui poll toutes les 2 s). Sur Linux (Render) aucune collision n'existe.
+        """
+        last_err: Optional[Exception] = None
+        for attempt in range(8):
+            try:
+                os.replace(tmp_path, dest_path)
+                return
+            except OSError as e:
+                last_err = e
+                time.sleep(0.1 + 0.1 * attempt)
+        raise last_err
 
     def _ensure_dir(self):
         if not self.task_dir:
@@ -137,7 +155,7 @@ class TaskManager:
             try:
                 with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
                     json.dump(self._state.model_dump(), f, ensure_ascii=False, indent=2)
-                os.replace(tmp_path, self._task_file)
+                self._atomic_replace(tmp_path, self._task_file)
             except Exception:
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)

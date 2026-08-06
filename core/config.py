@@ -582,3 +582,25 @@ def get_agnes_api_root() -> str:
     """返回基于当前域名配置的 API Root URL（不含 /v1 后缀）。"""
     domain = get_agnes_domain()
     return AGNES_DOMAIN_MAP.get(domain, AGNES_DOMAIN_MAP[_DEFAULT_DOMAIN])
+
+
+# ═══════════════════════════════════════════════════
+# Moteur LTX-2.3 (GPU loué) — v9.0
+# ═══════════════════════════════════════════════════
+
+LTX_COMFY_URL_ENV = "LTX_COMFY_URL"
+
+
+def get_ltx_comfy_url() -> str:
+    """URL publique du pod ComfyUI (RunPod/Vast.ai) exécutant LTX-2.3.
+
+    Ex. `https://xxxx-8188.proxy.runpod.net` (sans slash final).
+    Vide = moteur LTX non configuré → la route /api/tasks/simple-ltx
+    renvoie 400 et l'UI désactive le bouton LTX.
+    """
+    return (os.environ.get(LTX_COMFY_URL_ENV, "") or "").strip().rstrip("/")
+
+
+def is_ltx_enabled() -> bool:
+    """True si le moteur LTX est configuré (URL de pod présente)."""
+    return bool(get_ltx_comfy_url())

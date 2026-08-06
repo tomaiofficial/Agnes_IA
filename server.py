@@ -1934,7 +1934,7 @@ async def _run_pipeline_with_concurrency(
     # 排队时持久化进度消息（前端轮询可读取）
     task_manager.update_state(
         current_step="init", current_status="running",
-        current_message="任务排队中...", current_progress=0.0,
+        current_message="En attente d'un slot de génération...", current_progress=0.0,
     )
 
     try:

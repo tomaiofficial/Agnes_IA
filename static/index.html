@@ -1117,7 +1117,15 @@ function switchMode(mode) {
   document.getElementById('form-image').classList.toggle('hidden', mode !== 'image');
   document.getElementById('panel-list').classList.toggle('hidden', mode !== 'list');
   document.getElementById('panel-gallery').classList.toggle('hidden', mode !== 'gallery');
-  document.getElementById('progress-panel').classList.toggle('hidden', mode === 'list' || mode === 'gallery');
+  // Bug refresh : le panneau était rendu visible par ce toggle sans aucune tâche
+  // suivie → après F5 il restait figé sur son état par défaut (0%, "Préparation...").
+  // Il ne doit apparaître QUE via showProgress (tâche reprise ou soumise).
+  const progressPanel = document.getElementById('progress-panel');
+  if (isTaskRunning) {
+    progressPanel.classList.toggle('hidden', mode === 'list' || mode === 'gallery');
+  } else {
+    progressPanel.classList.add('hidden');
+  }
   // Uncollapse form if no task running when switching to video/image
   if (!isTaskRunning && (mode === 'video' || mode === 'image')) {
     document.querySelectorAll('.sora-form-collapse').forEach(el => el.classList.remove('collapsed'));
@@ -1503,7 +1511,12 @@ async function showProgress(taskId, dirName) {
   }
 
   const dirInfo = dirName ? `<span style="color:rgba(156,163,175,0.4);">Dossier: <span class="font-mono">${dirName}</span></span>` : '';
-  document.getElementById('progress-message').innerHTML = `<div class="sora-status-text" style="color:rgba(156,163,175,0.5); font-size:12px;">Tâche: ${taskId} ${dirInfo}</div>`;
+  // Afficher le vrai message serveur dès le premier rendu (sinon le panneau
+  // reparti de zéro affiche "Préparation..." tant que le polling n'a pas tourné).
+  const statusMsg = (state && state.current_message)
+    ? state.current_message
+    : `Tâche: ${taskId} ${dirInfo}`;
+  document.getElementById('progress-message').innerHTML = `<div class="sora-status-text" style="color:rgba(156,163,175,0.6); font-size:13px;">${statusMsg}</div>`;
   currentArtifactsTaskId = taskId;
   loadArtifacts();
   // Smooth scroll to progress panel
@@ -1668,7 +1681,9 @@ async function pollTaskProgress(taskId) {
           <p style="color: rgba(156,163,175,0.5); font-size: 12px;">${state.current_message || 'Vérifiez les logs console, puis reprenez depuis la liste.'}</p>
         </div>`;
     }
-  } catch(e) {}
+  } catch(e) {
+    console.warn('[Poll] Erreur pendant le polling de la tâche :', e);
+  }
 }
 
 function showResult(videoPath) {
@@ -1851,8 +1866,20 @@ async function autoReconnectRunningTask() {
       currentDirName = running.dir_name || running.task_id;
       await showProgress(running.task_id, currentDirName);
       await startPolling(running.task_id);
+      _reconnectAttempts = 0;
+      return;
     }
-  } catch(e) {}
+  } catch(e) {
+    console.warn('[Reconnect] Échec de la reprise de tâche :', e);
+  }
+  // Si rien n'a été repris au premier essai, retenter une fois peu après :
+  // le serveur peut être occupé au chargement de la page (redémarrage Render).
+  _reconnectAttempts = (_reconnectAttempts || 0) + 1;
+  if (_reconnectAttempts < 2) {
+    setTimeout(autoReconnectRunningTask, 2000);
+  } else {
+    _reconnectAttempts = 0;
+  }
 }
 
 // ═══════════════════════════════════════════════════

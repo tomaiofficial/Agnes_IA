@@ -795,15 +795,6 @@
             <p class="text-[10px] sm:text-[11px] text-purple-300/80 mt-2 leading-relaxed">🎬 <strong>Réglages Cinéma Pro</strong> : seed fixe (42), negative prompt cinéma, HDR Oui. Pour un rendu optimal : prompt détaillé (250+ mots), éclairage nommé (three-point/key/fill/backlight), caméra immobile, textures explicites, finir par « ultra-réaliste 4K, zéro déformation, zéro flicker ».</p>
           </div>
        </div>
-        <!-- v8.20: Moteur de génération — Agnes (illimité) ou PixVerse (V6, 10s, API officielle) -->
-        <div class="mt-3">
-          <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Moteur de génération</label>
-          <div class="grid grid-cols-2 gap-2">
-            <button type="button" id="engine-agnes" onclick="selectEngine('agnes')" class="w-full rounded-lg px-3 py-2 text-sm font-medium min-h-[44px] transition border" style="background:rgba(59,130,246,0.18); border-color:rgba(96,165,250,0.5); color:#93bbfc;">🧠 Agnes — illimité</button>
-            <button type="button" id="engine-pixverse" onclick="selectEngine('pixverse')" class="w-full rounded-lg px-3 py-2 text-sm font-medium min-h-[44px] transition border" style="background:rgba(31,41,55,0.6); border-color:rgba(255,255,255,0.08); color:#9ca3af;">🎬 PixVerse V6 — 10s</button>
-          </div>
-          <p class="text-[10px] sm:text-[11px] text-emerald-300/80 mt-2 leading-relaxed">🧪 <strong>PixVerse V6</strong> — génération vidéo 10s (540p, 9:16) via l'API officielle PixVerse (crédits). Bascule automatique sur Agnes si indisponible.</p>
-        </div>
        <button id="btn-simple" onclick="submitSimple()" class="w-full py-4 sm:py-3.5 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 rounded-xl text-base font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed glow-btn min-h-[50px]">
          🎬 Générer la vidéo
        </button>
@@ -1242,47 +1233,7 @@ function parseResolution(val) {
 async function submitSimple() {
   const prompt = document.getElementById('s_prompt').value.trim();
   if (!prompt) return alert('Veuillez décrire la vidéo');
-  const model = document.getElementById('p_model') ? document.getElementById('p_model').value : 'agnes';
-  // PixVerse utilise son API officielle (pas Puter) — via le bouton moteur ou un modèle pixverse
-  if (currentEngine === 'pixverse' || model.indexOf('pixverse') !== -1) return submitSimplePixVerse(prompt);
   return submitSimpleAgnes(prompt);
-}
-
-async function submitSimplePixVerse(prompt) {
-  const btn = document.getElementById('btn-simple');
-  btn.disabled = true;
-  const model = document.getElementById('p_model') ? document.getElementById('p_model').value : 'pixverse-v6';
-  const seconds = 10;
-  const res = parseResolution(document.getElementById('s_resolution').value);
-  const size = res.width + 'x' + res.height;
-  showToast('🎬 Génération PixVerse V6 en cours (1-5 min, 540p)…', 8000);
-  try {
-    const fd = new FormData();
-    fd.append('prompt', prompt);
-    fd.append('engine', model);
-    fd.append('duration', String(seconds));
-    fd.append('resolution', size);
-    const r = await fetchWithAuth(API_BASE + '/api/community/videos/publish-external-pixverse', { method: 'POST', body: fd });
-    const d = await r.json();
-    if (!d.ok) throw new Error(d.detail || 'Génération PixVerse impossible');
-    const resultVideo = document.getElementById('result-video');
-    resultVideo.src = d.video_url;
-    resultVideo.load();
-    document.getElementById('result-area').classList.remove('hidden');
-    const pubBtn = document.getElementById('btn-publish');
-    pubBtn.textContent = '✅ Publié dans Vibes';
-    pubBtn.disabled = true;
-    pubBtn.className = 'mt-3 w-full py-3 sm:py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-green-600 to-green-500 text-white transition-all min-h-[44px]';
-    if (currentMode === 'gallery') loadGallery();
-    showToast('🎉 Vidéo PixVerse publiée dans Vibes !', 5000);
-    btn.disabled = false;
-  } catch (e) {
-    console.warn('[PixVerse] Échec:', e);
-    showToast('PixVerse indisponible (' + e.message + ') → bascule automatique sur Agnes', 7000);
-    currentEngine = 'agnes';
-    selectEngine('agnes');
-    await submitSimpleAgnes(prompt);
-  }
 }
 
 async function submitSimpleAgnes(prompt) {
@@ -1344,17 +1295,12 @@ async function submitSimpleAgnes(prompt) {
 }
 
 // ═══════════════════════════════════════════════════
-// v8.20: Moteur Agnes (illimité) — PixVerse utilise son API officielle directement
+// v8.20: sélecteur de moteur externe retiré — formulaire simple = Agnes uniquement
+// (Wan 2.1 puis PixVerse supprimés ; selectEngine conservé pour le fallback Puter)
 // ═══════════════════════════════════════════════════
 
 function selectEngine(name) {
   currentEngine = name;
-  const ag = document.getElementById('engine-agnes');
-  const px = document.getElementById('engine-pixverse');
-  const active = 'background:rgba(59,130,246,0.18); border-color:rgba(96,165,250,0.5); color:#93bbfc;';
-  const idle = 'background:rgba(31,41,55,0.6); border-color:rgba(255,255,255,0.08); color:#9ca3af;';
-  if (ag) ag.style.cssText = name === 'agnes' ? active : idle;
-  if (px) px.style.cssText = name === 'pixverse' ? active : idle;
 }
 
 async function puterSignIn() {
@@ -1434,11 +1380,10 @@ async function submitSimplePuter(prompt) {
     markStep('signin', true);
     const model = document.getElementById('p_model') ? document.getElementById('p_model').value : 'kwaivgi/kling-2.1-master';
     let seconds = parseInt(document.getElementById('s_duration').value, 10) || 5;
-    // Durées supportées par modèle (doc Puter) : Sora 4/8/12s, Veo 4/6/8s, Hunyuan 5s, Kling 5/10s ; PixVerse 10s
+    // Durées supportées par modèle (doc Puter) : Sora 4/8/12s, Veo 4/6/8s, Hunyuan 5s, Kling 5/10s
     if (model.indexOf('sora') !== -1) seconds = seconds <= 4 ? 4 : seconds <= 8 ? 8 : 12;
     else if (model.indexOf('veo') !== -1) seconds = seconds <= 4 ? 4 : seconds <= 6 ? 6 : 8;
     else if (model.indexOf('hunyuan') !== -1) seconds = 5;
-    else if (model.indexOf('pixverse') !== -1 || currentEngine === 'pixverse') seconds = 10;
     else seconds = seconds <= 5 ? 5 : 10;
     const res = parseResolution(document.getElementById('s_resolution').value);
     // Sora 2 impose des tailles fixes documentées (720x1280 / 1280x720 / 1024x1792 / 1792x1024) ;

@@ -4,8 +4,9 @@ v8.19 : le front génère la vidéo avec le SDK Puter (Kling/Sora/Veo) puis uplo
 le fichier sur POST /api/community/videos/publish-external, qui réutilise le
 même store communautaire que les tâches Agnes (Vibes).
 
-v8.19.6 : Wan 2.1 via Hugging Face (POST /api/community/videos/publish-external-wan) —
-retiré en v8.20 au profit de PixVerse V6 (POST /api/community/videos/publish-external-pixverse).
+v8.19.6 : Wan 2.1 via Hugging Face (publish-external-wan) — retiré en v8.20.
+v8.20 : PixVerse V6 (publish-external-pixverse) — ajouté puis retiré le même
+jour à la demande : plus aucun moteur externe, formulaire simple = Agnes seul.
 """
 
 import pytest
@@ -16,7 +17,6 @@ import server
 from core.storage.local_backend import LocalCommunityStore
 
 FAKE_MP4 = b"\x00\x00\x00\x18ftypmp42" + b"fake-video-bytes"
-FAKE_PIXVERSE_MP4 = b"\x00\x00\x00\x18ftypmp42" + b"fake-pixverse-video-bytes" * 200
 
 
 @pytest.fixture
@@ -100,63 +100,5 @@ def test_publish_external_author_and_delete(community_client):
     r = client.delete(f"/api/community/videos/{vid}", headers={"X-User-Id": "someone-else"})
     assert r.status_code == 403
     r = client.delete(f"/api/community/videos/{vid}", headers={"X-User-Id": "owner-puter"})
-    assert r.status_code == 200
-    assert store.list_videos()["total"] == 0
-
-
-# ── publish-external-pixverse (PixVerse V6 via API officielle) ────────────
-
-def test_publish_external_pixverse_requires_prompt(community_client):
-    """422 si prompt manquant pour PixVerse."""
-    client, _ = community_client
-    r = client.post(
-        "/api/community/videos/publish-external-pixverse",
-        data={},
-    )
-    assert r.status_code == 422
-
-
-def test_publish_external_pixverse_roundtrip(community_client):
-    """Roundtrip PixVerse : prompt → mock génération → publication Vibes."""
-    client, store = community_client
-    with patch("server._pixverse_generate", return_value=FAKE_PIXVERSE_MP4):
-        r = client.post(
-            "/api/community/videos/publish-external-pixverse",
-            data={
-                "prompt": "Un dragon volant au-dessus des nuages",
-                "author": "PixUser",
-            },
-            headers={"X-User-Id": "u-pix"},
-        )
-    assert r.status_code == 200, r.text
-    d = r.json()
-    assert d["ok"] is True
-    assert d["video_id"]
-    assert d["video_url"]
-
-    listed = store.list_videos()
-    assert listed["total"] == 1
-    v = listed["videos"][0]
-    assert v["user_id"] == "u-pix"
-    assert v["author"] == "PixUser"
-    assert v["duration"] == 10.0
-    assert v["resolution"] == "720x1280"
-    assert v["prompt"] == "Un dragon volant au-dessus des nuages"
-
-
-def test_publish_external_pixverse_author_and_delete(community_client):
-    """Le créateur peut supprimer, un autre user reçoit 403."""
-    client, store = community_client
-    with patch("server._pixverse_generate", return_value=FAKE_PIXVERSE_MP4):
-        r = client.post(
-            "/api/community/videos/publish-external-pixverse",
-            data={"prompt": "Océan au coucher du soleil", "author": "PixAuthor"},
-            headers={"X-User-Id": "owner-pix"},
-        )
-    assert r.status_code == 200, r.text
-    vid = r.json()["video_id"]
-    r = client.delete(f"/api/community/videos/{vid}", headers={"X-User-Id": "someone-else"})
-    assert r.status_code == 403
-    r = client.delete(f"/api/community/videos/{vid}", headers={"X-User-Id": "owner-pix"})
     assert r.status_code == 200
     assert store.list_videos()["total"] == 0

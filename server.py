@@ -3398,14 +3398,17 @@ async def publish_external_video(request: Request, user_id: str = Header(default
 # NOTE 2026-08 : l'API Inference « legacy » (api-inference.huggingface.co)
 # a été supprimée par Hugging Face lors de la migration « Inference
 # Providers » (nov. 2025). Le domaine ne résout plus dans le DNS →
-# NameResolutionError / MaxRetryError sur le serveur Render. L'accès se fait
-# désormais via le client officiel `huggingface_hub.InferenceClient` qui
-# route vers le provider de son choix : le provider par défaut (hf-inference)
-# ne sert PAS la vidéo ; `fal-ai` sert officiellement Wan-AI/Wan2.1-T2V-1.3B
-# (Text-to-Video, voir la page du modèle sur HF).
+# NameResolutionError / MaxRetryError sur le serveur Render. L'accès passe
+# par le client officiel `huggingface_hub.InferenceClient`.
+#
+# Choix du provider : le mapping HF liste fal-ai et wavespeed, mais fal-ai
+# a RETIRÉ Wan 2.1 de son catalogue (modèle introuvable chez fal.ai → le SDK
+# reçoit un résultat sans champ `video` → KeyError 'video'). Seul `wavespeed`
+# sert réellement Wan-AI/Wan2.1-T2V-1.3B (t2v-480p-ultra-fast, statut live).
+# → huggingface_hub >= 1.26 (helper `wavespeed` disponible).
 
-_HF_WAN_MODEL = "Wan-AI/Wan2.1-T2V-1.3B"  # 1.3B : le plus léger serviable par fal-ai
-_HF_WAN_PROVIDER = "fal-ai"               # seul provider HF servant Wan 2.1 T2V (gratuit/free tier)
+_HF_WAN_MODEL = "Wan-AI/Wan2.1-T2V-1.3B"  # 1.3B : le plus léger serviable
+_HF_WAN_PROVIDER = "wavespeed"            # seul provider HF servant réellement Wan 2.1 T2V
 _HF_WAN_DURATION = 10  # secondes (fixe pour Wan 2.1)
 _HF_WAN_FPS = 16       # fps de Wan 2.1 (10s = 161 frames)
 
@@ -3413,7 +3416,7 @@ _hf_client: Optional[InferenceClient] = None
 
 
 def _get_hf_client() -> InferenceClient:
-    """Client HF routé vers fal-ai (singleton)."""
+    """Client HF routé vers wavespeed (singleton)."""
     global _hf_client
     if _hf_client is None:
         hf_token = os.environ.get("HF_TOKEN", "")
@@ -3424,14 +3427,14 @@ def _get_hf_client() -> InferenceClient:
 
 
 def _hf_wan_generate(prompt: str) -> bytes:
-    """Génère une vidéo Wan 2.1 via le client HF Inference Providers (fal-ai).
+    """Génère une vidéo Wan 2.1 via le client HF Inference Providers (wavespeed).
 
     Retourne les octets vidéo (mp4). Lève une exception en cas d'échec.
     """
     client = _get_hf_client()
     last_error = None
 
-    # Essai 1 : 10 s (num_frames = 10s * 16fps + 1). Essai 2 : défauts (5 s).
+    # Essai 1 : 10 s (num_frames = 10s * 16fps + 1). Essai 2 : défauts (durée modèle).
     attempts = [
         {"num_frames": _HF_WAN_FPS * _HF_WAN_DURATION + 1},
         {},
@@ -3440,7 +3443,7 @@ def _hf_wan_generate(prompt: str) -> bytes:
         try:
             logger.info("[Wan2.1] Génération via %s/%s%s ...",
                         _HF_WAN_PROVIDER, _HF_WAN_MODEL,
-                        f" ({params})" if params else " (défauts 5s)")
+                        f" ({params})" if params else " (défauts modèle)")
             video = client.text_to_video(
                 prompt,
                 model=_HF_WAN_MODEL,

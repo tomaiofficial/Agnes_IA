@@ -22,4 +22,5 @@ supabase>=2.4.0,<3.0.0
 psycopg2-binary>=2.9.0,<3.0.0
 
 # Wan 2.1 via Hugging Face Inference Providers (client officiel, routing provider)
-huggingface_hub>=0.28.0,<1.0.0
+# >= 1.26 : helper `wavespeed` présent (le seul provider servant réellement Wan 2.1 T2V)
+huggingface_hub>=1.26.1,<2.0.0

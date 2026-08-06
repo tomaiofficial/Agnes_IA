@@ -35,6 +35,9 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Hea
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 
+# Client officiel Hugging Face (Inference Providers) — utilisé pour Wan 2.1
+from huggingface_hub import InferenceClient
+
 from core.config import get_api_key, set_api_key, delete_api_key, get_api_key_source, get_working_dir, DURATION_FRAME_MAP, get_workspaces, add_workspace, remove_workspace, set_active_workspace, get_active_workspace, REGRESSION_WORKING_DIR_ENV, get_watermark_config, set_watermark_config, WATERMARK_PROMO_TEXT_ZH, WATERMARK_PROMO_TEXT_EN, get_selected_models, set_selected_models, get_agnes_domain, set_agnes_domain, AGNES_DOMAIN_MAP, get_agnes_api_root, DEFAULT_NEGATIVE_PROMPT
 from core.path_security import safe_join, safe_workspace_path, UnsafePathError
 from core.audio.voices import (
@@ -3395,119 +3398,64 @@ async def publish_external_video(request: Request, user_id: str = Header(default
 # NOTE 2026-08 : l'API Inference « legacy » (api-inference.huggingface.co)
 # a été supprimée par Hugging Face lors de la migration « Inference
 # Providers » (nov. 2025). Le domaine ne résout plus dans le DNS →
-# NameResolutionError / MaxRetryError sur le serveur Render. Le nouvel
-# endpoint officiel est https://router.huggingface.co/hf-inference/models/<model>
-# (même format de requête que l'ancienne API).
+# NameResolutionError / MaxRetryError sur le serveur Render. L'accès se fait
+# désormais via le client officiel `huggingface_hub.InferenceClient` qui
+# route vers le provider de son choix : le provider par défaut (hf-inference)
+# ne sert PAS la vidéo ; `fal-ai` sert officiellement Wan-AI/Wan2.1-T2V-1.3B
+# (Text-to-Video, voir la page du modèle sur HF).
 
-_HF_API_BASE = "https://router.huggingface.co/hf-inference"
-# Candidats testés dans l'ordre. Le provider par défaut (hf-inference) ne sert
-# PAS Wan 2.1 (« Model not supported by provider hf-inference ») : il faut
-# suffixer le provider au modèle (`model:provider`). Le fournisseur fal sert
-# officiellement Wan-AI/Wan2.1-T2V-1.3B (voir la page du modèle sur HF).
-# En dernier recours, on retente sans suffixe (compatibilité si HF change).
-_HF_WAN_MODELS = [
-    "Wan-AI/Wan2.1-T2V-1.3B:fal-ai",
-    "Wan-AI/Wan2.1-T2V-14B:fal-ai",
-    "Wan-AI/Wan2.1-T2V-1.3B",
-    "Wan-AI/Wan2.1",
-]
+_HF_WAN_MODEL = "Wan-AI/Wan2.1-T2V-1.3B"  # 1.3B : le plus léger serviable par fal-ai
+_HF_WAN_PROVIDER = "fal-ai"               # seul provider HF servant Wan 2.1 T2V (gratuit/free tier)
 _HF_WAN_DURATION = 10  # secondes (fixe pour Wan 2.1)
+_HF_WAN_FPS = 16       # fps de Wan 2.1 (10s = 161 frames)
+
+_hf_client: Optional[InferenceClient] = None
+
+
+def _get_hf_client() -> InferenceClient:
+    """Client HF routé vers fal-ai (singleton)."""
+    global _hf_client
+    if _hf_client is None:
+        hf_token = os.environ.get("HF_TOKEN", "")
+        if not hf_token:
+            raise RuntimeError("HF_TOKEN non configuré — Wan 2.1 indisponible")
+        _hf_client = InferenceClient(token=hf_token, provider=_HF_WAN_PROVIDER)
+    return _hf_client
 
 
 def _hf_wan_generate(prompt: str) -> bytes:
-    """Génère une vidéo Wan 2.1 via le router Hugging Face (Inference Providers).
+    """Génère une vidéo Wan 2.1 via le client HF Inference Providers (fal-ai).
 
     Retourne les octets vidéo (mp4). Lève une exception en cas d'échec.
     """
-    hf_token = os.environ.get("HF_TOKEN", "")
-    if not hf_token:
-        raise RuntimeError("HF_TOKEN non configuré — Wan 2.1 indisponible")
-
-    headers = {
-        "Authorization": f"Bearer {hf_token}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "inputs": prompt,
-        "parameters": {
-            "duration": _HF_WAN_DURATION,
-            "resolution": "720p",
-        },
-    }
-
+    client = _get_hf_client()
     last_error = None
-    for model_id in _HF_WAN_MODELS:
-        url = f"{_HF_API_BASE}/models/{model_id}"
-        # Si les paramètres (duration/resolution) sont rejetés pour ce modèle
-        # (400/422), on retente une fois sans parameters (défauts du modèle).
-        payloads = [payload, {"inputs": prompt}]
-        for attempt, p in enumerate(payloads):
-            try:
-                resp = requests.post(
-                    url,
-                    headers=headers,
-                    json=p,
-                    timeout=300,  # 5 min max pour la génération
-                )
-            except requests.RequestException as e:
-                logger.warning("[Wan2.1] Échec réseau %s: %s", model_id, e)
-                last_error = e
-                break
 
-            if resp.status_code == 503:
-                # Modèle en cours de chargement (cold start) — attendre et réessayer
-                raise RuntimeError(
-                    "Wan 2.1 est en cours de chargement sur Hugging Face, "
-                    "veuillez réessayer dans quelques instants"
-                )
-
-            if resp.status_code in (400, 422):
-                # Paramètres rejetés ou modèle non servi : retente sans params
-                # (1er essai), sinon passe au candidat suivant.
-                logger.warning("[Wan2.1] %s refusé (HTTP %s): %s",
-                               model_id, resp.status_code, resp.text[:150])
-                last_error = RuntimeError(
-                    f"Hugging Face ({resp.status_code}) pour {model_id}: {resp.text[:200]}"
-                )
-                continue
-
-            if resp.status_code == 404:
-                logger.warning("[Wan2.1] %s introuvable (HTTP 404)", model_id)
-                last_error = RuntimeError(
-                    f"Hugging Face (404) pour {model_id}"
-                )
-                break
-
-            if resp.status_code != 200:
-                raise RuntimeError(
-                    f"Erreur Hugging Face ({resp.status_code}): {resp.text[:200]}"
-                )
-
-            content_type = resp.headers.get("content-type", "")
-            if "application/json" in content_type:
-                # Le modèle a retourné un URL (pas du binaire direct)
-                try:
-                    data = resp.json()
-                    video_url = data.get("url") or data.get("output")
-                    if not video_url:
-                        raise RuntimeError("Pas d'URL de vidéo dans la réponse HF")
-                    # Télécharger la vidéo depuis l'URL
-                    video_resp = requests.get(video_url, timeout=120)
-                    if video_resp.status_code != 200:
-                        raise RuntimeError(
-                            f"Impossible de télécharger la vidéo ({video_resp.status_code})"
-                        )
-                    return video_resp.content
-                except (ValueError, KeyError) as e:
-                    raise RuntimeError(f"Réponse HF invalide: {e}")
-
-            # Réponse binaire (vidéo mp4)
-            if not resp.content:
+    # Essai 1 : 10 s (num_frames = 10s * 16fps + 1). Essai 2 : défauts (5 s).
+    attempts = [
+        {"num_frames": _HF_WAN_FPS * _HF_WAN_DURATION + 1},
+        {},
+    ]
+    for params in attempts:
+        try:
+            logger.info("[Wan2.1] Génération via %s/%s%s ...",
+                        _HF_WAN_PROVIDER, _HF_WAN_MODEL,
+                        f" ({params})" if params else " (défauts 5s)")
+            video = client.text_to_video(
+                prompt,
+                model=_HF_WAN_MODEL,
+                **params,
+            )
+            if video is None or len(video) == 0:
                 raise RuntimeError("Hugging Face a retourné une réponse vide")
-            return resp.content
-        # fin des essais (avec/sans parameters) pour ce modèle
+            return video if isinstance(video, bytes) else bytes(video)
+        except RuntimeError:
+            raise
+        except Exception as e:
+            logger.warning("[Wan2.1] Échec (params=%s): %s", params, e)
+            last_error = e
 
-    raise RuntimeError(f"Tous les modèles Wan 2.1 ont échoué: {last_error}")
+    raise RuntimeError(f"Génération Wan 2.1 impossible via {_HF_WAN_PROVIDER}: {last_error}")
 
 
 @app.post("/api/community/videos/publish-external-wan")

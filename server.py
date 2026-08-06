@@ -35,8 +35,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Hea
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 
-# Client officiel Hugging Face (Inference Providers) — utilisé pour Wan 2.1
-from huggingface_hub import InferenceClient
+# (PixVerse API utilisée via `requests` — voir section « PixVerse » plus bas)
 
 from core.config import get_api_key, set_api_key, delete_api_key, get_api_key_source, get_working_dir, DURATION_FRAME_MAP, get_workspaces, add_workspace, remove_workspace, set_active_workspace, get_active_workspace, REGRESSION_WORKING_DIR_ENV, get_watermark_config, set_watermark_config, WATERMARK_PROMO_TEXT_ZH, WATERMARK_PROMO_TEXT_EN, get_selected_models, set_selected_models, get_agnes_domain, set_agnes_domain, AGNES_DOMAIN_MAP, get_agnes_api_root, DEFAULT_NEGATIVE_PROMPT
 from core.path_security import safe_join, safe_workspace_path, UnsafePathError
@@ -3392,81 +3391,118 @@ async def publish_external_video(request: Request, user_id: str = Header(default
 
 
 # ═══════════════════════════════════════════════════
-# Wan 2.1 via Hugging Face (gratuit, illimité, 10s)
+# PixVerse (API officielle, T2V) — V6, 540p, 10s, 9:16
 # ═══════════════════════════════════════════════════
 #
-# NOTE 2026-08 : l'API Inference « legacy » (api-inference.huggingface.co)
-# a été supprimée par Hugging Face lors de la migration « Inference
-# Providers » (nov. 2025). Le domaine ne résout plus dans le DNS →
-# NameResolutionError / MaxRetryError sur le serveur Render. L'accès passe
-# par le client officiel `huggingface_hub.InferenceClient`.
+# NOTE 2026-08 : remplace Wan 2.1 (Hugging Face), retiré à la demande.
 #
-# Choix du provider : le mapping HF liste fal-ai et wavespeed, mais fal-ai
-# a RETIRÉ Wan 2.1 de son catalogue (modèle introuvable chez fal.ai → le SDK
-# reçoit un résultat sans champ `video` → KeyError 'video'). Seul `wavespeed`
-# sert réellement Wan-AI/Wan2.1-T2V-1.3B (t2v-480p-ultra-fast, statut live).
-# → huggingface_hub >= 1.26 (helper `wavespeed` disponible).
+# API : POST https://app-api.pixverse.ai/openapi/v2/video/text/generate
+# Auth : header `API-KEY` (clé platform.pixverse.ai — API payante, crédits)
+#        + header `Ai-trace-id` (UUID unique PAR REQUÊTE : réutiliser un id
+#        identique bloque le lancement d'une nouvelle génération).
+# Flux : submit → video_id → poll GET /openapi/v2/video/result/{video_id}
+#        (status 5 = génération en cours, 1 = terminé avec `url`, sinon échec).
+# Modèle V6 : 1 à 15 s, aspect ratios dont 9:16. Qualités : 360p/540p/720p/1080p.
 
-_HF_WAN_MODEL = "Wan-AI/Wan2.1-T2V-1.3B"  # 1.3B : le plus léger serviable
-_HF_WAN_PROVIDER = "wavespeed"            # seul provider HF servant réellement Wan 2.1 T2V
-_HF_WAN_DURATION = 10  # secondes (fixe pour Wan 2.1)
-_HF_WAN_FPS = 16       # fps de Wan 2.1 (10s = 161 frames)
-
-_hf_client: Optional[InferenceClient] = None
-
-
-def _get_hf_client() -> InferenceClient:
-    """Client HF routé vers wavespeed (singleton)."""
-    global _hf_client
-    if _hf_client is None:
-        hf_token = os.environ.get("HF_TOKEN", "")
-        if not hf_token:
-            raise RuntimeError("HF_TOKEN non configuré — Wan 2.1 indisponible")
-        _hf_client = InferenceClient(token=hf_token, provider=_HF_WAN_PROVIDER)
-    return _hf_client
+_PIXVERSE_API_BASE = "https://app-api.pixverse.ai"
+_PIXVERSE_MODEL = "v6"
+_PIXVERSE_QUALITY = "540p"
+_PIXVERSE_DURATION = 10  # secondes (V6 : 1-15)
+_PIXVERSE_ASPECT_RATIO = "9:16"  # vertical, cohérent avec Vibes (720x1280)
+_PIXVERSE_POLL_INTERVAL = 5  # secondes entre deux statuts
+_PIXVERSE_POLL_MAX = 240  # 240 * 5 s = 20 min max
 
 
-def _hf_wan_generate(prompt: str) -> bytes:
-    """Génère une vidéo Wan 2.1 via le client HF Inference Providers (wavespeed).
+def _pixverse_generate(prompt: str) -> bytes:
+    """Génère une vidéo PixVerse V6 (10 s, 540p, 9:16) et retourne les octets mp4.
 
-    Retourne les octets vidéo (mp4). Lève une exception en cas d'échec.
+    Lève une exception en cas d'échec (clé manquante, erreur API, timeout).
     """
-    client = _get_hf_client()
-    last_error = None
+    api_key = os.environ.get("PIXVERSE_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("PIXVERSE_API_KEY non configuré — PixVerse indisponible")
 
-    # Essai 1 : 10 s (num_frames = 10s * 16fps + 1). Essai 2 : défauts (durée modèle).
-    attempts = [
-        {"num_frames": _HF_WAN_FPS * _HF_WAN_DURATION + 1},
-        {},
-    ]
-    for params in attempts:
+    # 1. Soumission de la tâche (Ai-trace-id unique par requête)
+    submit_url = f"{_PIXVERSE_API_BASE}/openapi/v2/video/text/generate"
+    headers = {
+        "API-KEY": api_key,
+        "Ai-trace-id": str(uuid.uuid4()),
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "prompt": prompt,
+        "model": _PIXVERSE_MODEL,
+        "duration": _PIXVERSE_DURATION,
+        "quality": _PIXVERSE_QUALITY,
+        "aspect_ratio": _PIXVERSE_ASPECT_RATIO,
+    }
+    logger.info(
+        "[PixVerse] Submit %s %ds %s %s (prompt=%r)",
+        _PIXVERSE_MODEL, _PIXVERSE_DURATION, _PIXVERSE_QUALITY,
+        _PIXVERSE_ASPECT_RATIO, prompt[:60],
+    )
+    try:
+        resp = requests.post(submit_url, headers=headers, json=payload, timeout=60)
+    except requests.RequestException as e:
+        raise RuntimeError(f"PixVerse submit network error: {e}") from e
+
+    if resp.status_code != 200:
+        raise RuntimeError(f"PixVerse submit HTTP {resp.status_code}: {resp.text[:300]}")
+    data = resp.json()
+    if data.get("ErrCode") != 0:
+        raise RuntimeError(f"PixVerse submit refusé: {data.get('ErrMsg') or data}")
+
+    video_id = (data.get("Resp") or {}).get("video_id")
+    if video_id is None:
+        raise RuntimeError(f"PixVerse submit sans video_id: {data}")
+
+    # 2. Polling du statut
+    result_url = f"{_PIXVERSE_API_BASE}/openapi/v2/video/result/{video_id}"
+    poll_headers = {"API-KEY": api_key, "Ai-trace-id": str(uuid.uuid4())}
+    started = time.time()
+    deadline = started + _PIXVERSE_POLL_MAX * _PIXVERSE_POLL_INTERVAL
+    while time.time() < deadline:
         try:
-            logger.info("[Wan2.1] Génération via %s/%s%s ...",
-                        _HF_WAN_PROVIDER, _HF_WAN_MODEL,
-                        f" ({params})" if params else " (défauts modèle)")
-            video = client.text_to_video(
-                prompt,
-                model=_HF_WAN_MODEL,
-                **params,
+            r = requests.get(result_url, headers=poll_headers, timeout=30)
+        except requests.RequestException as e:
+            logger.warning("[PixVerse] Poll error: %s", e)
+            time.sleep(_PIXVERSE_POLL_INTERVAL)
+            continue
+        if r.status_code != 200:
+            logger.warning("[PixVerse] Poll HTTP %s: %s", r.status_code, r.text[:200])
+            time.sleep(_PIXVERSE_POLL_INTERVAL)
+            continue
+        d = r.json()
+        resp_data = d.get("Resp") or {}
+        status = resp_data.get("status")
+        if status == 1:  # terminé → téléchargement
+            video_url = resp_data.get("url")
+            if not video_url:
+                raise RuntimeError(f"PixVerse terminé sans url: {resp_data}")
+            logger.info(
+                "[PixVerse] Terminé après %.0fs → %s",
+                time.time() - started, video_url[:90],
             )
-            if video is None or len(video) == 0:
-                raise RuntimeError("Hugging Face a retourné une réponse vide")
-            return video if isinstance(video, bytes) else bytes(video)
-        except RuntimeError:
-            raise
-        except Exception as e:
-            logger.warning("[Wan2.1] Échec (params=%s): %s", params, e)
-            last_error = e
+            dl = requests.get(video_url, timeout=120)
+            dl.raise_for_status()
+            return dl.content
+        if status != 5:  # ni génération ni terminé → échec
+            raise RuntimeError(
+                f"PixVerse status={status}: {resp_data.get('ErrMsg') or resp_data}"
+            )
+        time.sleep(_PIXVERSE_POLL_INTERVAL)
 
-    raise RuntimeError(f"Génération Wan 2.1 impossible via {_HF_WAN_PROVIDER}: {last_error}")
+    raise RuntimeError(
+        f"PixVerse timeout après {int(_PIXVERSE_POLL_MAX * _PIXVERSE_POLL_INTERVAL)}s"
+    )
 
 
-@app.post("/api/community/videos/publish-external-wan")
-async def publish_external_wan(request: Request, user_id: str = Header(default="", alias="X-User-Id")):
-    """Générer une vidéo Wan 2.1 (10s) via Hugging Face et la publier dans Vibes.
+@app.post("/api/community/videos/publish-external-pixverse")
+async def publish_external_pixverse(request: Request, user_id: str = Header(default="", alias="X-User-Id")):
+    """Générer une vidéo PixVerse V6 (10 s, 540p, 9:16) et la publier dans Vibes.
 
-    Multipart : `prompt` (texte, requis). Le modèle génère 10s de vidéo
-    en 720p. La vidéo est publiée directement dans Vibes.
+    Multipart : `prompt` (texte, requis). Nécessite la variable d'environnement
+    PIXVERSE_API_KEY (clé platform.pixverse.ai — API payante par crédits).
     """
     try:
         form = await request.form()
@@ -3481,12 +3517,12 @@ async def publish_external_wan(request: Request, user_id: str = Header(default="
 
     tmp_path = None
     try:
-        # Génération via Hugging Face (lent : 1-5 min)
-        logger.info("[Wan2.1] Génération en cours pour prompt=%r", prompt[:60])
-        video_bytes = await asyncio.to_thread(_hf_wan_generate, prompt)
+        # Génération via PixVerse (asynchrone : submit + poll, 1-5 min)
+        logger.info("[PixVerse] Génération en cours pour prompt=%r", prompt[:60])
+        video_bytes = await asyncio.to_thread(_pixverse_generate, prompt)
 
         if not video_bytes or len(video_bytes) < 1024:
-            raise HTTPException(502, "Vidéo Wan 2.1 vide ou invalide")
+            raise HTTPException(502, "Vidéo PixVerse vide ou invalide")
 
         if len(video_bytes) > _MAX_EXTERNAL_VIDEO_BYTES:
             raise HTTPException(413, "Vidéo trop volumineuse (max 50 Mo)")
@@ -3495,12 +3531,12 @@ async def publish_external_wan(request: Request, user_id: str = Header(default="
             f.write(video_bytes)
             tmp_path = f.name
 
-        task_id = "wan-" + uuid.uuid4().hex[:12]
+        task_id = "pix-" + uuid.uuid4().hex[:12]
         result = get_community_store().publish(
             task_id=task_id,
             author=author,
             prompt=prompt,
-            duration=_HF_WAN_DURATION,
+            duration=_PIXVERSE_DURATION,
             resolution="720x1280",
             video_path=tmp_path,
             user_id=user_id,
@@ -3508,7 +3544,7 @@ async def publish_external_wan(request: Request, user_id: str = Header(default="
     except HTTPException:
         raise
     except Exception as e:
-        raise _community_error(e, "Génération Wan 2.1 impossible")
+        raise _community_error(e, "Génération PixVerse impossible")
     finally:
         if tmp_path:
             try:
@@ -3517,7 +3553,7 @@ async def publish_external_wan(request: Request, user_id: str = Header(default="
                 pass
 
     logger.info(
-        f"[Community] Published Wan 2.1 video {result['video_id']} "
+        f"[Community] Published PixVerse video {result['video_id']} "
         f"(storage={storage_mode()}, prompt={prompt[:60]!r})"
     )
     return {"ok": True, "video_id": result["video_id"], "video_url": result["video_url"]}

@@ -403,6 +403,37 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 24px;
   }
+  /* v9.7: fond de chargement façon TikTok (spinner) tant que la vidéo n'a pas
+     de première frame ; remplacé par la vignette JPEG ou la frame réelle. */
+  .feed-loading {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    background: #000;
+  }
+  .feed-loading::after {
+    content: '';
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.18);
+    border-top-color: #fff;
+    animation: feed-spin 0.8s linear infinite;
+  }
+  @keyframes feed-spin { to { transform: rotate(360deg); } }
+  .feed-end {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 60px;
+    color: rgba(255,255,255,0.45);
+    font-size: 12px;
+    letter-spacing: 0.05em;
+  }
   .feed-comments-panel {
     position: fixed;
     top: 0; right: 0; bottom: 0;
@@ -2103,9 +2134,17 @@ async function publishVideo() {
 // Vibes — Feed plein écran (style Reels/TikTok)
 // ═══════════════════════════════════════════════════
 let feedObserver = null;
+let feedInfinityObserver = null;
 let feedVideos = [];         // dernière liste de vidéos chargée
 let feedCommentsOpen = null; // video_id du panneau commentaires ouvert
 let feedUserInteracted = false; // le navigateur autorise le son (interaction requise)
+// v9.7: pagination du feed — on charge 10 vidéos puis on en charge plus en
+// scrollant (fini les 50 connexions vidéo d'un coup qui figeaient le chargement)
+const FEED_PER_PAGE = 10;
+let feedPage = 1;
+let feedTotal = 0;
+let feedLoadingMore = false;
+let feedCount = 0; // slides construits au total (index global)
 
 // v9.4: synchronise l'icône du bouton son avec l'état réel de la vidéo
 function updateFeedMuteIcon(video) {
@@ -2134,30 +2173,23 @@ function feedActivateVideo(video) {
   if (video.preload !== 'auto') video.preload = 'auto';
 }
 
-// v8.5: préchargement intelligent des vidéos adjacentes
-const preloadedUrls = new Set();
-function preloadVideo(url) {
-  if (!url || preloadedUrls.has(url)) return;
-  preloadedUrls.add(url);
-  const link = document.createElement('link');
-  link.rel = 'prefetch';
-  link.href = url;
-  link.as = 'video';
-  document.head.appendChild(link);
-  // Aussi créer un élément video caché pour forcer le préchargement navigateur
-  const v = document.createElement('video');
-  v.src = url;
-  v.preload = 'auto';
-  v.style.display = 'none';
-  v.muted = true;
-  document.body.appendChild(v);
-  // Nettoyer après un délai
-  setTimeout(() => { v.remove(); }, 30000);
-}
-
-function preloadAdjacentVideos(currentIndex, total) {
-  if (currentIndex > 0) preloadVideo(feedVideos[currentIndex - 1]?.video_url);
-  if (currentIndex < total - 1) preloadVideo(feedVideos[currentIndex + 1]?.video_url);
+// v9.7: préchargement ciblé façon TikTok. Seule la vidéo active joue ; celle
+// d'après passe en preload=auto pour buffer dès que la courante démarre, la
+// précédente garde metadata, et tout le reste reste en none (0 requête réseau).
+// Plus aucun <video> caché qui télécharge les voisines en entier.
+function setAdjacentPreload(activeIndex) {
+  document.querySelectorAll('.feed-slide').forEach(s => {
+    const idx = parseInt(s.dataset.index || '-1', 10);
+    const v = s.querySelector('.feed-video');
+    if (!v || idx < 0) return;
+    if (idx === activeIndex || idx === activeIndex + 1) {
+      if (v.preload !== 'auto') v.preload = 'auto';
+    } else if (idx === activeIndex - 1) {
+      if (v.preload !== 'metadata') v.preload = 'metadata';
+    } else if (v.preload !== 'none') {
+      v.preload = 'none';
+    }
+  });
 }
 
 // Dès la première interaction (clic/tap n'importe où), activer le son de TOUTES
@@ -2193,19 +2225,26 @@ function closeGalleryFeed() {
   closeFeedProfile();
   closeFeedVideoViewer();
   if (feedObserver) { feedObserver.disconnect(); feedObserver = null; }
+  if (feedInfinityObserver) { feedInfinityObserver.disconnect(); feedInfinityObserver = null; }
   document.querySelectorAll('.feed-video').forEach(v => { v.pause(); v.removeAttribute('src'); });
   const panel = document.getElementById('panel-gallery');
   panel.classList.add('hidden');
   panel.style.display = 'none';
   document.body.style.overflow = '';
   closeFeedComments();
+  // v9.7: reset de la pagination
+  feedPage = 1;
+  feedTotal = 0;
+  feedLoadingMore = false;
+  feedCount = 0;
 }
 
 async function loadGallery() {
   const container = document.getElementById('feed-container');
   container.innerHTML = '<div class="flex items-center justify-center h-full"><p class="text-gray-400 text-sm">Chargement...</p></div>';
   try {
-    const r = await fetchWithAuth(API_BASE + '/api/community/videos?per_page=50');
+    // v9.7: chargement paginé (10 vidéos, pas 50) → le premier rendu arrive vite
+    const r = await fetchWithAuth(API_BASE + '/api/community/videos?per_page=' + FEED_PER_PAGE);
     const d = await r.json();
     if (!d.videos || d.videos.length === 0) {
       container.innerHTML = '<div class="flex flex-col items-center justify-center h-full text-center px-6"><p class="text-gray-400 text-sm mb-2">Aucune vidéo publiée pour le moment.</p><p class="text-gray-600 text-xs">Soyez le premier à partager votre création !</p><button onclick="closeGalleryFeed()" class="mt-6 px-4 py-2 rounded-lg text-xs font-medium bg-white/10 text-gray-200 hover:bg-white/20 min-h-[44px]">✕ Fermer</button></div>';
@@ -2213,22 +2252,82 @@ async function loadGallery() {
     }
     container.innerHTML = '';
     feedVideos = d.videos;
-    const total = d.videos.length;
-    d.videos.forEach((v, i) => container.appendChild(buildFeedSlide(v, i, total)));
+    feedTotal = d.total || d.videos.length;
+    feedPage = 1;
+    feedCount = 0;
+    d.videos.forEach((v) => container.appendChild(buildFeedSlide(v, feedCount++)));
+    // v9.7: sentinelle d'infinite scroll DANS le conteneur de scroll
+    const endMarker = document.createElement('div');
+    endMarker.id = 'feed-end-marker';
+    endMarker.style.height = '8px';
+    endMarker.style.background = 'transparent';
+    container.appendChild(endMarker);
+    // v9.7: la 1ère vidéo se charge tout de suite, la 2ème buffer derrière
+    setAdjacentPreload(0);
     setupFeedObserver();
     // v9.4: activer immédiatement la 1ère vidéo — l'observer peut ne pas se
     // déclencher au tout premier rendu, ce qui laissait le feed muet ET figé
     // sur la vignette (bug « plus de son + vidéos qui ne veulent pas marcher »).
     const firstVideo = container.querySelector('.feed-video');
     if (firstVideo) feedActivateVideo(firstVideo);
-    // v8.5: précharger la 2ème vidéo dès le début
-    if (total > 1) preloadVideo(d.videos[1].video_url);
+    // v9.7: infinite scroll — observer le dernier slide pour charger la suite
+    setupFeedInfinity();
   } catch(e) {
     container.innerHTML = '<div class="flex flex-col items-center justify-center h-full"><p class="text-gray-400 text-sm">Erreur de chargement : ' + escapeHtml(e.message) + '</p></div>';
   }
 }
 
-function buildFeedSlide(v, index, total) {
+// v9.7: infinite scroll façon TikTok — quand le dernier slide approche du
+// bas, on charge la page suivante (les anciens slides restent en place).
+function setupFeedInfinity() {
+  if (feedInfinityObserver) feedInfinityObserver.disconnect();
+  const sentinel = document.getElementById('feed-end-marker');
+  if (!sentinel) return;
+  feedInfinityObserver = new IntersectionObserver((entries) => {
+    if (entries.some(e => e.isIntersecting)) loadMoreFeed();
+  }, { root: document.getElementById('feed-container'), rootMargin: '600px 0px', threshold: 0 });
+  feedInfinityObserver.observe(sentinel);
+}
+
+async function loadMoreFeed() {
+  if (feedLoadingMore) return;
+  if (feedPage * FEED_PER_PAGE >= feedTotal) {
+    // fin du flux : marqueur discret
+    const end = document.getElementById('feed-end-marker');
+    if (end && !end.classList.contains('feed-end')) end.className = 'feed-end';
+    return;
+  }
+  feedLoadingMore = true;
+  try {
+    const next = feedPage + 1;
+    const r = await fetchWithAuth(API_BASE + '/api/community/videos?per_page=' + FEED_PER_PAGE + '&page=' + next);
+    const d = await r.json();
+    const container = document.getElementById('feed-container');
+    const end = document.getElementById('feed-end-marker');
+    const items = d.videos || [];
+    items.forEach((v) => {
+      const slide = buildFeedSlide(v, feedCount++);
+      if (end && end.parentNode === container) container.insertBefore(slide, end);
+      else container.appendChild(slide);
+      feedVideos.push(v);
+    });
+    feedPage = next;
+    feedTotal = d.total || feedTotal;
+    // re-câbler l'observer des slides + l'infinity sur le nouveau dernier slide
+    if (items.length > 0) {
+      if (feedObserver) {
+        container.querySelectorAll('.feed-slide').forEach(s => feedObserver.observe(s));
+      }
+      setupFeedInfinity();
+    }
+  } catch(e) {
+    console.error('loadMoreFeed error', e);
+  } finally {
+    feedLoadingMore = false;
+  }
+}
+
+function buildFeedSlide(v, index) {
   const slide = document.createElement('div');
   slide.className = 'feed-slide';
   slide.dataset.videoId = v.id;
@@ -2241,12 +2340,34 @@ function buildFeedSlide(v, index, total) {
   video.muted = true;
   video.loop = true;
   video.playsInline = true;
-  // v8.5: preload metadata pour la 1ère, auto pour la vidéo active
-  video.preload = index === 0 ? 'auto' : 'metadata';
+  // v9.7: lazy — seules les 2 premières se chargent, le reste en none (0 requête).
+  // La vidéo suivante passe en auto quand la courante démarre (setAdjacentPreload).
+  video.preload = index < 2 ? 'auto' : 'none';
+  // v9.7: vraie vignette JPEG si disponible → affichage immédiat façon TikTok
+  const thumb = (v.thumbnail && v.thumbnail !== v.video_url) ? v.thumbnail : '';
+  if (thumb) video.poster = thumb;
+  // v9.7: spinner tant que la 1ère frame n'est pas prête (si pas de vignette)
+  let loadingEl = null;
+  if (!thumb) {
+    loadingEl = document.createElement('div');
+    loadingEl.className = 'feed-loading';
+    slide.appendChild(loadingEl);
+  }
   // v8.5: hint décodage hardware
   video.setAttribute('playsinline', '');
   video.setAttribute('webkit-playsinline', '');
   slide.appendChild(video);
+
+  // v9.7: retirer le spinner dès qu'une frame est dispo (ou que la lecture part)
+  function dropLoading() {
+    if (loadingEl && loadingEl.parentNode) loadingEl.remove();
+    loadingEl = null;
+  }
+  video.addEventListener('loadeddata', dropLoading);
+  video.addEventListener('playing', dropLoading);
+  // garde-fou : si la vidéo est en erreur, le gestionnaire d'erreur affiche
+  // son message par-dessus ; on retire le spinner pour ne pas le cacher
+  video.addEventListener('error', dropLoading);
 
   // Dégradé bas
   const grad = document.createElement('div');
@@ -2343,9 +2464,9 @@ function buildFeedSlide(v, index, total) {
   // Première frame comme vignette
   video.addEventListener('loadedmetadata', () => { if (video.paused) video.currentTime = 0.5; });
 
-  // v8.5: précharger la vidéo suivante/précédente quand celle-ci devient active
+  // v9.7: quand la vidéo devient active, buffer la suivante (et rien d'autre)
   video.addEventListener('play', () => {
-    preloadAdjacentVideos(index, total);
+    setAdjacentPreload(index);
   });
 
   // v9.4: vidéo cassée (404 Supabase / fichier corrompu / CORS) → retry via le
@@ -2391,13 +2512,15 @@ function setupFeedObserver() {
   if (feedObserver) feedObserver.disconnect();
   feedObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
-      const video = entry.target.querySelector('.feed-video');
+      const slide = entry.target;
+      const video = slide.querySelector('.feed-video');
       if (!video) return;
-      // v9.4: seuil assoupli 0.4 (au lieu de 0.6) — avec 0.6, un slide jamais
-      // assez visible (viewport partagé, barre d'infos…) ne démarrait JAMAIS :
-      // feed figé sur la vignette + muet.
+      const index = parseInt(slide.dataset.index || '-1', 10);
+      // v9.7: rootMargin 900px → la vidéo suivante passe en auto AVANT d'arriver
+      // à l'écran (préchargement anticipé), la lecture démarre dès le ratio 0.4
       if (entry.isIntersecting && entry.intersectionRatio > 0.4) {
         feedActivateVideo(video);
+        if (index >= 0) setAdjacentPreload(index);
       } else {
         video.pause();
         // v9.4: ne plus re-muter en sortie — l'état du son appartient à
@@ -2406,7 +2529,7 @@ function setupFeedObserver() {
     });
   }, { 
     root: document.getElementById('feed-container'),
-    rootMargin: '0px',
+    rootMargin: '900px 0px 900px 0px',
     threshold: [0.4, 0.6, 0.75]
   });
   document.querySelectorAll('.feed-slide').forEach(s => feedObserver.observe(s));

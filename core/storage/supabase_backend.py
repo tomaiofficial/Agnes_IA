@@ -20,10 +20,12 @@ import json
 import logging
 import os
 import re
+import subprocess
+import tempfile
 import threading
 import time
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from .base import CommunityStore, TaskStore
 
@@ -35,6 +37,20 @@ SUPABASE_DATABASE_URL = os.environ.get("SUPABASE_DATABASE_URL", "") or ""
 SUPABASE_STORAGE_BUCKET = os.environ.get("SUPABASE_STORAGE_BUCKET", "") or "agnes-community"
 
 DEFAULT_VIDEO_MIME = "video/mp4"
+
+# Vignettes : convention de nommage `thumbnails/{video_id}.jpg` dans le bucket
+# (pas de colonne SQL : les vignettes sont dérivées du video_id et détectées
+# par un list du dossier — fonctionne sans migration de schéma).
+_THUMB_PREFIX = "thumbnails/"
+_THUMB_MIME = "image/jpeg"
+
+# ffmpeg statique (imageio-ffmpeg) pour extraire la 1ère frame des vidéos.
+try:
+    import imageio_ffmpeg
+
+    _FFMPEG_EXE = imageio_ffmpeg.get_ffmpeg_exe()
+except Exception:  # pragma: no cover — environnement sans imageio-ffmpeg
+    _FFMPEG_EXE = ""
 
 SCHEMA_DDL = """
 CREATE TABLE IF NOT EXISTS community_videos (
@@ -303,6 +319,51 @@ class SupabaseCommunityStore(CommunityStore):
         except Exception:
             return f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/public/{SUPABASE_STORAGE_BUCKET}/{storage_path}"
 
+    def _extract_frame(self, source: str, out_path: str, position: float = 0.5,
+                       timeout: int = 40) -> bool:
+        """Extrait une frame (JPEG) d'une vidéo locale ou d'une URL publique.
+
+        `source` peut être un chemin local ou une URL http(s) : ffmpeg sait
+        lire les deux (seek rapide pour les URLs, quelques centaines de Ko
+        téléchargés seulement). Retourne False en cas d'échec (jamais d'exception).
+        """
+        if not _FFMPEG_EXE or not source:
+            return False
+        try:
+            cmd = [
+                _FFMPEG_EXE, "-y", "-loglevel", "error",
+                "-ss", str(position),
+                "-i", source,
+                "-frames:v", "1", "-q:v", "4",
+                out_path,
+            ]
+            proc = subprocess.run(
+                cmd, capture_output=True, timeout=timeout,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            )
+            if proc.returncode != 0:
+                logger.warning(f"[CommunityStore] Extraction frame échouée: {proc.stderr[:200]}")
+                return False
+            return os.path.exists(out_path) and os.path.getsize(out_path) > 0
+        except Exception as e:
+            logger.warning(f"[CommunityStore] Extraction frame impossible: {e}")
+            return False
+
+    def _upload_thumbnail(self, video_id: str, jpg_path: str) -> bool:
+        """Publie la vignette `thumbnails/{video_id}.jpg` dans le bucket."""
+        try:
+            with open(jpg_path, "rb") as f:
+                data = f.read()
+            self._storage().upload(f"{_THUMB_PREFIX}{video_id}.jpg", data,
+                                   {"content-type": _THUMB_MIME})
+            return True
+        except Exception as e:
+            logger.warning(f"[CommunityStore] Upload vignette {video_id} impossible: {e}")
+            return False
+
+    def _thumbnail_url(self, video_id: str) -> str:
+        return self._public_url(f"{_THUMB_PREFIX}{video_id}.jpg")
+
     def publish(self, task_id, author, prompt, duration, resolution, video_path,
                 user_id: str = "") -> dict:
         import uuid
@@ -330,6 +391,17 @@ class SupabaseCommunityStore(CommunityStore):
             f"[CommunityStore] Published {video_id} -> supabase storage "
             f"({len(data)} octets, bucket={SUPABASE_STORAGE_BUCKET})"
         )
+        # Vignette : extraire la 1ère frame et la publier (non bloquant — un
+        # échec ne retire pas la vidéo du flux, le front affiche alors un fond).
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                tmp_path = tmp.name
+            if self._extract_frame(video_path, tmp_path):
+                self._upload_thumbnail(video_id, tmp_path)
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except Exception as e:
+            logger.warning(f"[CommunityStore] Vignette {video_id} ignorée: {e}")
         return {"video_id": video_id, "video_url": self._public_url(storage_path)}
 
     def save_task_video_backup(self, task_id: str, video_path: str) -> Optional[str]:
@@ -358,11 +430,13 @@ class SupabaseCommunityStore(CommunityStore):
 
     def _row_to_video(self, row: dict, like_counts: dict, comment_counts: dict,
                       avatars: Optional[dict] = None,
-                      verified: Optional[dict] = None) -> dict:
+                      verified: Optional[dict] = None,
+                      thumbnail_ids: Optional[Set[str]] = None) -> dict:
         vid = row["id"]
         prompt = row.get("prompt", "") or ""
         avatars = avatars or {}
         verified = verified or {}
+        has_thumb = bool(thumbnail_ids) and vid in thumbnail_ids
         return {
             "id": vid,
             "title": prompt[:80] if prompt else "Untitled",
@@ -377,8 +451,24 @@ class SupabaseCommunityStore(CommunityStore):
             "likes": like_counts.get(vid, 0),
             "comments_count": comment_counts.get(vid, 0),
             "video_url": self._public_url(row.get("storage_path") or f"videos/{vid}.mp4"),
-            "thumbnail": self._public_url(row.get("storage_path") or f"videos/{vid}.mp4"),
+            # Vraie vignette JPEG si elle existe, sinon "" → le front affiche un
+            # fond de chargement au lieu d'un écran noir (façon TikTok).
+            "thumbnail": self._thumbnail_url(vid) if has_thumb else "",
         }
+
+    def _list_thumbnail_ids(self) -> Set[str]:
+        """IDs des vidéos ayant une vignette, en une seule requête storage."""
+        try:
+            res = self._storage().list(_THUMB_PREFIX.rstrip("/"), {"limit": 2000})
+            out = set()
+            for item in res or []:
+                name = (item.get("name") or "").strip()
+                if name.endswith(".jpg"):
+                    out.add(name[:-4])
+            return out
+        except Exception as e:
+            logger.warning(f"[CommunityStore] Liste des vignettes impossible: {e}")
+            return set()
 
     def _avatars_by_user(self, user_ids: list) -> dict:
         """Avatar (URL publique) par user_id, en une seule requête groupée."""
@@ -430,8 +520,9 @@ class SupabaseCommunityStore(CommunityStore):
             avatars = self._avatars_by_user([r.get("user_id", "") for r in rows])
         if verified is None:
             verified = self._verified_by_user([r.get("user_id", "") for r in rows])
+        thumbnail_ids = self._list_thumbnail_ids()
         return [
-            self._row_to_video(r, like_counts, comment_counts, avatars, verified)
+            self._row_to_video(r, like_counts, comment_counts, avatars, verified, thumbnail_ids)
             for r in rows
         ]
 
@@ -795,6 +886,65 @@ class SupabaseCommunityStore(CommunityStore):
         client.table("community_comments").delete().eq("video_id", video_id).execute()
         client.table("community_likes").delete().eq("video_id", video_id).execute()
         client.table("community_videos").delete().eq("id", video_id).execute()
+
+    def backfill_thumbnails(self, limit: int = 60, delay: float = 1.5) -> dict:
+        """Génère les vignettes manquantes des vidéos déjà publiées.
+
+        Utilisé au démarrage du serveur (tâche de fond) : liste les vidéos
+        récentes, extrait la 1ère frame depuis l'URL publique (ffmpeg seek
+        rapide, pas de téléchargement complet) et l'upload dans le bucket.
+        Non bloquant et borné — s'arrête dès que `limit` vignettes ont été
+        créées ou que la liste est épuisée.
+        """
+        existing = self._list_thumbnail_ids()
+        done = 0
+        failed = 0
+        skipped = 0
+        try:
+            page = 1
+            client = _get_client()
+            while done + failed < limit:
+                res = (
+                    client.table("community_videos")
+                    .select("id", "storage_path")
+                    .order("published_at", desc=True)
+                    .limit(50)
+                    .offset((page - 1) * 50)
+                    .execute()
+                )
+                rows = res.data or []
+                if not rows:
+                    break
+                if page > 10:  # garde : ne pas scanner plus de 500 vidéos à chaque boot
+                    break
+                for row in rows:
+                    if done + failed >= limit:
+                        break
+                    vid = row.get("id") or ""
+                    if not vid or vid in existing:
+                        skipped += 1
+                        continue
+                    url = self._public_url(row.get("storage_path") or f"videos/{vid}.mp4")
+                    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                        tmp_path = tmp.name
+                    try:
+                        if self._extract_frame(url, tmp_path) and self._upload_thumbnail(vid, tmp_path):
+                            done += 1
+                            logger.info(f"[CommunityStore] Backfill vignette {vid} ({done}/{limit})")
+                        else:
+                            failed += 1
+                    except Exception as e:
+                        failed += 1
+                        logger.warning(f"[CommunityStore] Backfill {vid} échec: {e}")
+                    finally:
+                        if os.path.exists(tmp_path):
+                            os.remove(tmp_path)
+                    if done + failed < limit:
+                        time.sleep(delay)
+                page += 1
+        except Exception as e:
+            logger.warning(f"[CommunityStore] Backfill vignettes interrompu: {e}")
+        return {"done": done, "failed": failed, "skipped": skipped}
 
 
 class _CoalescingWriter:

@@ -725,6 +725,27 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"[Startup] Agents scheduler init failed ({e}); continuing")
 
+    # Vignettes manquantes des vidéos déjà publiées (tâche de fond non bloquante)
+    try:
+        import asyncio as _asyncio
+        from core.storage.supabase_backend import is_configured as _supa_configured
+
+        if _supa_configured():
+
+            def _backfill_thumbnails():
+                # Bloquant (ffmpeg + sleep) → exécution dans un thread de pool
+                try:
+                    result = get_community_store().backfill_thumbnails(limit=60, delay=1.5)
+                    logger.info(f"[Startup] Backfill vignettes terminé: {result}")
+                except Exception as e:
+                    logger.warning(f"[Startup] Backfill vignettes échoué: {e}")
+
+            loop = _asyncio.get_event_loop()
+            loop.run_in_executor(None, _backfill_thumbnails)
+            logger.info("[Startup] Backfill des vignettes lancé en arrière-plan")
+    except Exception as e:
+        logger.warning(f"[Startup] Backfill vignettes init failed ({e})")
+
     yield
 
     # Cleanup à l'arrêt

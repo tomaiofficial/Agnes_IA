@@ -664,18 +664,6 @@
             </select>
           </div>
         </div>
-        <!-- v9.1: Moteur NovAI (cogvideox-flash, $0/génération) — visible si
-             NOVAI_API_KEY configurée côté serveur (init() démasque ce bloc) -->
-        <div id="s_novai_wrap" class="hidden border-t border-white/5 pt-3 sm:pt-3.5 mt-3 sm:mt-4">
-          <div class="flex items-center gap-2 min-h-[44px]">
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input id="s_novai_mode" type="checkbox" class="sr-only peer" onchange="onNovaiToggle()">
-              <div class="w-10 sm:w-9 h-6 sm:h-5 bg-gray-700 rounded-full peer peer-checked:bg-emerald-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-1 after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
-            </label>
-            <span class="text-[11px] sm:text-xs text-gray-300">⚡ Moteur NovAI — <b>gratuit & illimité</b> (cogvideox-flash, $0/génération)</span>
-          </div>
-          <p class="text-[10px] sm:text-[11px] text-gray-500 mt-1 ml-12 leading-relaxed">Ne consomme <b class="text-gray-400">aucun crédit Agnes</b>. Clips de 5 ou 10 s, texte → vidéo uniquement. Qualité « flash tier » + watermark « AI生成 » inclus — plan gratuit de la passerelle NovAI (aiapi-pro.com).</p>
-        </div>
         <!-- Reference Image (i2v) -->
         <div id="s_ref_section" class="hidden mb-3 sm:mb-4">
           <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Image de référence</label>
@@ -1257,10 +1245,6 @@ async function submitSimple() {
 }
 
 async function submitSimpleAgnes(prompt) {
-  // v9.1: moteur NovAI activé → route gratuite dédiée (aucun crédit Agnes)
-  const novai = document.getElementById('s_novai_mode');
-  if (novai && novai.checked) return submitSimpleNovai(prompt);
-
   const btn = document.getElementById('btn-simple');
   btn.disabled = true;
 
@@ -1326,43 +1310,7 @@ async function submitSimpleTo(form, btn, endpoint) {
 // ═══════════════════════════════════════════════════
 // v8.20: sélecteur de moteur externe retiré — formulaire simple = Agnes uniquement
 // (selectEngine conservé pour le fallback du flux Puter legacy)
-// v9.1: moteur NovAI (cogvideox-flash, $0/génération) réintroduit en toggle
-//       dédié → route /api/tasks/simple-novai, aucun crédit Agnes consommé.
 // ═══════════════════════════════════════════════════
-
-// v9.1: Moteur NovAI — soumet à la route gratuite dédiée.
-async function submitSimpleNovai(prompt) {
-  const btn = document.getElementById('btn-simple');
-  btn.disabled = true;
-
-  const form = new FormData();
-  form.append('prompt', prompt);
-  form.append('duration', document.getElementById('s_duration').value);
-  const res = parseResolution(document.getElementById('s_resolution').value);
-  form.append('video_width', res.width);
-  form.append('video_height', res.height);
-  const seed = document.getElementById('s_seed').value;
-  if (seed) form.append('seed', seed);
-
-  return submitSimpleTo(form, btn, '/api/tasks/simple-novai');
-}
-
-// v9.1: quand le moteur NovAI est coché — T2V uniquement, durées 5/10 s
-// (cogvideox-flash ne génère que des clips courts).
-function onNovaiToggle() {
-  const on = document.getElementById('s_novai_mode').checked;
-  const mode = document.getElementById('s_mode');
-  const dur = document.getElementById('s_duration');
-  if (on) {
-    mode.value = 't2v';
-    mode.disabled = true;
-    [...dur.options].forEach(o => { o.disabled = !(o.value === '5' || o.value === '10'); });
-    if (!['5', '10'].includes(dur.value)) dur.value = '5';
-  } else {
-    mode.disabled = false;
-    [...dur.options].forEach(o => { o.disabled = false; });
-  }
-}
 
 function selectEngine(name) {
   currentEngine = name;
@@ -2751,8 +2699,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const r = await fetchWithAuth(API_BASE + '/api/config');
     const d = await r.json();
     if (d.api_key) setApiKeyConfiguredUI(d.source, d.can_clear);
-    // v9.1: moteur NovAI — visible seulement si NOVAI_API_KEY configurée
-    if (d.novai_enabled) document.getElementById('s_novai_wrap').classList.remove('hidden');
   } catch(e) {}
   autoReconnectRunningTask();
 })();

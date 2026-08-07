@@ -582,28 +582,3 @@ def get_agnes_api_root() -> str:
     """返回基于当前域名配置的 API Root URL（不含 /v1 后缀）。"""
     domain = get_agnes_domain()
     return AGNES_DOMAIN_MAP.get(domain, AGNES_DOMAIN_MAP[_DEFAULT_DOMAIN])
-
-
-# ═══════════════════════════════════════════════════
-# Moteur NovAI (cogvideox-flash, $0/génération) — v9.1
-# ═══════════════════════════════════════════════════
-
-NOVAI_API_KEY_ENV = "NOVAI_API_KEY"
-NOVAI_BASE_URL = "https://aiapi-pro.com/v1"
-
-
-def get_novai_api_key() -> str:
-    """Retourne la clé API NovAI (variable d'environnement NOVAI_API_KEY).
-
-    NovAI (https://aiapi-pro.com) est une passerelle OpenAI-compatible qui
-    route les modèles flash gratuits de Zhipu : cogvideox-flash (vidéo) et
-    cogview-3-flash (image) sont facturés $0 par génération. Inscription par
-    email, sans carte bancaire. Contreparties : qualité « flash tier »
-    (prototype) + watermark chinois « AI生成 » obligatoire.
-    """
-    return os.environ.get(NOVAI_API_KEY_ENV, "").strip()
-
-
-def is_novai_enabled() -> bool:
-    """Le moteur NovAI est disponible si une clé API est configurée."""
-    return bool(get_novai_api_key())

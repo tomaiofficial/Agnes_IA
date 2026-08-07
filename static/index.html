@@ -360,6 +360,42 @@
     font-size: 24px;
     filter: drop-shadow(0 1px 3px rgba(0,0,0,0.7));
   }
+  /* v9.4: bouton son du feed — l'utilisateur peut TOUJOURS récupérer le son,
+     même si l'autoplay/observer n'a pas dé-muté la vidéo */
+  .feed-mute-btn {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 30;
+    width: 44px;
+    height: 44px;
+    border-radius: 9999px;
+    background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(255,255,255,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+  }
+  /* v9.4: message clair quand une vidéo est vraiment indisponible (404/corrompue) */
+  .feed-video-error {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: #d1d5db;
+    font-size: 13px;
+    text-align: center;
+    padding: 16px;
+    background: rgba(0,0,0,0.6);
+    cursor: pointer;
+  }
   .feed-play-badge {
     width: 64px; height: 64px;
     border-radius: 9999px;
@@ -2071,6 +2107,13 @@ let feedVideos = [];         // dernière liste de vidéos chargée
 let feedCommentsOpen = null; // video_id du panneau commentaires ouvert
 let feedUserInteracted = false; // le navigateur autorise le son (interaction requise)
 
+// v9.4: synchronise l'icône du bouton son avec l'état réel de la vidéo
+function updateFeedMuteIcon(video) {
+  const slide = video && video.closest ? video.closest('.feed-slide') : null;
+  const btn = slide && slide.querySelector('.feed-mute-btn');
+  if (btn) btn.innerHTML = video.muted ? '🔇' : '🔊';
+}
+
 // Active la lecture d'une vidéo avec le son. Le navigateur bloque l'autoplay
 // audio sans interaction récente : on tente le son, et si refusé on joue quand
 // même en muet (le son reprend au prochain clic/tap).
@@ -2086,6 +2129,7 @@ function feedActivateVideo(video) {
     video.muted = true;
     video.play().catch(() => {});
   }
+  updateFeedMuteIcon(video);
   // v8.5: passer en preload=auto pour la vidéo active
   if (video.preload !== 'auto') video.preload = 'auto';
 }
@@ -2116,13 +2160,23 @@ function preloadAdjacentVideos(currentIndex, total) {
   if (currentIndex < total - 1) preloadVideo(feedVideos[currentIndex + 1]?.video_url);
 }
 
-// Dès la première interaction (clic/tap n'importe où), activer le son de la
-// vidéo en cours (elle a pu démarrer en repli muet avant l'autorisation).
+// Dès la première interaction (clic/tap n'importe où), activer le son de TOUTES
+// les vidéos du feed et relancer la plus visible (v9.4 : l'ancienne version ne
+// cherchait que la vidéo déjà en lecture — si l'observer n'avait rien activé,
+// le son ne revenait jamais).
 document.addEventListener('pointerdown', () => {
   if (!feedUserInteracted) {
     feedUserInteracted = true;
-    const active = Array.from(document.querySelectorAll('.feed-video')).find(v => !v.paused && !v.ended);
-    if (active && active.muted) { active.muted = false; active.play().catch(() => {}); }
+    document.querySelectorAll('.feed-video').forEach(v => { v.muted = false; });
+    document.querySelectorAll('.feed-mute-btn').forEach(b => { b.innerHTML = '🔊'; });
+    let best = null, bestRatio = 0;
+    document.querySelectorAll('.feed-slide').forEach(s => {
+      const rect = s.getBoundingClientRect();
+      const visible = Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0);
+      const ratio = rect.height > 0 ? visible / rect.height : 0;
+      if (ratio > bestRatio) { bestRatio = ratio; best = s.querySelector('.feed-video'); }
+    });
+    if (best) feedActivateVideo(best);
   }
 }, { passive: true });
 
@@ -2162,6 +2216,11 @@ async function loadGallery() {
     const total = d.videos.length;
     d.videos.forEach((v, i) => container.appendChild(buildFeedSlide(v, i, total)));
     setupFeedObserver();
+    // v9.4: activer immédiatement la 1ère vidéo — l'observer peut ne pas se
+    // déclencher au tout premier rendu, ce qui laissait le feed muet ET figé
+    // sur la vignette (bug « plus de son + vidéos qui ne veulent pas marcher »).
+    const firstVideo = container.querySelector('.feed-video');
+    if (firstVideo) feedActivateVideo(firstVideo);
     // v8.5: précharger la 2ème vidéo dès le début
     if (total > 1) preloadVideo(d.videos[1].video_url);
   } catch(e) {
@@ -2259,19 +2318,70 @@ function buildFeedSlide(v, index, total) {
   playBadge.innerHTML = '<div class="feed-play-badge hidden">▶</div>';
   slide.appendChild(playBadge);
 
-  // Tap = lecture / pause ; actions + auteur = stopPropagation
+  // v9.4: bouton son — l'utilisateur peut TOUJOURS récupérer le son, même si
+  // l'autoplay a démarré en muet ou si l'observer n'a rien dé-muté.
+  const muteBtn = document.createElement('button');
+  muteBtn.className = 'feed-mute-btn';
+  muteBtn.innerHTML = '🔇';
+  muteBtn.title = 'Activer le son';
+  muteBtn.onclick = (e) => {
+    e.stopPropagation();
+    feedUserInteracted = true;
+    video.muted = !video.muted;
+    muteBtn.innerHTML = video.muted ? '🔇' : '🔊';
+    if (!video.muted && video.paused) video.play().catch(() => {});
+  };
+  slide.appendChild(muteBtn);
+
+  // Tap = lecture / pause ; actions + auteur + bouton son + erreur = stopPropagation
   slide.addEventListener('click', (e) => {
-    if (e.target.closest('.feed-actions') || e.target.closest('.feed-author-btn')) return;
+    if (e.target.closest('.feed-actions') || e.target.closest('.feed-author-btn') || e.target.closest('.feed-mute-btn') || e.target.closest('.feed-video-error')) return;
     if (video.paused) { feedActivateVideo(video); } else { video.pause(); }
   });
-  video.addEventListener('play', () => { const b = playBadge.querySelector('.feed-play-badge'); if (b) b.classList.add('hidden'); });
-  video.addEventListener('pause', () => { const b = playBadge.querySelector('.feed-play-badge'); if (b) b.classList.remove('hidden'); });
+  video.addEventListener('play', () => { const b = playBadge.querySelector('.feed-play-badge'); if (b) b.classList.add('hidden'); updateFeedMuteIcon(video); });
+  video.addEventListener('pause', () => { const b = playBadge.querySelector('.feed-play-badge'); if (b) b.classList.remove('hidden'); updateFeedMuteIcon(video); });
   // Première frame comme vignette
   video.addEventListener('loadedmetadata', () => { if (video.paused) video.currentTime = 0.5; });
 
   // v8.5: précharger la vidéo suivante/précédente quand celle-ci devient active
   video.addEventListener('play', () => {
     preloadAdjacentVideos(index, total);
+  });
+
+  // v9.4: vidéo cassée (404 Supabase / fichier corrompu / CORS) → retry via le
+  // proxy Render une seule fois, puis message clair avec bouton réessayer
+  // (fini l'écran noir silencieux sur les vidéos « qui ne veulent pas marcher »).
+  let videoRetried = false;
+  function showVideoUnavailable() {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    if (!slide.querySelector('.feed-video-error')) {
+      const err = document.createElement('div');
+      err.className = 'feed-video-error';
+      err.innerHTML = '⚠️ Vidéo indisponible<span class="text-[10px] opacity-80">Toucher pour réessayer</span>';
+      slide.appendChild(err);
+      err.onclick = (e) => {
+        e.stopPropagation();
+        err.remove();
+        videoRetried = false;
+        video.muted = true;
+        updateFeedMuteIcon(video);
+        video.src = v.video_url;
+        video.load();
+        feedActivateVideo(video);
+      };
+    }
+  }
+  video.addEventListener('error', () => {
+    if (!videoRetried && /^https?:\/\//i.test(v.video_url || '')) {
+      videoRetried = true;
+      // 1er retry via l'API Render (contourne CORS / URL publique morte)
+      video.src = API_BASE + '/api/community/videos/' + encodeURIComponent(v.id) + '/video';
+      video.load();
+      return;
+    }
+    showVideoUnavailable();
   });
 
   return slide;
@@ -2283,17 +2393,21 @@ function setupFeedObserver() {
     entries.forEach(entry => {
       const video = entry.target.querySelector('.feed-video');
       if (!video) return;
-      if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
+      // v9.4: seuil assoupli 0.4 (au lieu de 0.6) — avec 0.6, un slide jamais
+      // assez visible (viewport partagé, barre d'infos…) ne démarrait JAMAIS :
+      // feed figé sur la vignette + muet.
+      if (entry.isIntersecting && entry.intersectionRatio > 0.4) {
         feedActivateVideo(video);
       } else {
         video.pause();
-        video.muted = true;
+        // v9.4: ne plus re-muter en sortie — l'état du son appartient à
+        // l'utilisateur (un mute manuel ne doit pas être annulé au scroll).
       }
     });
   }, { 
     root: document.getElementById('feed-container'),
     rootMargin: '0px',
-    threshold: [0.55, 0.6, 0.75]
+    threshold: [0.4, 0.6, 0.75]
   });
   document.querySelectorAll('.feed-slide').forEach(s => feedObserver.observe(s));
 }

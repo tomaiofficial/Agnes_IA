@@ -122,15 +122,21 @@ class AudioEnhancer:
             logger.info("[AudioEnhancer] No filters to apply, copying original")
             return input_path
 
+        # v9.4: un fichier `.wav` DOIT contenir du PCM — encoder de l'AAC dans
+        # un conteneur WAV produit un fichier corrompu (ffmpeg le décode en
+        # "Invalid data found when processing input") qui faisait échouer le
+        # mux audio des vidéos des bots → vidéos publiées muettes.
+        is_wav = str(output_path).lower().endswith(".wav")
         cmd = [
             "ffmpeg", "-y",
             "-i", input_path,
             "-af", filter_chain,
-            "-c:a", "aac",
-            "-b:a", "192k",
-            "-ar", "48000",  # sample rate 48kHz
-            output_path,
         ]
+        if is_wav:
+            cmd += ["-c:a", "pcm_s16le", "-ar", "48000", "-ac", "2"]
+        else:
+            cmd += ["-c:a", "aac", "-b:a", "192k", "-ar", "48000"]
+        cmd.append(output_path)
 
         logger.info(f"[AudioEnhancer] Applying filters: {filter_chain[:100]}...")
 

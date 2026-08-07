@@ -448,7 +448,7 @@ class AIVideoPipeline:
                     stderr=asyncio.subprocess.PIPE,
                 )
                 try:
-                    await asyncio.wait_for(proc.communicate(), timeout=120)
+                    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
                 except asyncio.TimeoutError:
                     # v8.10: tuer le process au timeout (évite un ffmpeg zombie
                     # qui tourne en parallèle du prochain encode → OOM 512 Mo).
@@ -470,11 +470,39 @@ class AIVideoPipeline:
                             except OSError:
                                 pass
                     return output_path
-                logger.warning(f"[AIVideoPipeline] Audio overlay failed (code {proc.returncode})")
+                # v9.4: loguer le stderr ffmpeg (avant, on voyait juste un code 69
+                # sans la cause) + supprimer la sortie partielle.
+                err_txt = ""
+                if stderr:
+                    err_txt = stderr.decode(errors="replace")[-600:]
+                logger.warning(
+                    f"[AIVideoPipeline] Audio overlay failed (code {proc.returncode}): {err_txt}"
+                )
+                if os.path.exists(output_path):
+                    try:
+                        os.remove(output_path)
+                    except OSError:
+                        pass
             except Exception as e:
                 logger.warning(f"[AIVideoPipeline] Audio overlay failed: {e}")
         except Exception as e:
             logger.warning(f"[AIVideoPipeline] Audio enhancement failed (non-fatal): {e}")
+
+        # v9.4: log clair si la vidéo part SANS piste audio (le fail-safe
+        # silencieux masquait les vidéos muettes publiées par les bots).
+        try:
+            probe = await asyncio.create_subprocess_exec(
+                "ffmpeg", "-i", video_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, probe_err = await asyncio.wait_for(probe.communicate(), timeout=30)
+            if b"Audio:" in (probe_err or b""):
+                logger.info(f"[AIVideoPipeline] Piste audio confirmée: {video_path}")
+            else:
+                logger.error(f"[AIVideoPipeline] Vidéo livrée SANS piste audio: {video_path}")
+        except Exception as e:
+            logger.warning(f"[AIVideoPipeline] Probe audio impossible: {e}")
 
         return video_path
 

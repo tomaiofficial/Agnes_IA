@@ -731,6 +731,19 @@
               <span class="text-[11px] sm:text-xs text-gray-400">✨ Amélioration qualité HD (1080p + audio)</span>
             </div>
            </div>
+           <!-- v9.2: Sélecteur de modèle vidéo Agnes — prêt pour Agnes-Video-2.5
+                (le choix est persisté via POST /api/config/models → toutes les
+                pipelines l'utilisent, y compris creative/manuscript/poetry/anchor) -->
+           <div class="border-t border-white/5 pt-3 mt-3">
+             <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">🎬 Modèle vidéo Agnes</label>
+             <select id="s_video_model" onchange="onVideoModelChange()" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+               <option value="agnes-video-v2.0">agnes-video-v2.0 (par défaut, gratuit)</option>
+             </select>
+             <div class="flex items-center justify-between gap-2 mt-1.5">
+               <p class="text-[10px] sm:text-[11px] text-gray-500 leading-relaxed">Liste chargée depuis l'API Agnes (GET /v1/models). <b class="text-gray-400">Agnes-Video-2.5</b> (préview : ~2× plus rapide, meilleure cohérence mouvement/physique) apparaîtra ici dès sa sortie API — aucun redéploiement nécessaire.</p>
+               <button id="btn-refresh-video-models" onclick="refreshVideoModels()" class="shrink-0 text-[10px] sm:text-[11px] px-2.5 py-1.5 rounded-lg border border-white/10 text-gray-400 hover:text-gray-200 hover:border-white/20 transition">Actualiser</button>
+             </div>
+           </div>
          </details>
 
          <!-- v8.0: Mode avancé -->
@@ -1056,6 +1069,8 @@ let taskListTimer = null;
 let currentMode = 'video';
 // v8.19: moteur de génération — 'agnes' (serveur, illimité) ou 'puter' (SDK client)
 let currentEngine = 'agnes';
+// v9.2: modèles Agnes sélectionnés côté serveur (d.models depuis /api/config)
+let currentSelectedModels = null;
 
 const POLL_INTERVAL = 2000;
 let _lastPolledStep = '';
@@ -1314,6 +1329,63 @@ async function submitSimpleTo(form, btn, endpoint) {
 
 function selectEngine(name) {
   currentEngine = name;
+}
+
+// ═══════════════════════════════════════════════════
+// v9.2: Sélecteur de modèle vidéo Agnes — prêt pour Agnes-Video-2.5.
+// La liste vient de GET /api/models (cache serveur 5 min, fallback offline) ;
+// le choix est persisté via POST /api/config/models et appliqué par le serveur
+// à toutes les pipelines (simple + creative/manuscript/poetry/anchor).
+// ═══════════════════════════════════════════════════
+
+async function loadVideoModels(selectedModel, forceRefresh = false) {
+  const sel = document.getElementById('s_video_model');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Chargement…</option>';
+  try {
+    const url = API_BASE + '/api/models' + (forceRefresh ? '?refresh=1' : '');
+    const r = await fetchWithAuth(url);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.detail || 'Erreur liste modèles');
+    const videos = (d.models && d.models.video) || [];
+    sel.innerHTML = '';
+    videos.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m + (m === 'agnes-video-v2.0' ? ' (par défaut)' : '');
+      sel.appendChild(opt);
+    });
+    if (selectedModel && videos.includes(selectedModel)) sel.value = selectedModel;
+    else if (videos.length) sel.value = videos[0];
+  } catch(e) {
+    sel.innerHTML = '<option value="agnes-video-v2.0">agnes-video-v2.0 (par défaut)</option>';
+    if (selectedModel) sel.value = selectedModel;
+    console.warn('load /api/models failed:', e);
+  }
+}
+
+async function onVideoModelChange() {
+  const sel = document.getElementById('s_video_model');
+  const model = sel.value;
+  if (!model) return;
+  try {
+    const form = new FormData();
+    form.append('text', (currentSelectedModels && currentSelectedModels.text) || 'agnes-2.0-flash');
+    form.append('video', model);
+    const r = await fetchWithAuth(API_BASE + '/api/config/models', { method: 'POST', body: form });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.detail || 'Erreur enregistrement');
+    currentSelectedModels = d.models || currentSelectedModels;
+    showToast('🎬 Modèle vidéo : ' + model, 3000);
+  } catch(e) {
+    showToast('Échec enregistrement modèle : ' + e.message, 4000);
+  }
+}
+
+async function refreshVideoModels() {
+  const sel = document.getElementById('s_video_model');
+  const current = sel ? sel.value : null;
+  await loadVideoModels(current, true);
 }
 
 async function puterSignIn() {
@@ -2699,6 +2771,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const r = await fetchWithAuth(API_BASE + '/api/config');
     const d = await r.json();
     if (d.api_key) setApiKeyConfiguredUI(d.source, d.can_clear);
+    // v9.2: sélecteur de modèle vidéo — charge le catalogue Agnes et
+    // présélectionne le modèle actif (d.models.video).
+    currentSelectedModels = d.models || null;
+    if (currentSelectedModels) loadVideoModels(currentSelectedModels.video);
   } catch(e) {}
   autoReconnectRunningTask();
 })();

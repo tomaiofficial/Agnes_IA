@@ -66,8 +66,16 @@ async def generate_and_publish(
     queue: Optional[VideoQueue] = None,
     monitor: Optional[VideoMonitor] = None,
     chat: Optional[AgnesChatAPI] = None,
+    task_id: Optional[str] = None,
 ) -> dict:
     """Génère une vidéo pour le persona et la publie en galerie.
+
+    Args:
+        task_id: identifiant de publication. Le scheduler passe le task_id
+            DÉTERMINISTE du créneau (`agent_{persona}_{YYYY-MM-DD}_{HH}`) pour
+            que l'anti-doublon `find_published` fonctionne : sinon chaque bot
+            re-publie en boucle pendant son heure et le feed est rempli d'un
+            seul auteur. S'il est None, un identifiant aléatoire est utilisé.
 
     Returns:
         dict avec video_id, video_url, prompt, ou lève une exception en cas d'échec.
@@ -84,6 +92,10 @@ async def generate_and_publish(
         style="ultra_realistic",
         audio_enabled=True,
         audio_voice=persona.voice,
+        # v9.5: les bots publient avec une MUSIQUE DE FOND (nappe synthétisée)
+        # au lieu de la voix de narration : le modèle t2v génère des vidéos
+        # muettes, et l'utilisateur ne veut pas entendre une voix de robot.
+        background_music=True,
         # Postprocess allégé : sans filtre, enhance() copie la vidéo sans ffmpeg
         # → beaucoup moins de mémoire, zéro OOM, génération plus rapide.
         denoise=False,
@@ -123,8 +135,10 @@ async def generate_and_publish(
     if not result.video_path or not os.path.exists(result.video_path):
         raise RuntimeError(f"[Agents] {persona.id}: fichier vidéo absent ({result.video_path})")
 
-    # Publication dans la galerie avec le vrai nom du persona
-    task_id = f"agent_{persona.id}_{uuid.uuid4().hex[:8]}"
+    # Publication dans la galerie avec le vrai nom du persona.
+    # v9.5: le task_id est fourni par le scheduler (déterministe par créneau)
+    # pour que l'anti-doublon fonctionne; sinon uuid aléatoire (appels manuels).
+    task_id = task_id or f"agent_{persona.id}_{uuid.uuid4().hex[:8]}"
     resolution = f"{bot_width}x{bot_height}"
     published = get_community_store().publish(
         task_id=task_id,

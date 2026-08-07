@@ -43,6 +43,7 @@ from core.video.postprocess import (
     PostProcessConfig,
     VIDEO_STYLES,
     ensure_video_duration,
+    _probe_duration,
 )
 from core.video.prompt_optimizer import PromptOptimizer
 from core.video.queue import VideoQueue, TaskPriority
@@ -75,6 +76,11 @@ class PipelineConfig:
     audio_enabled: bool = True
     audio_voice: str = "fr-FR-DeniseNeural"
     audio_rate: str = "+0%"
+    # v9.5: musique de fond à la place de la narration (bots) — le modèle t2v
+    # génère des vidéos muettes ; au lieu d'une voix TTS, on mixe une nappe
+    # musicale synthétisée (core/audio/music.py). Ne touche pas aux utilisateurs
+    # (défaut False = narration TTS inchangée).
+    background_music: bool = False
 
     # File d'attente
     priority: TaskPriority = TaskPriority.FREE
@@ -395,18 +401,32 @@ class AIVideoPipeline:
         demandées). On muxe maintenant sans `-shortest` (la vidéo garde toute
         sa longueur ; la durée EXACTE est garantie par ensure_video_duration).
         """
-        from core.audio.tts import EdgeTTSEngine
-        from core.audio.enhancer import AudioEnhancer, AudioEnhanceConfig
-
         audio_path = video_path + ".narration.wav"
         try:
-            tts = EdgeTTSEngine()
-            await tts.generate(
-                text=prompt.strip(),
-                output_path=audio_path,
-                voice=self.config.audio_voice,
-                rate=self.config.audio_rate,
-            )
+            if self.config.background_music:
+                # v9.5: musique de fond à la place de la narration (bots).
+                # Le modèle t2v génère des vidéos muettes → nappe musicale
+                # synthétisée (core/audio/music.py), seed dérivée du prompt
+                # pour varier entre vidéos.
+                from core.audio.music import generate_background_music
+                vid_duration = await _probe_duration(video_path)
+                duration = max(vid_duration or 10.0, 5.0)
+                await asyncio.to_thread(
+                    generate_background_music,
+                    duration,
+                    audio_path,
+                    seed=abs(hash(prompt)) % 100000,
+                )
+            else:
+                from core.audio.tts import EdgeTTSEngine
+                tts = EdgeTTSEngine()
+                await tts.generate(
+                    text=prompt.strip(),
+                    output_path=audio_path,
+                    voice=self.config.audio_voice,
+                    rate=self.config.audio_rate,
+                )
+            from core.audio.enhancer import AudioEnhancer, AudioEnhanceConfig
 
             # v8.5: config audio adaptée au TTS synthétique (pas de débruitage agressif
             # qui dégrade la voix artificielle). On garde normalisation douce + EQ vocal.

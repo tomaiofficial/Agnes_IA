@@ -64,6 +64,8 @@ class AgentScheduler:
         # État local : {persona_id: {"enabled": bool}}
         self._state: dict = {}
         self._load_state()
+        # v9.5: génération des photos de profil IA des personas (une fois au boot)
+        self._avatars_started = False
 
     # ── Heure courante (fuseau AGENTS_TZ ou locale) ──────────────────
     def _now(self) -> datetime:
@@ -138,6 +140,23 @@ class AgentScheduler:
             return
         self._loop_task = asyncio.create_task(self._run_loop(), name="agents-scheduler")
         logger.info("[Agents] Scheduler démarré (%d personas)", len(AGENT_PERSONAS))
+        # v9.5: photos de profil IA des personas, en tâche de fond (pas bloquant).
+        if not self._avatars_started:
+            self._avatars_started = True
+            task = asyncio.create_task(self._ensure_avatars(), name="agents-avatars")
+            self._background.add(task)
+            task.add_done_callback(self._background.discard)
+
+    async def _ensure_avatars(self) -> None:
+        """Génère et enregistre les avatars manquants des personas (idempotent)."""
+        try:
+            api_key = self._api_key_provider()
+            if not api_key:
+                return
+            from core.agents.avatars import ensure_agent_avatars
+            await ensure_agent_avatars(api_key)
+        except Exception as e:
+            logger.warning(f"[Agents.Avatars] Échec initialisation: {e}")
 
     async def stop(self) -> None:
         if self._loop_task:
@@ -228,6 +247,10 @@ class AgentScheduler:
                     api_key=self._api_key_provider(),
                     queue=self._queue,
                     monitor=self._monitor,
+                    # v9.5: task_id DÉTERMINISTE du créneau → l'anti-doublon
+                    # `find_published` fonctionne enfin : chaque bot publie UNE
+                    # fois par créneau, le feed varie (plus "toujours Thomas").
+                    task_id=self._task_id_for(persona, now),
                 )
             except asyncio.CancelledError:
                 raise

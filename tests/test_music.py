@@ -37,6 +37,22 @@ class TestBackgroundMusic(unittest.TestCase):
         with open(a, "rb") as fa, open(b, "rb") as fb:
             self.assertNotEqual(fa.read(), fb.read(), "deux seeds doivent produire des musiques différentes")
 
+    def test_many_seeds_are_distinct(self):
+        # v9.6: l'utilisateur entendait « toujours le même son » → la variété
+        # doit être RÉELLE : sur 20 seeds, la grande majorité doit produire
+        # des musiques distinctes (au moins 15/20 uniques).
+        d = tempfile.mkdtemp()
+        hashes = set()
+        for s in range(20):
+            p = os.path.join(d, f"m{s}.wav")
+            generate_background_music(4.0, p, seed=s)
+            with open(p, "rb") as f:
+                hashes.add(hash(f.read()))
+        self.assertGreaterEqual(
+            len(hashes), 15,
+            f"trop peu de musiques distinctes: {len(hashes)}/20 (seed → même son)",
+        )
+
     def test_short_duration_no_crash(self):
         path = os.path.join(tempfile.mkdtemp(), "short.wav")
         generate_background_music(0.8, path, seed=0)  # moins d'une mesure

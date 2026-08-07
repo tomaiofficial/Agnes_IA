@@ -3,7 +3,7 @@ core/agents/agent_runner.py — Génération et publication d'une vidéo par un 
 
 Flux :
   1. Prompt ultra réaliste (généré par AgnesChatAPI ou prompt de secours)
-  2. AIVideoPipeline (full_hd, ultra_realistic, audio français)
+  2. AIVideoPipeline (hd, ultra_realistic) — audio original de la vidéo conservé
   3. Publication dans la galerie communautaire avec le nom du persona
 """
 
@@ -90,12 +90,18 @@ async def generate_and_publish(
                                  # sinon le postprocess fait OOM le plan Free 512 MB
                                  # et tue les tâches des utilisateurs en file.
         style="ultra_realistic",
+        # audio_enabled=True est REQUIS pour que _enhance_audio() tourne.
+        # v9.5: background_music=True → nappe musicale synthétisée (PAS de voix
+        # de narration). Le modèle t2v Agnes génère des vidéos MUETTES : il n'y
+        # a pas d'audio original à conserver — la seule piste sonore possible
+        # est ajoutée après génération.
         audio_enabled=True,
+        background_music=True,
         audio_voice=persona.voice,
         # v9.5: les bots publient avec une MUSIQUE DE FOND (nappe synthétisée)
         # au lieu de la voix de narration : le modèle t2v génère des vidéos
         # muettes, et l'utilisateur ne veut pas entendre une voix de robot.
-        background_music=True,
+        # (commentaire v9.5 conservé)
         # Postprocess allégé : sans filtre, enhance() copie la vidéo sans ffmpeg
         # → beaucoup moins de mémoire, zéro OOM, génération plus rapide.
         denoise=False,

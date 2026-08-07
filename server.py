@@ -35,8 +35,9 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Hea
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 
-from core.config import get_api_key, set_api_key, delete_api_key, get_api_key_source, get_working_dir, DURATION_FRAME_MAP, get_workspaces, add_workspace, remove_workspace, set_active_workspace, get_active_workspace, REGRESSION_WORKING_DIR_ENV, get_watermark_config, set_watermark_config, WATERMARK_PROMO_TEXT_ZH, WATERMARK_PROMO_TEXT_EN, get_selected_models, set_selected_models, get_agnes_domain, set_agnes_domain, AGNES_DOMAIN_MAP, get_agnes_api_root, DEFAULT_NEGATIVE_PROMPT
+from core.config import get_api_key, set_api_key, delete_api_key, get_api_key_source, get_working_dir, DURATION_FRAME_MAP, get_workspaces, add_workspace, remove_workspace, set_active_workspace, get_active_workspace, REGRESSION_WORKING_DIR_ENV, get_watermark_config, set_watermark_config, WATERMARK_PROMO_TEXT_ZH, WATERMARK_PROMO_TEXT_EN, get_selected_models, set_selected_models, get_agnes_domain, set_agnes_domain, AGNES_DOMAIN_MAP, get_agnes_api_root, DEFAULT_NEGATIVE_PROMPT, is_novai_enabled, get_novai_api_key
 from core.path_security import safe_join, safe_workspace_path, UnsafePathError
+from core.api.novai import NovAIVideoClient, NovAIError
 from core.audio.voices import (
     get_voice_catalog,
     get_voice_lang,
@@ -917,6 +918,8 @@ async def get_config():
         "models": get_selected_models(),
         "agnes_domain": get_agnes_domain(),
         "agnes_domains": list(AGNES_DOMAIN_MAP.keys()),
+        # v9.1: moteur NovAI (cogvideox-flash, $0/génération)
+        "novai_enabled": is_novai_enabled(),
     }
     return data
 
@@ -2111,6 +2114,181 @@ async def create_simple_task(
     _launch_background_task(_run_pipeline_with_concurrency(pipeline, state, tm))
     logger.info(f"[Simple] Task created: {task_id}, mode={mode}, duration={duration}s (queued)")
     return {"ok": True, "task_id": task_id, "dir_name": dir_name}
+
+
+# ═══════════════════════════════════════════════════
+# Moteur NovAI (cogvideox-flash, $0/génération) — v9.1
+# ═══════════════════════════════════════════════════
+
+# cogvideox-flash : clips courts de 5 ou 10 s
+NOVAI_DURATION_MAX = 10
+_NOVAI_WEIGHT = 1  # n'utilise AUCUN crédit Agnes → slot léger
+
+
+@app.post("/api/tasks/simple-novai")
+async def create_simple_novai_task(
+    request: Request,
+    prompt: str = Form(...),
+    user_id: str = Header(default="", alias="X-User-Id"),
+    duration: int = Form(5),
+    video_width: int = Form(1280),
+    video_height: int = Form(720),
+    seed: Optional[int] = Form(None),
+):
+    """Crée une tâche vidéo via le moteur NovAI (cogvideox-flash, $0/génération).
+
+    Ne consomme AUCUN crédit Agnes : le job est soumis à la passerelle NovAI
+    (NOVAI_API_KEY, gratuite sur https://aiapi-pro.com), pollé, puis le MP4 est
+    téléchargé et exposé comme une tâche simple classique (GET /api/video/{id}).
+    """
+    if not is_novai_enabled():
+        raise HTTPException(
+            status_code=400,
+            detail="Moteur NovAI non configuré — définis la clé API "
+                   "(NOVAI_API_KEY, gratuite sur https://aiapi-pro.com) puis redémarre le serveur.",
+        )
+
+    prompt = (prompt or "").strip()
+    if not prompt:
+        raise HTTPException(status_code=422, detail="prompt requis")
+    if len(prompt) > 5000:
+        raise HTTPException(status_code=422, detail="prompt 最多 5000 字符")
+    if duration not in (5, 10):
+        raise HTTPException(
+            status_code=422,
+            detail=f"cogvideox-flash génère des clips de 5 ou 10 s — duration reçu: {duration}",
+        )
+
+    if _security_validator:
+        # Rate limit par IP (même protection que /api/tasks/simple)
+        client_ip = request.client.host if request.client else ""
+        if not _security_validator.check_ip_rate_limit(client_ip):
+            _security_validator.log_security_event("rate_limit_exceeded", ip=client_ip)
+            raise HTTPException(status_code=429, detail="Trop de requêtes, veuillez patienter")
+        # Validation du prompt
+        result = _security_validator.validate_prompt(prompt)
+        if not result.valid:
+            _security_validator.log_security_event(
+                "blocked_prompt", ip=client_ip, user_id=user_id,
+                details={"error": result.error},
+            )
+            raise HTTPException(status_code=400, detail=result.error or "Prompt invalide")
+        if result.sanitized:
+            prompt = result.sanitized
+
+    task_id = uuid.uuid4().hex[:12]
+    dir_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{task_id}"
+
+    state = SimpleVideoTask(
+        task_id=task_id,
+        user_id=user_id,
+        creative_name=f"simple_novai_{task_id}",
+        prompt=prompt,
+        mode=VideoMode.T2V,
+        duration=duration,
+        video_width=video_width,
+        video_height=video_height,
+        seed=seed,
+        negative_prompt="",
+    )
+
+    tm = TaskManager(task_id, dir_name=dir_name)
+    tm.create(state)
+    _launch_background_task(_run_novai_with_concurrency(state, tm, dir_name))
+    logger.info(f"[NovAI] Task created: {task_id}, duration={duration}s (queued)")
+    return {"ok": True, "task_id": task_id, "dir_name": dir_name}
+
+
+async def _run_novai_with_concurrency(state: SimpleVideoTask, task_manager: TaskManager, dir_name: str):
+    """File d'attente légère (semaphore partagé) pour les générations NovAI."""
+    task_id = state.task_id
+    _queued_tasks[task_id] = _NOVAI_WEIGHT
+    logger.info(
+        f"[Concurrency] Task {task_id} queued (NovAI, weight={_NOVAI_WEIGHT}, "
+        f"current={_pipeline_semaphore.current}/{_pipeline_semaphore.max_weight})"
+    )
+    task_manager.update_state(status=StepStatus.QUEUED)
+    task_manager.update_state(
+        current_step="novai", current_status="running",
+        current_message="En attente d'un slot de génération...", current_progress=0.0,
+    )
+    try:
+        await _pipeline_semaphore.acquire(_NOVAI_WEIGHT)
+        _queued_tasks.pop(task_id, None)
+        logger.info(f"[Concurrency] Task {task_id} acquired slot (NovAI)")
+        await _run_novai(state, task_manager, dir_name)
+    except asyncio.CancelledError:
+        _queued_tasks.pop(task_id, None)
+        logger.info(f"[Concurrency] Task {task_id} cancelled while queued (NovAI)")
+    finally:
+        try:
+            await _pipeline_semaphore.release(_NOVAI_WEIGHT)
+        except Exception:
+            pass
+        _queued_tasks.pop(task_id, None)
+
+
+async def _run_novai(state: SimpleVideoTask, task_manager: TaskManager, dir_name: str):
+    """Génère la vidéo NovAI : soumission → polling → téléchargement."""
+    task_id = state.task_id
+    try:
+        task_manager.update_state(
+            current_step="novai", current_status="running",
+            current_message="Connexion à NovAI (cogvideox-flash, $0/génération)…", current_progress=0.05,
+        )
+        client = NovAIVideoClient(get_novai_api_key())
+
+        dest_dir = os.path.abspath(os.path.join(get_working_dir(), dir_name))
+        os.makedirs(dest_dir, exist_ok=True)
+        dest_path = os.path.join(dest_dir, "novai_final.mp4")
+
+        def _on_progress(progress: float, message: str):
+            task_manager.update_state(
+                current_step="novai", current_status="running",
+                current_message=message, current_progress=max(0.05, min(0.95, progress)),
+            )
+
+        # L'appel réseau est bloquant → exécution dans un thread.
+        result = await asyncio.to_thread(
+            client.generate,
+            state.prompt,
+            state.duration,
+            dest_path,
+            1800.0,
+            _on_progress,
+        )
+
+        if not result or not os.path.exists(result):
+            raise NovAIError("La vidéo n'a pas pu être récupérée depuis NovAI.")
+
+        state.final_video_file = result
+        task_manager.update_state(
+            status=StepStatus.COMPLETED,
+            final_video_file=result,
+            current_step="video_gen", current_status="completed",
+            current_message="Vidéo NovAI générée avec succès ✓", current_progress=1.0,
+        )
+        logger.info(f"[NovAI] Task {task_id} completed: {result}")
+
+        # v8.1: sauvegarde Supabase (survit au redéploiement Render).
+        try:
+            await asyncio.to_thread(_persist_video_backup, task_id, result)
+        except Exception as e:
+            logger.warning(f"[NovAI] Sauvegarde vidéo {task_id} impossible: {e}")
+    except NovAIError as e:
+        logger.error(f"[NovAI] Task {task_id} failed: {e}")
+        task_manager.update_state(
+            status=StepStatus.FAILED,
+            current_step="novai", current_status="failed",
+            current_message=str(e), current_progress=0.0,
+        )
+    except Exception as e:
+        logger.exception(f"[NovAI] Task {task_id} unexpected error: {e}")
+        task_manager.update_state(
+            status=StepStatus.FAILED,
+            current_step="novai", current_status="failed",
+            current_message=f"Erreur inattendue: {e}", current_progress=0.0,
+        )
 
 
 @app.post("/api/tasks/advanced")

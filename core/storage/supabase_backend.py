@@ -499,6 +499,20 @@ class SupabaseCommunityStore(CommunityStore):
         )
         return {"ok": True, "likes": count_res.count or 0, "liked": not liked}
 
+    def is_liked(self, video_id: str, visitor_hash: str) -> bool:
+        """True si `visitor_hash` a déjà liké la vidéo (lecture seule)."""
+        if not self.get_meta(video_id):
+            raise KeyError(video_id)
+        res = (
+            _get_client().table("community_likes")
+            .select("visitor_hash")
+            .eq("video_id", video_id)
+            .eq("visitor_hash", visitor_hash)
+            .limit(1)
+            .execute()
+        )
+        return bool(res.data)
+
     def get_comments(self, video_id: str) -> List[dict]:
         if not self.get_meta(video_id):
             raise KeyError(video_id)

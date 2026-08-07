@@ -23,6 +23,7 @@ from typing import Callable, Optional, Set
 
 from core.agents.agent_runner import generate_and_publish
 from core.agents.personas import AGENT_PERSONAS, AgentPersona
+from core.agents.social import AgentSocial, _SOCIAL_INTERVAL_S
 from core.config import get_working_dir
 from core.storage import get_community_store, get_task_store
 from core.video import VideoMonitor, VideoQueue
@@ -53,8 +54,13 @@ class AgentScheduler:
         self._last_launch_at: float = 0.0
         self._retry: dict = {}  # slot -> {"attempts": n, "next_at": epoch} (API down → retry)
         self._current_hour: Optional[str] = None
+        self._attempted: Set[str] = set()  # créneaux déjà tentés dans l'heure courante (v9.3: fix initialisation manquante)
         self._max_attempts = 6      # 1 essai + 5 retries par créneau
         self._retry_delay = 600     # 10 min entre deux essais (API Agnes instable)
+        # v9.3: vie sociale des bots (likes + abonnements), rythmée, sans quota Agnes
+        self._social = AgentSocial(store_provider=get_community_store, tz=tz)
+        self._social_last_tick = 0.0
+        self._social_running = False
         # État local : {persona_id: {"enabled": bool}}
         self._state: dict = {}
         self._load_state()
@@ -104,10 +110,11 @@ class AgentScheduler:
         return True
 
     def is_enabled(self, persona: AgentPersona) -> bool:
-        # Désactivé par défaut : les générations autonomes (Full HD 15s) font
-        # OOM le plan Free 512 Mo (cascade de "Ran out of memory"). Réactivable
-        # à la demande via POST /api/agents/toggle (ou run-now).
-        return bool(self._state.get(persona.id, {}).get("enabled", False))
+        # v9.3: activé par défaut — les publications des bots sont en qualité
+        # réduite (720p/10s) imposée par agent_runner : plus d'OOM du plan
+        # Free 512 Mo. Un état explicitement désactivé via POST /api/agents/toggle
+        # reste respecté (persisté dans agents_state.json).
+        return bool(self._state.get(persona.id, {}).get("enabled", True))
 
     # ── Slot / anti-doublon ──────────────────────────────────────────
     @staticmethod
@@ -183,6 +190,28 @@ class AgentScheduler:
                     await self._launch(persona, now, slot)
                     break
 
+        # v9.3: vie sociale des bots — toutes les 15 min, en tâche de fond
+        # (to_thread : le store est synchrone), jamais deux ticks en parallèle.
+        # Indépendant de l'API Agnes (aucun quota consommé).
+        if (
+            time.time() - self._social_last_tick >= _SOCIAL_INTERVAL_S
+            and not self._social_running
+        ):
+            self._social_last_tick = time.time()
+            self._social_running = True
+            task = asyncio.create_task(self._run_social(), name="agents-social")
+            self._background.add(task)
+            task.add_done_callback(self._background.discard)
+
+    async def _run_social(self) -> None:
+        """Exécute un tick social des bots (dans un thread, hors event loop)."""
+        try:
+            await asyncio.to_thread(self._social.run_tick)
+        except Exception as e:
+            logger.warning(f"[Agents.Social] Tick échoué: {e}")
+        finally:
+            self._social_running = False
+
     async def _launch(self, persona: AgentPersona, now: datetime, slot: str) -> None:
         """Lance la génération d'un bot en arrière-plan (un à la fois)."""
         self._last_launch_at = time.time()
@@ -250,6 +279,7 @@ class AgentScheduler:
             "ok": True,
             "scheduler_running": bool(self._loop_task and not self._loop_task.done()),
             "api_key_configured": bool(self._api_key_provider()),
+            "social": self._social.status(),
             "agents": items,
         }
 

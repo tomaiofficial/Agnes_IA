@@ -121,6 +121,14 @@ class LocalCommunityStore(CommunityStore):
         self._save_index(index)
         return {"ok": True, "likes": len(likes), "liked": not already_liked}
 
+    def is_liked(self, video_id: str, visitor_hash: str) -> bool:
+        """True si `visitor_hash` a déjà liké la vidéo (lecture seule)."""
+        index = self._load_index()
+        videos = index.get("videos", {})
+        if video_id not in videos:
+            raise KeyError(video_id)
+        return visitor_hash in videos[video_id].get("likes", [])
+
     def get_comments(self, video_id: str) -> List[dict]:
         index = self._load_index()
         videos = index.get("videos", {})

@@ -108,12 +108,16 @@ async def generate_and_publish(
         monitor=monitor,
     )
 
-    logger.info(f"[Agents] {persona.author} génère: {prompt[:100]}…")
+    # v9.3: qualité réduite imposée aux bots (1280x720, 10 s max) : les
+    # générations 1080p/15 s font OOM le plan Free 512 Mo (cascade de
+    # "Ran out of memory" qui tue aussi les tâches des utilisateurs en file).
+    bot_width, bot_height, bot_duration = 1280, 720, min(persona.duration, 10)
+    logger.info(f"[Agents] {persona.author} génère (720p/{bot_duration}s): {prompt[:100]}…")
     result = await pipeline.generate(
         prompt=prompt,
-        duration=persona.duration,
-        width=persona.width,
-        height=persona.height,
+        duration=bot_duration,
+        width=bot_width,
+        height=bot_height,
         working_dir=working_dir,
     )
     if not result.video_path or not os.path.exists(result.video_path):
@@ -121,19 +125,19 @@ async def generate_and_publish(
 
     # Publication dans la galerie avec le vrai nom du persona
     task_id = f"agent_{persona.id}_{uuid.uuid4().hex[:8]}"
-    resolution = f"{persona.width}x{persona.height}"
+    resolution = f"{bot_width}x{bot_height}"
     published = get_community_store().publish(
         task_id=task_id,
         author=persona.author,
         prompt=prompt,
-        duration=float(result.duration or persona.duration),
+        duration=float(result.duration or bot_duration),
         resolution=resolution,
         video_path=result.video_path,
         user_id=persona.user_id,
     )
     logger.info(
         f"[Agents] {persona.author} publié: {published.get('video_id')} "
-        f"(storage=communauté, duration={result.duration or persona.duration}s)"
+        f"(storage=communauté, duration={result.duration or bot_duration}s)"
     )
     return {
         "video_id": published.get("video_id"),

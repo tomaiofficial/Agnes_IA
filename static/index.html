@@ -664,6 +664,19 @@
             </select>
           </div>
         </div>
+        <!-- v9.3: Sélecteur de modèle vidéo Agnes — visible dans la grille principale.
+             Le choix est persisté via POST /api/config/models → toutes les pipelines
+             l'utilisent (simple + creative/manuscript/poetry/anchor). -->
+        <div class="mb-3 sm:mb-4">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <label class="block text-[11px] sm:text-xs text-gray-500">🎬 Modèle vidéo Agnes</label>
+            <button id="btn-refresh-video-models" onclick="refreshVideoModels()" class="shrink-0 text-[10px] sm:text-[11px] px-2.5 py-1.5 rounded-lg border border-white/10 text-gray-400 hover:text-gray-200 hover:border-white/20 transition">Actualiser</button>
+          </div>
+          <select id="s_video_model" onchange="onVideoModelChange()" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+            <option value="agnes-video-v2.0">agnes-video-v2.0 (par défaut, gratuit)</option>
+          </select>
+          <p class="text-[10px] sm:text-[11px] text-gray-500 leading-relaxed mt-1.5">Liste chargée depuis l'API Agnes (GET /v1/models). <b class="text-gray-400">Agnes-Video-2.5</b> (préview : ~2× plus rapide, meilleure cohérence mouvement/physique) est proposé ici : s'il échoue pour votre compte, repassez sur v2.0.</p>
+        </div>
         <!-- Reference Image (i2v) -->
         <div id="s_ref_section" class="hidden mb-3 sm:mb-4">
           <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Image de référence</label>
@@ -730,19 +743,6 @@
               </label>
               <span class="text-[11px] sm:text-xs text-gray-400">✨ Amélioration qualité HD (1080p + audio)</span>
             </div>
-           </div>
-           <!-- v9.2: Sélecteur de modèle vidéo Agnes — prêt pour Agnes-Video-2.5
-                (le choix est persisté via POST /api/config/models → toutes les
-                pipelines l'utilisent, y compris creative/manuscript/poetry/anchor) -->
-           <div class="border-t border-white/5 pt-3 mt-3">
-             <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">🎬 Modèle vidéo Agnes</label>
-             <select id="s_video_model" onchange="onVideoModelChange()" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
-               <option value="agnes-video-v2.0">agnes-video-v2.0 (par défaut, gratuit)</option>
-             </select>
-             <div class="flex items-center justify-between gap-2 mt-1.5">
-               <p class="text-[10px] sm:text-[11px] text-gray-500 leading-relaxed">Liste chargée depuis l'API Agnes (GET /v1/models). <b class="text-gray-400">Agnes-Video-2.5</b> (préview : ~2× plus rapide, meilleure cohérence mouvement/physique) apparaîtra ici dès sa sortie API — aucun redéploiement nécessaire.</p>
-               <button id="btn-refresh-video-models" onclick="refreshVideoModels()" class="shrink-0 text-[10px] sm:text-[11px] px-2.5 py-1.5 rounded-lg border border-white/10 text-gray-400 hover:text-gray-200 hover:border-white/20 transition">Actualiser</button>
-             </div>
            </div>
          </details>
 
@@ -1355,7 +1355,17 @@ async function loadVideoModels(selectedModel, forceRefresh = false) {
       opt.textContent = m + (m === 'agnes-video-v2.0' ? ' (par défaut)' : '');
       sel.appendChild(opt);
     });
+    // v9.3: propose Agnes-Video-2.5 même s'il n'est pas encore exposé par le
+    // catalogue (préview) : l'utilisateur peut le tester dès qu'il sort pour
+    // son compte ; s'il échoue, le message d'erreur invite à repasser sur v2.0.
+    if (!videos.includes('agnes-video-v2.5')) {
+      const opt = document.createElement('option');
+      opt.value = 'agnes-video-v2.5';
+      opt.textContent = 'agnes-video-v2.5 (préview — test)';
+      sel.appendChild(opt);
+    }
     if (selectedModel && videos.includes(selectedModel)) sel.value = selectedModel;
+    else if (selectedModel === 'agnes-video-v2.5') sel.value = 'agnes-video-v2.5';
     else if (videos.length) sel.value = videos[0];
   } catch(e) {
     sel.innerHTML = '<option value="agnes-video-v2.0">agnes-video-v2.0 (par défaut)</option>';
@@ -1368,6 +1378,9 @@ async function onVideoModelChange() {
   const sel = document.getElementById('s_video_model');
   const model = sel.value;
   if (!model) return;
+  if (model === 'agnes-video-v2.5') {
+    showToast('⚠️ Agnes-Video-2.5 est en préview : si la génération échoue, repassez sur v2.0', 5000);
+  }
   try {
     const form = new FormData();
     form.append('text', (currentSelectedModels && currentSelectedModels.text) || 'agnes-2.0-flash');

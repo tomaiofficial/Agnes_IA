@@ -558,7 +558,14 @@ class AgnesVideoAPI:
                     retry_count=attempt + 1,
                     extra={"mode": mode_desc},
                 )
-                raise RuntimeError(f"Agnes video submit failed (HTTP {resp.status_code}): {error_text}")
+                # v9.3: message d'erreur clair en français (ex. 503 model_not_found
+                # pour un modèle en préview, 400 pour un prompt refusé).
+                raise RuntimeError(
+                    f"L'API Agnes a refusé la demande (HTTP {resp.status_code}). "
+                    f"Détail: {error_text[:300]}. "
+                    f"Si vous avez choisi un modèle en préview (ex. Agnes-Video-2.5), "
+                    f"repassez sur agnes-video-v2.0."
+                )
 
             except (requests.exceptions.Timeout, requests.exceptions.ConnectionError,
                         asyncio.TimeoutError) as e:
@@ -590,6 +597,7 @@ class AgnesVideoAPI:
         )
         raise RuntimeError(
             f"[AgnesVideo] {mode_desc}: max retries ({self.max_retries}) exceeded"
+            " — l'API Agnes est indisponible ou surchargée. Réessayez dans quelques minutes."
         )
 
     async def generate_single_video(

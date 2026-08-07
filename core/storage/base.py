@@ -58,6 +58,15 @@ class CommunityStore(ABC):
             {"ok": True, "likes": int, "liked": bool}
         """
 
+    def is_liked(self, video_id: str, visitor_hash: str) -> bool:
+        """True si `visitor_hash` a déjà liké la vidéo (sans basculer).
+
+        v9.3 : méthode concrète rétrocompatible (défaut False) — les bots
+        sociaux s'en servent pour ne jamais retirer un like par accident
+        (toggle_like inverserait un like déjà posé).
+        """
+        return False
+
     @abstractmethod
     def get_comments(self, video_id: str) -> List[dict]:
         """Retourne les commentaires d'une vidéo (ordre chronologique)."""

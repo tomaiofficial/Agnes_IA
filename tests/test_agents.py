@@ -1,12 +1,13 @@
-"""Tests du moteur de créateurs IA autonomes (personas + scheduler)."""
+"""Tests du moteur de créateurs IA autonomes (personas + scheduler + social)."""
 
+import os
 import sys
 import unittest
 from datetime import datetime
 
 sys.path.insert(0, ".")
 
-from core.agents import AGENT_PERSONAS, AgentScheduler, get_persona  # noqa: E402
+from core.agents import AGENT_PERSONAS, AgentScheduler, AgentSocial, get_persona  # noqa: E402
 
 
 class TestPersonas(unittest.TestCase):
@@ -59,6 +60,79 @@ class TestScheduler(unittest.TestCase):
 
     def test_toggle_unknown(self):
         self.assertFalse(self.sched.set_enabled("inconnu", True))
+
+    def test_attempted_initialized(self):
+        # v9.3: regression — self._attempted était utilisé sans être initialisé
+        self.assertIsInstance(self.sched._attempted, set)
+
+
+class TestSocial(unittest.TestCase):
+    """v9.3: vie sociale des bots (likes + abonnements) sur le store local."""
+
+    def setUp(self):
+        import tempfile
+        import shutil
+        from core.agents.social import activity_probability
+        from core.storage import local_backend as lb
+        from core.storage.local_backend import LocalCommunityStore
+
+        self._shutil = shutil
+        self._tmp = tempfile.mkdtemp(prefix="agents_social_")
+        self._orig_wd = lb.get_working_dir
+        lb.get_working_dir = lambda: self._tmp
+        self.store = LocalCommunityStore()
+        self.social = AgentSocial(store_provider=lambda: self.store)
+        self._orig_prob = activity_probability
+        # Déterministe : tous les bots agissent, quelle que soit l'heure du test
+        import core.agents.social as social_mod
+        social_mod.activity_probability = lambda h: 1.0
+        self._fake = os.path.join(self._tmp, "fake.mp4")
+        with open(self._fake, "wb") as f:
+            f.write(b"\x00\x00\x00\x18ftypmp42" + b"fake-video-bytes")
+
+    def tearDown(self):
+        import core.agents.social as social_mod
+        from core.storage import local_backend as lb
+        lb.get_working_dir = self._orig_wd
+        social_mod.activity_probability = self._orig_prob
+        self._shutil.rmtree(self._tmp, ignore_errors=True)
+
+    def _publish(self, task_id, author, user_id, i):
+        return self.store.publish(
+            task_id=task_id, author=author, prompt=f"Vidéo test {i}",
+            duration=5.0, resolution="1024x576", video_path=self._fake, user_id=user_id,
+        )
+
+    def test_is_liked_local_backend(self):
+        v = self._publish("t1", "A", "u1", 0)["video_id"]
+        self.assertFalse(self.store.is_liked(v, "agent:lea-martin"))
+        self.store.toggle_like(v, "agent:lea-martin")
+        self.assertTrue(self.store.is_liked(v, "agent:lea-martin"))
+        # is_liked est en lecture seule : il ne bascule pas le like
+        self.assertTrue(self.store.is_liked(v, "agent:lea-martin"))
+
+    def test_social_likes_and_follows(self):
+        vids = [self._publish(f"h{i}", f"Humain {i}", f"u{i}", i)["video_id"] for i in range(3)]
+        bot_vid = self._publish("b1", "Léa Martin", "agent:lea-martin", 9)["video_id"]
+        stats = self.social.run_tick()
+        self.assertGreater(stats["likes"], 0)
+        self.assertGreater(stats["follows"], 0)
+        # Les vidéos humaines ont été likées par au moins un bot
+        any_liked = any(
+            self.store.is_liked(v, p.user_id)
+            for v in vids
+            for p in AGENT_PERSONAS
+        )
+        self.assertTrue(any_liked)
+        # Un bot ne like jamais sa propre vidéo
+        self.assertFalse(self.store.is_liked(bot_vid, "agent:lea-martin"))
+        # Idempotence : un second tick n'inverse aucun like (pas d'unlike)
+        likes_before = sum(len(self.store.get_meta(v)["likes"]) for v in vids)
+        self.social.run_tick()
+        likes_after = sum(len(self.store.get_meta(v)["likes"]) for v in vids)
+        self.assertGreaterEqual(likes_after, likes_before)
+        # Abonnements : chaque bot a suivi au moins un créateur (bot ou humain)
+        self.assertGreaterEqual(self.store.get_following_count("agent:lea-martin"), 1)
 
 
 if __name__ == "__main__":

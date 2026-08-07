@@ -634,17 +634,6 @@
           <label class="block text-xs sm:text-sm text-gray-400 mb-1 sm:mb-1.5">Description vidéo (prompt) <span class="text-red-400">*</span></label>
           <textarea id="s_prompt" rows="3" placeholder="Décrivez la vidéo souhaitée..." class="w-full glass-input rounded-lg px-4 py-3 sm:py-2.5 text-sm resize-y text-gray-100 placeholder-gray-500"></textarea>
         </div>
-        <!-- v9.0: Moteur LTX-2.3 (pod GPU loué, 0 crédit Agnes) -->
-        <div id="s_ltx_wrap" class="hidden mb-3 sm:mb-4 flex items-center gap-3">
-          <label class="relative inline-flex items-center cursor-pointer min-h-[44px]">
-            <input id="s_ltx" type="checkbox" class="sr-only peer" onchange="onLtxToggle()">
-            <div class="w-10 sm:w-9 h-6 sm:h-5 bg-gray-700 rounded-full peer peer-checked:bg-emerald-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-1 after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
-          </label>
-          <div>
-            <span class="text-[11px] sm:text-xs text-gray-300">⚡ Moteur LTX-2.3 (pod GPU) — <b class="text-emerald-400">0 crédit Agnes</b>, vidéo + audio générés par le modèle</span>
-            <p class="text-[10px] text-gray-500 mt-0.5">Image → vidéo indisponible. Durées 5/7/10 s max. Le pod doit être DÉMARRÉ sur RunPod/Vast.ai.</p>
-          </div>
-        </div>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-3 sm:mb-4">
           <div>
             <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Mode</label>
@@ -1163,54 +1152,6 @@ function onSimpleModeChange() {
 }
 
 // ═══════════════════════════════════════════════════
-// v9.0: Moteur LTX-2.3 (pod GPU) — bascule du formulaire simple
-// ═══════════════════════════════════════════════════
-
-function onLtxToggle() {
-  const ltx = document.getElementById('s_ltx').checked;
-  const modeSel = document.getElementById('s_mode');
-  const durSel = document.getElementById('s_duration');
-  const resSel = document.getElementById('s_resolution');
-  const note = document.getElementById('s_duration_note');
-  const adv = document.getElementById('s_advanced_mode');
-  const advOpts = document.getElementById('s_advanced_options');
-  const audio = document.getElementById('s_audio_enabled');
-  const audioOpts = document.getElementById('s_audio_options');
-  const qb = document.getElementById('s_quality_boost');
-
-  if (ltx) {
-    // Mode = Texte → vidéo uniquement
-    Array.from(modeSel.options).forEach(o => o.disabled = o.value !== 't2v');
-    modeSel.value = 't2v';
-    // Durées ≤ 10 s (LTX-2.3 dev)
-    Array.from(durSel.options).forEach(o => o.disabled = !['5', '7', '10'].includes(o.value));
-    if (!['5', '7', '10'].includes(durSel.value)) durSel.value = '5';
-    if (note) note.classList.add('hidden');
-    // Résolutions LTX (latent /2 → multiple de 32 ; sortie ≈ 1280×720)
-    if (!window._origResHtml) window._origResHtml = resSel.innerHTML;
-    resSel.innerHTML = [
-      '<option value="768x1280">Portrait 9:16 (720p)</option>',
-      '<option value="1280x768">Paysage 16:9 (720p)</option>',
-      '<option value="1024x1024">Carré 1:1 (1024)</option>'
-    ].join('');
-    resSel.value = '768x1280';
-    // Désactiver mode avancé + audio TTS + qualité boost (incompatibles)
-    if (adv) { adv.checked = false; adv.disabled = true; if (advOpts) advOpts.classList.add('hidden'); }
-    if (audio) { audio.checked = false; audio.disabled = true; if (audioOpts) audioOpts.classList.add('hidden'); }
-    if (qb) qb.disabled = true;
-  } else {
-    Array.from(modeSel.options).forEach(o => o.disabled = false);
-    Array.from(durSel.options).forEach(o => o.disabled = false);
-    if (window._origResHtml) resSel.innerHTML = window._origResHtml;
-    resSel.value = '768x1152';
-    if (adv) { adv.disabled = false; }
-    if (audio) { audio.disabled = false; }
-    if (qb) qb.disabled = false;
-  }
-  onSimpleModeChange();
-}
-
-// ═══════════════════════════════════════════════════
 // API Key
 // ═══════════════════════════════════════════════════
 function setApiKeyConfiguredUI(source, canClear) {
@@ -1307,12 +1248,9 @@ async function submitSimpleAgnes(prompt) {
   const btn = document.getElementById('btn-simple');
   btn.disabled = true;
 
-  // v9.0: moteur LTX-2.3 (pod GPU) — route dédiée, aucun crédit Agnes
-  const ltxMode = document.getElementById('s_ltx') && document.getElementById('s_ltx').checked;
-
   const form = new FormData();
   form.append('prompt', prompt);
-  if (!ltxMode) form.append('mode', document.getElementById('s_mode').value);
+  form.append('mode', document.getElementById('s_mode').value);
   form.append('duration', document.getElementById('s_duration').value);
   const res = parseResolution(document.getElementById('s_resolution').value);
   form.append('video_width', res.width);
@@ -1321,11 +1259,6 @@ async function submitSimpleAgnes(prompt) {
   if (seed) form.append('seed', seed);
   const neg = document.getElementById('s_negative').value;
   if (neg) form.append('negative_prompt', neg);
-
-  if (ltxMode) {
-    // Le pod génère lui-même l'audio — rien d'autre à envoyer.
-    return submitSimpleLtx(form, btn);
-  }
 
   const sp = document.getElementById('s_system').value.trim();
   if (sp) form.append('system_prompt', sp);
@@ -1372,10 +1305,6 @@ async function submitSimpleTo(form, btn, endpoint) {
     alert('Échec : ' + e.message);
     btn.disabled = false;
   }
-}
-
-async function submitSimpleLtx(form, btn) {
-  return submitSimpleTo(form, btn, '/api/tasks/simple-ltx');
 }
 
 // ═══════════════════════════════════════════════════
@@ -2770,9 +2699,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const r = await fetchWithAuth(API_BASE + '/api/config');
     const d = await r.json();
     if (d.api_key) setApiKeyConfiguredUI(d.source, d.can_clear);
-    // v9.0: moteur LTX-2.3 visible uniquement si LTX_COMFY_URL est configuré
-    const ltxWrap = document.getElementById('s_ltx_wrap');
-    if (ltxWrap) ltxWrap.classList.toggle('hidden', !d.ltx_enabled);
   } catch(e) {}
   autoReconnectRunningTask();
 })();

@@ -81,6 +81,10 @@ class PipelineConfig:
     # musicale synthétisée (core/audio/music.py). Ne touche pas aux utilisateurs
     # (défaut False = narration TTS inchangée).
     background_music: bool = False
+    # v9.8: paysage sonore de la scène (vagues, pluie, vent…) synthétisé à
+    # partir du prompt (core/audio/ambiance.py) — « son réel » façon Sora 2.
+    # Priorité sur background_music et sur la narration TTS.
+    ambiance_sound: bool = False
 
     # File d'attente
     priority: TaskPriority = TaskPriority.FREE
@@ -403,7 +407,22 @@ class AIVideoPipeline:
         """
         audio_path = video_path + ".narration.wav"
         try:
-            if self.config.background_music:
+            if self.config.ambiance_sound:
+                # v9.8: paysage sonore de la scène (comme Sora 2) : le modèle
+                # t2v génère des vidéos muettes → on synthétise l'ambiance
+                # décrite par le prompt (vagues, pluie, forêt, ville…), seed
+                # dérivée du prompt pour rester déterministe par vidéo.
+                from core.audio.ambiance import generate_scene_sound
+                vid_duration = await _probe_duration(video_path)
+                duration = max(vid_duration or 10.0, 5.0)
+                await asyncio.to_thread(
+                    generate_scene_sound,
+                    duration,
+                    audio_path,
+                    prompt=prompt,
+                    seed=abs(hash(prompt)) % 100000,
+                )
+            elif self.config.background_music:
                 # v9.5: musique de fond à la place de la narration (bots).
                 # Le modèle t2v génère des vidéos muettes → nappe musicale
                 # synthétisée (core/audio/music.py), seed dérivée du prompt
@@ -430,13 +449,15 @@ class AIVideoPipeline:
 
             # v8.5: config audio adaptée au TTS synthétique (pas de débruitage agressif
             # qui dégrade la voix artificielle). On garde normalisation douce + EQ vocal.
+            # v9.8: pour l'ambiance de scène, EQ « flat » (aucun filtre vocal — on ne
+            # veut ni colorer ni abîmer le paysage sonore).
             enhancer = AudioEnhancer(
                 config=AudioEnhanceConfig(
-                    denoise=False,           # TTS = pas de bruit à enlever (afftdn crée des artefacts)
+                    denoise=False,           # TTS/ambiance = pas de bruit à enlever (afftdn crée des artefacts)
                     normalize=True,          # loudnorm doux pour niveau constant
                     reduce_breath=False,     # pas de souffle sur TTS
                     spatialize=False,
-                    eq_preset="vocal",       # EQ vocal léger
+                    eq_preset="flat" if self.config.ambiance_sound else "vocal",  # EQ vocal léger
                     remove_clicks=False,     # pas de clics sur TTS
                     target_lufs=-18.0,       # niveau plus naturel pour narration
                 )

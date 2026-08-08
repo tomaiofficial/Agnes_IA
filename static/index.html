@@ -336,35 +336,20 @@
   }
   .feed-actions {
     position: absolute;
-    right: 10px;
-    bottom: 96px;
+    right: 16px;
+    bottom: 150px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 14px;
+    gap: 16px;
     z-index: 10;
   }
-  .feed-action {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-    color: #fff;
-    font-size: 10px;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
-    min-width: 52px;
-    min-height: 40px;
-    cursor: pointer;
-  }
-  .feed-action-icon {
-    font-size: 24px;
-    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.7));
-  }
   /* v9.4: bouton son du feed — l'utilisateur peut TOUJOURS récupérer le son,
-     même si l'autoplay/observer n'a pas dé-muté la vidéo */
+     même si l'autoplay/observer n'a pas dé-muté la vidéo.
+     v9.9: déplacé sous le header TikTok (top 56px) pour ne pas recouvrir la loupe */
   .feed-mute-btn {
     position: absolute;
-    top: 14px;
+    top: 56px;
     right: 14px;
     z-index: 30;
     width: 44px;
@@ -379,6 +364,249 @@
     cursor: pointer;
     backdrop-filter: blur(4px);
   }
+  /* ═══════ v9.9 : coque TikTok 2020 (screenshot Agorapulse) ═══════ */
+  /* Header : onglets "Suivant | Pour toi" centrés + loupe à droite */
+  .tt-header {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 26px;
+    padding: 14px 16px 18px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.65), transparent);
+    pointer-events: none;
+  }
+  .tt-tab {
+    pointer-events: auto;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    opacity: 0.65;
+    padding: 4px 2px 7px;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+    min-height: 40px;
+    background: transparent;
+    border-top: none; border-left: none; border-right: none;
+    letter-spacing: 0.01em;
+  }
+  .tt-tab:hover { opacity: 0.85; }
+  .tt-tab-active { opacity: 1; border-bottom-color: #fff; }
+  .tt-search {
+    position: absolute;
+    right: 14px;
+    top: 12px;
+    pointer-events: auto;
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 22px;
+    cursor: pointer;
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.7));
+  }
+  /* Colonne d'actions droite (avatar + cœur + commentaires + partage + disque)
+     — position définie plus haut (.feed-actions) */
+  .tt-avatar-wrap {
+    position: relative;
+    display: block;
+    width: 48px;
+    height: 48px;
+    border-radius: 9999px;
+    overflow: hidden;
+    border: 1.5px solid rgba(255,255,255,0.9);
+    background: #1f2937;
+    cursor: pointer;
+  }
+  .tt-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .tt-avatar-initial {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #fe2c55, #8b00ff);
+  }
+  .tt-add-badge {
+    position: absolute;
+    bottom: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 20px;
+    border-radius: 9999px;
+    background: #fe2c55;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #000;
+  }
+  /* Disque de musique (rotation continue, comme TikTok) */
+  .tt-disc {
+    width: 48px;
+    height: 48px;
+    border-radius: 9999px;
+    background:
+      radial-gradient(circle at 50% 50%, rgba(0,0,0,0.55) 0 13%, transparent 14%),
+      repeating-radial-gradient(circle at 50% 50%, rgba(255,255,255,0.85) 0 1px, rgba(0,0,0,0.55) 2px 5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 15px;
+    animation: ttSpin 4s linear infinite;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    margin-top: 6px;
+  }
+  @keyframes ttSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  /* Infos bas-gauche : @user + description + ♬ son original */
+  .tt-info {
+    position: absolute;
+    left: 12px;
+    right: 90px;
+    bottom: 118px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    pointer-events: none;
+  }
+  .tt-author {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.85);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: auto;
+    cursor: pointer;
+    text-align: left;
+    background: transparent;
+    border: none;
+    padding: 0;
+    line-height: 1.3;
+  }
+  .tt-author:hover { text-decoration: underline; }
+  .tt-song {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #fff;
+    font-size: 12px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.85);
+    pointer-events: auto;
+    cursor: pointer;
+    min-height: 28px;
+  }
+  .tt-song-icon {
+    font-size: 14px;
+    animation: ttSpin 3s linear infinite;
+    display: inline-block;
+  }
+  .tt-song-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Barre de progression verticale fine (bord droit) */
+  .tt-progress {
+    position: absolute;
+    right: 4px;
+    top: 22%;
+    bottom: 26%;
+    width: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.28);
+    z-index: 10;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .tt-progress-fill {
+    width: 100%;
+    height: 0%;
+    background: #fff;
+    border-radius: 2px;
+  }
+  /* Barre du bas : Accueil / Découvrir / + / Boîte / Profil */
+  .tt-bottombar {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    z-index: 20;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+    padding: 8px 6px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.55) 60%, transparent);
+    pointer-events: none;
+  }
+  .tt-nav {
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 21px;
+    line-height: 1;
+    cursor: pointer;
+    min-width: 56px;
+    min-height: 48px;
+    padding: 4px;
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.7));
+  }
+  .tt-nav span {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+  .tt-nav-active span { color: #fff; }
+  .tt-nav:not(.tt-nav-active) { opacity: 0.75; }
+  .tt-create {
+    pointer-events: auto;
+    width: 58px;
+    height: 58px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #fe2c55, #ff6b6b);
+    color: #fff;
+    font-size: 34px;
+    font-weight: 500;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(254, 44, 85, 0.45);
+    margin-bottom: 6px;
+  }
+  .tt-create:active { transform: scale(0.95); }
   /* v9.4: message clair quand une vidéo est vraiment indisponible (404/corrompue) */
   .feed-video-error {
     position: absolute;
@@ -992,13 +1220,22 @@
 
     <!-- Gallery Panel — Feed plein écran (style Reels/TikTok) -->
     <div id="panel-gallery" class="hidden fixed inset-0 z-40 bg-black">
-      <!-- Header du feed -->
-      <div class="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/70 to-transparent pointer-events-none">
-        <h2 class="text-sm font-semibold text-white drop-shadow pointer-events-auto">✨ Vibes</h2>
-        <button onclick="switchMode('video')" class="pointer-events-auto px-3 py-2 rounded-xl text-xs font-medium bg-white/10 border border-white/15 text-gray-200 hover:bg-white/20 transition min-h-[40px]">+ Créer</button>
+      <!-- Header du feed (v9.9 : coque TikTok 2020 — onglets Suivant | Pour toi + loupe) -->
+      <div class="tt-header">
+        <button class="tt-tab" id="tt-tab-following" onclick="setFeedTab('following')">Suivant</button>
+        <button class="tt-tab tt-tab-active" id="tt-tab-foryou" onclick="setFeedTab('foryou')">Pour toi</button>
+        <button class="tt-search" onclick="showToast('🔍 Recherche bientôt disponible', 2200)" title="Rechercher">🔍</button>
       </div>
       <!-- Liste des slides (scroll vertical plein écran) -->
       <div id="feed-container" class="feed-scroll"></div>
+      <!-- Barre du bas (v9.9 : Accueil / Découvrir / + / Boîte / Profil) -->
+      <div class="tt-bottombar">
+        <button class="tt-nav tt-nav-active" onclick="scrollFeedTop()"><span>🏠</span><span>Accueil</span></button>
+        <button class="tt-nav" onclick="showToast('🔍 Découvrir bientôt disponible', 2200)"><span>🔎</span><span>Découvrir</span></button>
+        <button class="tt-create" onclick="switchMode('video')" title="Créer une vidéo">+</button>
+        <button class="tt-nav" onclick="showToast('📥 Boîte bientôt disponible', 2200)"><span>💬</span><span>Boîte</span></button>
+        <button class="tt-nav" onclick="openMyProfile()"><span>👤</span><span>Profil</span></button>
+      </div>
       <!-- Panneau commentaires (glisse depuis la droite) -->
       <div id="feed-comments-panel" class="feed-comments-panel">
         <div class="flex items-center justify-between px-4 py-3 border-b border-white/10">
@@ -2407,33 +2644,45 @@ function buildFeedSlide(v, index) {
   grad.className = 'feed-gradient';
   slide.appendChild(grad);
 
-  // Info bas-gauche (auteur cliquable → profil + prompt + temps)
+  // v9.9: infos bas-gauche façon TikTok — @user + description + ♬ son original
   const info = document.createElement('div');
-  info.className = 'absolute bottom-0 left-0 right-0 p-4 pb-6 z-10';
+  info.className = 'tt-info';
   const authorBtn = document.createElement('button');
-  authorBtn.className = 'feed-author-btn mb-1.5';
+  authorBtn.className = 'tt-author';
   authorBtn.title = 'Voir le profil';
-  authorBtn.innerHTML = avatarHtml(v.avatar_url, (v.author || 'A').charAt(0), 'w-8 h-8 text-xs') +
-    '<span class="author-name text-sm font-semibold text-white drop-shadow">' + escapeHtml(v.author || 'Anonyme') + '</span>' +
+  authorBtn.innerHTML = '@' + escapeHtml(v.author || 'Anonyme') +
     (v.author_verified ? '<span class="feed-verified-badge" title="Créateur certifié">✓</span>' : '');
   authorBtn.onclick = (e) => { e.stopPropagation(); openFeedProfile(v.user_id || '', v.author || 'Anonyme'); };
   info.appendChild(authorBtn);
-  const meta = document.createElement('div');
-  meta.className = 'flex items-center gap-2 mb-1.5';
-  meta.innerHTML = '<span class="text-[10px] text-gray-400">' + timeAgo(v.published_at) + '</span>';
-  info.appendChild(meta);
   if (v.prompt) {
     const pr = document.createElement('p');
-    pr.className = 'feed-prompt text-[11px] text-gray-200/90 max-w-[60%] drop-shadow';
+    pr.className = 'feed-prompt text-[12px] text-gray-200/90 drop-shadow';
     pr.title = v.prompt;
     pr.textContent = v.prompt;
     info.appendChild(pr);
   }
+  const song = document.createElement('div');
+  song.className = 'tt-song';
+  song.title = 'Activer / couper le son';
+  song.innerHTML = '<span class="tt-song-icon">♬</span><span class="tt-song-name">son original – ' + escapeHtml(v.author || 'Anonyme') + '</span>';
+  song.onclick = (e) => { e.stopPropagation(); muteBtn.click(); };
+  info.appendChild(song);
   slide.appendChild(info);
 
-  // Barre d'actions droite (side rail, comme Reels/TikTok)
+  // v9.9: colonne d'actions droite façon TikTok — avatar + cœur + commentaires
+  // + partage + disque de musique (barre de progression à l'extrême droite)
   const actions = document.createElement('div');
   actions.className = 'feed-actions';
+
+  const avatarWrap = document.createElement('button');
+  avatarWrap.className = 'tt-avatar-wrap';
+  avatarWrap.title = 'Voir le profil';
+  avatarWrap.innerHTML = (v.avatar_url
+      ? '<img class="tt-avatar-img" src="' + escapeHtml(v.avatar_url) + '" alt="" loading="lazy">'
+      : '<span class="tt-avatar-initial">' + escapeHtml((v.author || 'A').charAt(0).toUpperCase()) + '</span>') +
+    '<span class="tt-add-badge">+</span>';
+  avatarWrap.onclick = (e) => { e.stopPropagation(); openFeedProfile(v.user_id || '', v.author || 'Anonyme'); };
+  actions.appendChild(avatarWrap);
 
   const likeBtn = document.createElement('button');
   likeBtn.className = 'feed-action';
@@ -2448,23 +2697,50 @@ function buildFeedSlide(v, index) {
   commentBtn.onclick = (e) => { e.stopPropagation(); openFeedComments(v); };
   actions.appendChild(commentBtn);
 
-  if (v.duration && v.duration > 0) {
-    const dur = document.createElement('div');
-    dur.className = 'feed-action';
-    dur.innerHTML = '<div class="feed-action-icon">⏱️</div><span>' + fmtDuration(v.duration) + '</span>';
-    actions.appendChild(dur);
-  }
+  const shareBtn = document.createElement('button');
+  shareBtn.className = 'feed-action';
+  shareBtn.title = 'Copier le lien';
+  shareBtn.innerHTML = '<div class="feed-action-icon">↗️</div><span>Partager</span>';
+  shareBtn.onclick = (e) => { e.stopPropagation(); shareFeedVideo(v); };
+  actions.appendChild(shareBtn);
 
-  // Suppression réservée au créateur de la publication (user_id)
+  const disc = document.createElement('div');
+  disc.className = 'tt-disc';
+  disc.title = '♬ son original – ' + (v.author || 'Anonyme');
+  disc.textContent = '♬';
+  actions.appendChild(disc);
+
+  slide.appendChild(actions);
+
+  // v9.9: barre de progression verticale fine (bord droit, façon TikTok)
+  const progress = document.createElement('div');
+  progress.className = 'tt-progress';
+  progress.innerHTML = '<div class="tt-progress-fill"></div>';
+  slide.appendChild(progress);
+  const progressFill = progress.querySelector('.tt-progress-fill');
+  const updateProgress = () => {
+    if (!video.duration || !isFinite(video.duration)) { progressFill.style.height = '0%'; return; }
+    progressFill.style.height = Math.min(100, (video.currentTime / video.duration) * 100) + '%';
+  };
+  video.addEventListener('timeupdate', updateProgress);
+  video.addEventListener('loadedmetadata', updateProgress);
+
+  // Suppression réservée au créateur de la publication (user_id) — discret,
+  // sous le bouton son (v9.9 : sorti de la colonne d'actions façon TikTok)
   if (v.user_id && v.user_id === agnesUserId) {
     const delBtn = document.createElement('button');
     delBtn.className = 'feed-action';
     delBtn.title = 'Supprimer (créateur)';
-    delBtn.innerHTML = '<div class="feed-action-icon">🗑</div><span>Suppr.</span>';
+    delBtn.style.position = 'absolute';
+    delBtn.style.top = '108px';
+    delBtn.style.right = '14px';
+    delBtn.style.zIndex = '30';
+    delBtn.style.minWidth = '44px';
+    delBtn.style.minHeight = '38px';
+    delBtn.innerHTML = '<div class="feed-action-icon" style="font-size:22px;">🗑</div><span style="font-size:9px;">Suppr.</span>';
     delBtn.onclick = (e) => { e.stopPropagation(); deleteGalleryVideo(v.id); };
-    actions.appendChild(delBtn);
+    slide.appendChild(delBtn);
   }
-  slide.appendChild(actions);
 
   // Badge lecture/pause au tap
   const playBadge = document.createElement('div');
@@ -2489,7 +2765,7 @@ function buildFeedSlide(v, index) {
 
   // Tap = lecture / pause ; actions + auteur + bouton son + erreur = stopPropagation
   slide.addEventListener('click', (e) => {
-    if (e.target.closest('.feed-actions') || e.target.closest('.feed-author-btn') || e.target.closest('.feed-mute-btn') || e.target.closest('.feed-video-error')) return;
+    if (e.target.closest('.feed-actions') || e.target.closest('.tt-author') || e.target.closest('.tt-song') || e.target.closest('.feed-mute-btn') || e.target.closest('.feed-video-error')) return;
     if (video.paused) { feedActivateVideo(video); } else { video.pause(); }
   });
   video.addEventListener('play', () => { const b = playBadge.querySelector('.feed-play-badge'); if (b) b.classList.add('hidden'); updateFeedMuteIcon(video); });
@@ -2599,6 +2875,46 @@ function avatarHtml(avatarUrl, initiale, sizeClass) {
 
 function pauseFeedVideo() {
   document.querySelectorAll('.feed-video').forEach(v => { if (!v.paused) v.pause(); });
+}
+
+// v9.9: coque TikTok — onglets "Suivant | Pour toi" (bascule visuelle + retour en haut)
+function setFeedTab(which) {
+  document.getElementById('tt-tab-following').classList.toggle('tt-tab-active', which === 'following');
+  document.getElementById('tt-tab-foryou').classList.toggle('tt-tab-active', which === 'foryou');
+  scrollFeedTop();
+  if (which === 'following') showToast('Le flux « Suivant » réunit les comptes que tu suis', 2600);
+}
+
+function scrollFeedTop() {
+  const c = document.getElementById('feed-container');
+  if (c) c.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// v9.9: profil courant (barre du bas "Profil") → modal d'édition du profil local
+function openMyProfile() {
+  feedUserInteracted = true;
+  pauseFeedVideo();
+  const el = document.getElementById('profile-edit-overlay');
+  if (el && el.classList.contains('hidden')) el.classList.remove('hidden');
+}
+
+// v9.9: partager = copier le lien de la vidéo
+function shareFeedVideo(v) {
+  const url = (v && v.video_url) || '';
+  if (!url) { showToast('Lien indisponible', 2000); return; }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(() => showToast('🔗 Lien copié', 2200)).catch(() => fallbackShare(url));
+  } else { fallbackShare(url); }
+}
+function fallbackShare(url) {
+  const ta = document.createElement('textarea');
+  ta.value = url;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); showToast('🔗 Lien copié', 2200); } catch (e) { showToast('Copie impossible', 2000); }
+  ta.remove();
 }
 
 async function openFeedProfile(userId, author) {

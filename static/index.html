@@ -2173,21 +2173,55 @@ function feedActivateVideo(video) {
   if (video.preload !== 'auto') video.preload = 'auto';
 }
 
-// v9.7: préchargement ciblé façon TikTok. Seule la vidéo active joue ; celle
-// d'après passe en preload=auto pour buffer dès que la courante démarre, la
-// précédente garde metadata, et tout le reste reste en none (0 requête réseau).
-// Plus aucun <video> caché qui télécharge les voisines en entier.
-function setAdjacentPreload(activeIndex) {
-  document.querySelectorAll('.feed-slide').forEach(s => {
+// v9.7: lecture façon TikTok — UN contrôleur central décide quelle vidéo joue.
+// (Le bug corrigé : l'ancien IntersectionObserver pausait la vidéo dès que le
+// ratio passait sous le seuil pendant le scroll/snap, puis ne la relançait
+// jamais s'il atterrissait entre deux seuils → « la vidéo se met sur pause
+// alors que ça marche ».)
+let feedPlayTimer = null;
+let feedActiveIndex = -1;
+
+function stopFeedPlayController() {
+  if (feedPlayTimer) { clearInterval(feedPlayTimer); feedPlayTimer = null; }
+  feedActiveIndex = -1;
+}
+
+function startFeedPlayController() {
+  stopFeedPlayController();
+  feedPlayTimer = setInterval(feedPlayTick, 250);
+}
+
+function feedPlayTick() {
+  const container = document.getElementById('feed-container');
+  if (!container) return;
+  const cRect = container.getBoundingClientRect();
+  let best = -1, bestRatio = 0;
+  container.querySelectorAll('.feed-slide').forEach(s => {
+    const idx = parseInt(s.dataset.index || '-1', 10);
+    if (idx < 0) return;
+    const r = s.getBoundingClientRect();
+    const top = Math.max(r.top, cRect.top);
+    const bottom = Math.min(r.bottom, cRect.bottom);
+    const visible = Math.max(0, bottom - top);
+    const ratio = r.height > 0 ? visible / r.height : 0;
+    if (ratio > bestRatio) { bestRatio = ratio; best = idx; }
+  });
+  if (best < 0 || bestRatio <= 0.3) return;
+  // On n'agit QUE si le slide le plus visible change : jamais de pause/replay
+  // intempestifs, et un tap « pause » de l'utilisateur reste respecté.
+  if (best === feedActiveIndex) return;
+  feedActiveIndex = best;
+  container.querySelectorAll('.feed-slide').forEach(s => {
     const idx = parseInt(s.dataset.index || '-1', 10);
     const v = s.querySelector('.feed-video');
     if (!v || idx < 0) return;
-    if (idx === activeIndex || idx === activeIndex + 1) {
-      if (v.preload !== 'auto') v.preload = 'auto';
-    } else if (idx === activeIndex - 1) {
-      if (v.preload !== 'metadata') v.preload = 'metadata';
-    } else if (v.preload !== 'none') {
-      v.preload = 'none';
+    if (idx === best) {
+      feedActivateVideo(v);
+      // buffer la suivante pendant que celle-ci joue
+      const next = container.querySelector('.feed-slide[data-index="' + (best + 1) + '"] .feed-video');
+      if (next && next.preload !== 'auto') next.preload = 'auto';
+    } else {
+      v.pause();
     }
   });
 }
@@ -2224,6 +2258,7 @@ function openGalleryFeed() {
 function closeGalleryFeed() {
   closeFeedProfile();
   closeFeedVideoViewer();
+  stopFeedPlayController();
   if (feedObserver) { feedObserver.disconnect(); feedObserver = null; }
   if (feedInfinityObserver) { feedInfinityObserver.disconnect(); feedInfinityObserver = null; }
   document.querySelectorAll('.feed-video').forEach(v => { v.pause(); v.removeAttribute('src'); });
@@ -2263,13 +2298,11 @@ async function loadGallery() {
     endMarker.style.background = 'transparent';
     container.appendChild(endMarker);
     // v9.7: la 1ère vidéo se charge tout de suite, la 2ème buffer derrière
-    setAdjacentPreload(0);
-    setupFeedObserver();
-    // v9.4: activer immédiatement la 1ère vidéo — l'observer peut ne pas se
-    // déclencher au tout premier rendu, ce qui laissait le feed muet ET figé
-    // sur la vignette (bug « plus de son + vidéos qui ne veulent pas marcher »).
     const firstVideo = container.querySelector('.feed-video');
     if (firstVideo) feedActivateVideo(firstVideo);
+    // v9.7: contrôleur de lecture centralisé (une seule vidéo visible joue)
+    startFeedPlayController();
+    setupFeedObserver();
     // v9.7: infinite scroll — observer le dernier slide pour charger la suite
     setupFeedInfinity();
   } catch(e) {
@@ -2341,7 +2374,7 @@ function buildFeedSlide(v, index) {
   video.loop = true;
   video.playsInline = true;
   // v9.7: lazy — seules les 2 premières se chargent, le reste en none (0 requête).
-  // La vidéo suivante passe en auto quand la courante démarre (setAdjacentPreload).
+  // La suivante passe en auto à l'approche (observer) et au démarrage (contrôleur).
   video.preload = index < 2 ? 'auto' : 'none';
   // v9.7: vraie vignette JPEG si disponible → affichage immédiat façon TikTok
   const thumb = (v.thumbnail && v.thumbnail !== v.video_url) ? v.thumbnail : '';
@@ -2464,10 +2497,8 @@ function buildFeedSlide(v, index) {
   // Première frame comme vignette
   video.addEventListener('loadedmetadata', () => { if (video.paused) video.currentTime = 0.5; });
 
-  // v9.7: quand la vidéo devient active, buffer la suivante (et rien d'autre)
-  video.addEventListener('play', () => {
-    setAdjacentPreload(index);
-  });
+  // v9.7: plus de preload ciblé ici — le contrôleur feedPlayTick bufferise la
+  // suivante quand la vidéo devient active, et l'observer précharge à l'approche.
 
   // v9.4: vidéo cassée (404 Supabase / fichier corrompu / CORS) → retry via le
   // proxy Render une seule fois, puis message clair avec bouton réessayer
@@ -2508,29 +2539,24 @@ function buildFeedSlide(v, index) {
   return slide;
 }
 
+// v9.7: l'observer ne fait PLUS que précharger : quand un slide entre dans le
+// buffer (800px), sa vidéo passe en preload=auto (le navigateur télécharge les
+// premières données) SANS démarrer la lecture — le contrôleur feedPlayTick
+// décide seul qui joue. Fini l'écran noir au scroll ET les pauses intempestives.
 function setupFeedObserver() {
   if (feedObserver) feedObserver.disconnect();
   feedObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
-      const slide = entry.target;
-      const video = slide.querySelector('.feed-video');
-      if (!video) return;
-      const index = parseInt(slide.dataset.index || '-1', 10);
-      // v9.7: rootMargin 900px → la vidéo suivante passe en auto AVANT d'arriver
-      // à l'écran (préchargement anticipé), la lecture démarre dès le ratio 0.4
-      if (entry.isIntersecting && entry.intersectionRatio > 0.4) {
-        feedActivateVideo(video);
-        if (index >= 0) setAdjacentPreload(index);
-      } else {
-        video.pause();
-        // v9.4: ne plus re-muter en sortie — l'état du son appartient à
-        // l'utilisateur (un mute manuel ne doit pas être annulé au scroll).
-      }
+      if (!entry.isIntersecting) return;
+      const idx = parseInt(entry.target.dataset.index || '-1', 10);
+      if (idx < 0) return;
+      const v = entry.target.querySelector('.feed-video');
+      if (v && v.preload !== 'auto') v.preload = 'auto';
     });
-  }, { 
+  }, {
     root: document.getElementById('feed-container'),
-    rootMargin: '900px 0px 900px 0px',
-    threshold: [0.4, 0.6, 0.75]
+    rootMargin: '800px 0px 800px 0px',
+    threshold: 0
   });
   document.querySelectorAll('.feed-slide').forEach(s => feedObserver.observe(s));
 }

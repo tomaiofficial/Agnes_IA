@@ -91,20 +91,20 @@ async def generate_and_publish(
                                  # et tue les tâches des utilisateurs en file.
         style="ultra_realistic",
         # audio_enabled=True est REQUIS pour que _enhance_audio() tourne.
-        # v9.8: ambiance_sound=True → paysage sonore de la SCÈNE (vagues, pluie,
-        # vent, forêt, ville…) synthétisé à partir du prompt — l'utilisateur veut
-        # le « son réel » de la vidéo (comme Sora 2) et plus la musique de fond.
-        # Le modèle t2v Agnes génère des vidéos MUETTES : il n'y a pas d'audio
-        # original à conserver — la seule piste sonore possible est ajoutée après
-        # génération (core/audio/ambiance.py).
+        # v9.8: native_audio=True → l'audio NATIF d'Agnes Video V2.0 est
+        # demandé (paramètre `audio` au submit) et CONSERVÉ s'il est présent :
+        # c'est le « son réel » de la scène (comme Sora 2). Si le modèle
+        # renvoie une vidéo muette, ambiance_sound=True (fallback) synthétise
+        # le paysage sonore du prompt (vagues, pluie, forêt, ville…).
+        # Plus de musique : l'utilisateur veut le son de l'environnement filmé.
         audio_enabled=True,
+        native_audio=True,
         ambiance_sound=True,
         background_music=False,
         audio_voice=persona.voice,
-        # v9.8: les bots publient avec le SON DE LA SCÈNE (paysage sonore
-        # procédural cohérent avec le prompt) au lieu de la musique : le modèle
-        # t2v génère des vidéos muettes, et l'utilisateur ne veut ni voix de
-        # robot ni nappe musicale — il veut le son de l'environnement filmé.
+        # v9.8: les bots publient avec le SON NATIF du modèle Agnes (audio
+        # synchronisé de la vidéo) ou, à défaut, le paysage sonore procédural
+        # du prompt — jamais de musique ni de voix de robot.
         # (commentaire v9.8 conservé)
         # Postprocess allégé : sans filtre, enhance() copie la vidéo sans ffmpeg
         # → beaucoup moins de mémoire, zéro OOM, génération plus rapide.

@@ -44,6 +44,7 @@ from core.video.postprocess import (
     VIDEO_STYLES,
     ensure_video_duration,
     _probe_duration,
+    _probe_video,
 )
 from core.video.prompt_optimizer import PromptOptimizer
 from core.video.queue import VideoQueue, TaskPriority
@@ -85,6 +86,12 @@ class PipelineConfig:
     # partir du prompt (core/audio/ambiance.py) — « son réel » façon Sora 2.
     # Priorité sur background_music et sur la narration TTS.
     ambiance_sound: bool = False
+    # v9.8: audio NATIF du modèle. Agnes Video V2.0 sait générer une piste
+    # sonore synchronisée (« Image to Video With Audio ») ; on demande le
+    # paramètre audio au moment de la génération et, si la vidéo reçue a une
+    # piste native, on la CONSERVE telle quelle (elle vaut mieux que toute
+    # synthèse). Sinon fallback ambiance_sound pour éviter le silence.
+    native_audio: bool = False
 
     # File d'attente
     priority: TaskPriority = TaskPriority.FREE
@@ -370,6 +377,15 @@ class AIVideoPipeline:
             await self._emit_progress("video_gen", msg, round(min(0.68, mapped), 4))
 
         async def _do_generate():
+            gen_kwargs = {}
+            if self.config.native_audio:
+                # v9.8: demande l'audio natif synchronisé d'Agnes Video V2.0
+                # (classé « With Audio » par Artificial Analysis). Paramètre
+                # non documenté dans la doc officielle : si l'API ne le
+                # supporte pas, elle l'ignore sans erreur (comportement
+                # « unsupported params ignored ») et on retombe sur le
+                # fallback ambiance de _enhance_audio.
+                gen_kwargs["audio"] = True
             video_output = await self.video_api.generate_single_video(
                 prompt=prompt,
                 reference_image_paths=reference_image_paths or [],
@@ -379,6 +395,7 @@ class AIVideoPipeline:
                 seed=seed,
                 negative_prompt=negative_prompt,
                 progress_callback=_agv_progress,
+                **gen_kwargs,
             )
             video_output.save(video_path)
             return video_path
@@ -407,6 +424,22 @@ class AIVideoPipeline:
         """
         audio_path = video_path + ".narration.wav"
         try:
+            if self.config.native_audio:
+                # v9.8: audio natif Agnes. Le modèle agnes-video-v2.0 génère
+                # une piste sonore synchronisée (leaderboard « With Audio »).
+                # Si la vidéo reçue en a une, on la CONSERVE telle quelle —
+                # c'est le « son réel » demandé (comme Sora 2) et il vaut
+                # mieux que toute synthèse. Le postprocess (ensure_video_duration)
+                # garde la piste (ré-encode aac + apad à la durée cible).
+                _, native_has_audio = await _probe_video(video_path)
+                if native_has_audio:
+                    logger.info(
+                        f"[AIVideoPipeline] Audio natif Agnes présent → conservé tel quel: {video_path}"
+                    )
+                    return video_path
+                logger.info(
+                    "[AIVideoPipeline] Pas d'audio natif Agnes → fallback ambiance de scène"
+                )
             if self.config.ambiance_sound:
                 # v9.8: paysage sonore de la scène (comme Sora 2) : le modèle
                 # t2v génère des vidéos muettes → on synthétise l'ambiance

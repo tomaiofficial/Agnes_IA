@@ -3,1000 +3,325 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Agnes Video Generator</title>
+<title>Agnes — Génération vidéo IA</title>
 <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
 <link rel="icon" type="image/png" sizes="1024x1024" href="/static/icon.png">
 <link rel="apple-touch-icon" href="/static/icon.png">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-    @keyframes spin { to { transform: rotate(360deg); } }
+  /* ═══════════ Thème Kling — Agnes ═══════════ */
+  :root {
+    --bg: #0a0a0a;
+    --bg2: #121212;
+    --card: #161616;
+    --line: rgba(255,255,255,0.08);
+    --txt: #f5f5f5;
+    --txt2: #9a9a9a;
+    --acc1: #5b8cff;
+    --acc2: #8b5cf6;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--txt);
+    min-height: 100vh;
+    overflow-x: hidden;
+    touch-action: manipulation;
+    background:
+      radial-gradient(ellipse 60% 40% at 50% -5%, rgba(91,140,255,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 30% at 90% 110%, rgba(139,92,246,0.05) 0%, transparent 60%),
+      var(--bg);
+  }
+  input, select, textarea, button { font-size: 16px !important; font-family: inherit; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+  ::selection { background: rgba(91,140,255,0.3); color: #fff; }
+  pre { white-space: pre-wrap; word-break: break-all; }
+
+  /* ── Header ── */
+  header.app-header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    height: 62px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 18px;
+    background: rgba(10,10,10,0.85);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--line);
+  }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; letter-spacing: -0.3px; text-decoration: none; color: var(--txt); }
+  .logo-badge {
+    width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--acc1), var(--acc2)); font-size: 15px; color: #fff;
+    box-shadow: 0 4px 14px rgba(91,140,255,0.35);
+  }
+  nav.header-nav { display: flex; align-items: center; gap: 2px; }
+  nav.header-nav a {
+    padding: 8px 14px; border-radius: 10px; color: var(--txt2); text-decoration: none;
+    font-size: 14px; font-weight: 500; transition: all .18s ease; cursor: pointer;
+  }
+  nav.header-nav a:hover { color: var(--txt); background: rgba(255,255,255,0.05); }
+  nav.header-nav a.active-nav { color: #fff; background: rgba(255,255,255,0.09); }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .avatar-mini {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--acc2), #22d3ee);
+    display: grid; place-items: center; font-size: 13px; font-weight: 700; color: #fff;
+  }
+
+  /* ── Boutons ── */
+  .btn-k {
+    border: none; cursor: pointer; font-size: 14px; font-weight: 600;
+    border-radius: 10px; padding: 9px 16px; transition: all .18s ease; color: #fff;
+    display: inline-flex; align-items: center; gap: 7px; justify-content: center;
+  }
+  .btn-primary-k {
+    background: linear-gradient(135deg, var(--acc1), var(--acc2));
+    box-shadow: 0 4px 18px rgba(91,140,255,0.35);
+  }
+  .btn-primary-k:hover { box-shadow: 0 6px 26px rgba(139,92,246,0.5); transform: translateY(-1px); }
+  .btn-ghost-k { background: rgba(255,255,255,0.07); color: var(--txt); }
+  .btn-ghost-k:hover { background: rgba(255,255,255,0.12); }
+  .btn-k:disabled { opacity: .5; cursor: not-allowed; transform: none !important; }
+  .gen-btn {
+    width: 100%; padding: 15px 20px; font-size: 15px; font-weight: 700; border-radius: 13px;
+    border: none; cursor: pointer; color: #fff;
+    background: linear-gradient(135deg, var(--acc1), var(--acc2));
+    box-shadow: 0 6px 24px rgba(91,140,255,0.4);
+    transition: all .2s; display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  }
+  .gen-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 30px rgba(139,92,246,0.55); }
+  .gen-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* ── Cartes ── */
+  .k-card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.45);
+  }
+  .k-field {
+    width: 100%; background: var(--bg2); color: var(--txt);
+    border: 1px solid var(--line); border-radius: 11px;
+    padding: 11px 13px; font-size: 14px; outline: none; transition: border .2s, box-shadow .2s;
+    min-height: 44px;
+  }
+  .k-field:focus { border-color: rgba(91,140,255,0.55); box-shadow: 0 0 0 3px rgba(91,140,255,0.12); }
+  .k-label { display: block; font-size: 11.5px; color: var(--txt2); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 7px; font-weight: 600; }
+  .k-note { font-size: 11px; color: #6f6f6f; line-height: 1.5; }
+  .k-chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+    background: rgba(255,255,255,0.06); border: 1px solid var(--line); color: var(--txt2);
+    font-size: 12.5px; cursor: default;
+  }
+  .glass-card {
+    background: rgba(22,22,22,0.7);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--line);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+  .glass-card:hover { border-color: rgba(91,140,255,0.2); }
+  .glass-input {
+    width: 100%; background: var(--bg2); border: 1px solid var(--line); color: var(--txt);
+    border-radius: 11px; padding: 11px 13px; font-size: 14px; outline: none; min-height: 44px;
+    transition: all .3s ease;
+  }
+  .glass-input:focus { border-color: rgba(91,140,255,0.5); box-shadow: 0 0 12px rgba(91,140,255,0.15); }
+  .glass-input::placeholder, .k-field::placeholder { color: #555; }
+
+  /* ── Onglets mode (vidéo/image) — classes d'état gérées par switchMode() ── */
+  .mode-tab {
+    flex: 1; border-radius: 13px; padding: 13px 8px; text-align: center;
+    font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid transparent;
+    min-height: 56px; transition: all .2s ease;
+    display: flex; flex-direction: column; align-items: center; gap: 4px; color: #fff;
+  }
+  .mode-tab .ico { font-size: 18px; }
+
+  /* ── Progress (Sora) ── */
+  @keyframes spin { to { transform: rotate(360deg); } }
   .animate-spin { animation: spin 1s linear infinite; }
   @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.3} }
   .animate-pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
   @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
-  .glass-card {
-    background: rgba(17,24,39,0.6);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(255,255,255,0.07);
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
-  }
-  .glass-card:hover {
-    border-color: rgba(59,130,246,0.2);
-    box-shadow: 0 0 20px rgba(59,130,246,0.06);
-  }
-  .glow-btn {
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 4px 15px rgba(37,99,235,0.25), 0 0 30px rgba(37,99,235,0.1);
-    transition: all 0.3s ease;
-  }
-  .glow-btn:hover:not(:disabled) {
-    box-shadow: 0 4px 25px rgba(37,99,235,0.4), 0 0 50px rgba(37,99,235,0.15);
-    transform: translateY(-1px);
-  }
-  .glow-btn::after {
-    content: '';
-    position: absolute;
-    top: 0; left: -100%; width: 200%; height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
-    animation: shimmer 3s ease-in-out infinite;
-  }
-  .glass-input {
-    background: rgba(31,41,55,0.5);
-    border: 1px solid rgba(255,255,255,0.08);
-    transition: all 0.3s ease;
-  }
-  .glass-input:focus {
-    border-color: rgba(59,130,246,0.5);
-    box-shadow: 0 0 12px rgba(59,130,246,0.15);
-    background: rgba(31,41,55,0.7);
-  }
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-  ::selection { background: rgba(59,130,246,0.3); color: white; }
-  pre { white-space: pre-wrap; word-break: break-all; }
-
-  /* ═════ Sora 2 Inspired Generation UI ═════ */
-  @keyframes ring-rotate {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-  @keyframes ring-rotate-reverse {
-    0% { transform: rotate(360deg); }
-    100% { transform: rotate(0deg); }
-  }
+  @keyframes ring-rotate { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
+  @keyframes ring-rotate-reverse { 0%{transform:rotate(360deg)} 100%{transform:rotate(0)} }
   @keyframes ring-pulse {
-    0%, 100% { box-shadow: 0 0 20px rgba(59,130,246,0.3), 0 0 40px rgba(59,130,246,0.1); }
-    50% { box-shadow: 0 0 30px rgba(59,130,246,0.5), 0 0 60px rgba(147,51,234,0.15); }
+    0%,100%{box-shadow:0 0 20px rgba(91,140,255,0.3),0 0 40px rgba(91,140,255,0.1)}
+    50%{box-shadow:0 0 30px rgba(91,140,255,0.5),0 0 60px rgba(139,92,246,0.18)}
   }
-  @keyframes icon-breathe {
-    0%, 100% { transform: scale(1); opacity: 0.9; }
-    50% { transform: scale(1.08); opacity: 1; }
-  }
-  @keyframes status-fade-in {
-    0% { opacity: 0; transform: translateY(10px); }
-    100% { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes step-slide-in {
-    0% { opacity: 0; transform: translateX(-12px); }
-    100% { opacity: 1; transform: translateX(0); }
-  }
-  @keyframes step-slide-out {
-    0% { opacity: 1; transform: translateX(0); max-height: 40px; margin-bottom: 8px; }
-    100% { opacity: 0; transform: translateX(12px); max-height: 0; margin-bottom: 0; }
-  }
-  @keyframes result-reveal {
-    0% { opacity: 0; transform: scale(0.92) translateY(20px); filter: blur(4px); }
-    100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
-  }
-  @keyframes count-up {
-    0% { opacity: 0; transform: scale(0.5); }
-    50% { opacity: 1; transform: scale(1.15); }
-    100% { opacity: 1; transform: scale(1); }
-  }
-  @keyframes ambient-drift {
-    0% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
-    50% { transform: translate(-45%, -55%) scale(1.3); opacity: 0.8; }
-    100% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
-  }
-  @keyframes dots-pulse {
-    0%, 100% { opacity: 0.2; }
-    50% { opacity: 1; }
-  }
-  @keyframes progress-glow-drift {
-    0% { filter: hue-rotate(0deg) brightness(1); }
-    50% { filter: hue-rotate(15deg) brightness(1.2); }
-    100% { filter: hue-rotate(0deg) brightness(1); }
-  }
-  @keyframes shimmer-fast {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
-  @keyframes complete-check {
-    0% { transform: scale(0) rotate(-45deg); opacity: 0; }
-    50% { transform: scale(1.3) rotate(0deg); opacity: 1; }
-    100% { transform: scale(1) rotate(0deg); opacity: 1; }
-  }
-
-  .sora-ring {
-    position: relative;
-    width: 100px;
-    height: 100px;
-    flex-shrink: 0;
-  }
+  @keyframes icon-breathe { 0%,100%{transform:scale(1);opacity:.9} 50%{transform:scale(1.08);opacity:1} }
+  @keyframes status-fade-in { 0%{opacity:0;transform:translateY(10px)} 100%{opacity:1;transform:translateY(0)} }
+  @keyframes step-slide-in { 0%{opacity:0;transform:translateX(-12px)} 100%{opacity:1;transform:translateX(0)} }
+  @keyframes step-slide-out { 0%{opacity:1;transform:translateX(0);max-height:40px;margin-bottom:8px} 100%{opacity:0;transform:translateX(12px);max-height:0;margin-bottom:0} }
+  @keyframes result-reveal { 0%{opacity:0;transform:scale(0.92) translateY(20px);filter:blur(4px)} 100%{opacity:1;transform:scale(1) translateY(0);filter:blur(0)} }
+  @keyframes count-up { 0%{opacity:0;transform:scale(.5)} 50%{opacity:1;transform:scale(1.15)} 100%{opacity:1;transform:scale(1)} }
+  @keyframes ambient-drift { 0%{transform:translate(-50%,-50%) scale(1);opacity:.6} 50%{transform:translate(-45%,-55%) scale(1.3);opacity:.8} 100%{transform:translate(-50%,-50%) scale(1);opacity:.6} }
+  @keyframes dots-pulse { 0%,100%{opacity:.2} 50%{opacity:1} }
+  @keyframes shimmer-fast { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+  @keyframes complete-check { 0%{transform:scale(0) rotate(-45deg);opacity:0} 50%{transform:scale(1.3) rotate(0);opacity:1} 100%{transform:scale(1) rotate(0);opacity:1} }
+  .sora-ring { position:relative; width:100px; height:100px; flex-shrink:0; }
   .sora-ring-inner {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    background: conic-gradient(from 0deg, transparent 0%, rgba(59,130,246,0.3) 25%, rgba(147,51,234,0.4) 50%, rgba(59,130,246,0.3) 75%, transparent 100%);
-    animation: ring-rotate 2s linear infinite;
-    mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
-    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    position:absolute; inset:0; border-radius:50%;
+    background:conic-gradient(from 0deg, transparent 0%, rgba(91,140,255,0.3) 25%, rgba(139,92,246,0.4) 50%, rgba(91,140,255,0.3) 75%, transparent 100%);
+    animation:ring-rotate 2s linear infinite;
+    mask:radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
   }
   .sora-ring-inner-2 {
-    position: absolute;
-    inset: 4px;
-    border-radius: 50%;
-    background: conic-gradient(from 180deg, transparent 0%, rgba(168,85,247,0.2) 35%, rgba(59,130,246,0.3) 65%, transparent 100%);
-    animation: ring-rotate-reverse 3s linear infinite;
-    mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
-    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+    position:absolute; inset:4px; border-radius:50%;
+    background:conic-gradient(from 180deg, transparent 0%, rgba(168,85,247,0.2) 35%, rgba(91,140,255,0.3) 65%, transparent 100%);
+    animation:ring-rotate-reverse 3s linear infinite;
+    mask:radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+    -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
   }
-  .sora-ring-icon {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 28px;
-    animation: icon-breathe 2s ease-in-out infinite;
-  }
-  .sora-ring-pulse {
-    position: absolute;
-    inset: -8px;
-    border-radius: 50%;
-    background: transparent;
-    box-shadow: 0 0 20px rgba(59,130,246,0.3), 0 0 40px rgba(59,130,246,0.1);
-    animation: ring-pulse 2.5s ease-in-out infinite;
-    pointer-events: none;
-  }
-  .sora-ambient {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 400px;
-    height: 400px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(59,130,246,0.08) 0%, rgba(147,51,234,0.04) 40%, transparent 70%);
-    animation: ambient-drift 8s ease-in-out infinite;
-    pointer-events: none;
-    z-index: 0;
-  }
-  .sora-step-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    flex-shrink: 0;
-  }
-  .sora-step {
-    animation: step-slide-in 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
-    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    max-height: 40px;
-    opacity: 0;
-  }
-  .sora-step.completed {
-    opacity: 0.5;
-  }
-  .sora-step.exit {
-    animation: step-slide-out 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
-  }
-  .sora-dot-1 { animation-delay: 0s; }
-  .sora-dot-2 { animation-delay: 0.15s; }
-  .sora-dot-3 { animation-delay: 0.3s; }
-  .sora-status-text {
-    animation: status-fade-in 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
-  }
-  .sora-progress-bar {
-    height: 3px;
-    background: linear-gradient(90deg, #3b82f6, #8b5cf6, #3b82f6);
-    background-size: 200% 100%;
-    animation: shimmer-fast 2s linear infinite;
-    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-    border-radius: 2px;
-  }
-  .sora-progress-track {
-    background: rgba(255,255,255,0.06);
-    border-radius: 2px;
-    height: 3px;
-    overflow: hidden;
-  }
-  .sora-result {
-    animation: result-reveal 0.8s cubic-bezier(0.4, 0, 0.2, 1) both;
-  }
-  .sora-count-up {
-    animation: count-up 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
-  }
-  .sora-check {
-    animation: complete-check 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
-  }
+  .sora-ring-icon { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:28px; animation:icon-breathe 2s ease-in-out infinite; }
+  .sora-ring-pulse { position:absolute; inset:-8px; border-radius:50%; background:transparent; box-shadow:0 0 20px rgba(91,140,255,0.3),0 0 40px rgba(91,140,255,0.1); animation:ring-pulse 2.5s ease-in-out infinite; pointer-events:none; }
+  .sora-ambient { position:absolute; top:50%; left:50%; width:400px; height:400px; border-radius:50%; background:radial-gradient(circle, rgba(91,140,255,0.08) 0%, rgba(139,92,246,0.04) 40%, transparent 70%); animation:ambient-drift 8s ease-in-out infinite; pointer-events:none; z-index:0; }
+  .sora-step-dot { width:10px; height:10px; border-radius:50%; transition:all .5s cubic-bezier(.4,0,.2,1); flex-shrink:0; }
+  .sora-step { animation:step-slide-in .5s cubic-bezier(.4,0,.2,1) both; transition:all .5s cubic-bezier(.4,0,.2,1); max-height:40px; opacity:0; }
+  .sora-step.completed { opacity:.5; }
+  .sora-step.exit { animation:step-slide-out .4s cubic-bezier(.4,0,.2,1) both; }
+  .sora-dot-1 { animation-delay:0s; }
+  .sora-dot-2 { animation-delay:.15s; }
+  .sora-dot-3 { animation-delay:.3s; }
+  .sora-status-text { animation:status-fade-in .4s cubic-bezier(.4,0,.2,1) both; }
+  .sora-progress-bar { height:3px; background:linear-gradient(90deg,#5b8cff,#8b5cf6,#5b8cff); background-size:200% 100%; animation:shimmer-fast 2s linear infinite; transition:width .6s cubic-bezier(.4,0,.2,1); border-radius:2px; }
+  .sora-progress-track { background:rgba(255,255,255,0.06); border-radius:2px; height:3px; overflow:hidden; }
+  .sora-result { animation:result-reveal .8s cubic-bezier(.4,0,.2,1) both; }
+  .sora-count-up { animation:count-up .5s cubic-bezier(.4,0,.2,1) both; }
+  .sora-check { animation:complete-check .5s cubic-bezier(.4,0,.2,1) both; }
+  .sora-form-collapse { transition:all .5s cubic-bezier(.4,0,.2,1); max-height:9999px; opacity:1; overflow:hidden; }
+  .sora-form-collapse.collapsed { max-height:0; opacity:0; margin:0; padding:0; }
+  .generation-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:20px; font-size:11px; font-weight:500; letter-spacing:.02em; backdrop-filter:blur(8px); }
+  .sora-skeleton { background:linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%); background-size:200% 100%; animation:shimmer 2s ease-in-out infinite; border-radius:8px; }
 
-  /* Form collapse */
-  .sora-form-collapse {
-    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    max-height: 9999px;
-    opacity: 1;
-    overflow: hidden;
-  }
-  .sora-form-collapse.collapsed {
-    max-height: 0;
-    opacity: 0;
-    margin: 0;
-    padding: 0;
-  }
+  /* ── Vibes — feed plein écran (Reels/TikTok) — IDENTIQUE v9.4 ── */
+  .feed-scroll { height:100dvh; overflow-y:scroll; scroll-snap-type:y mandatory; scrollbar-width:none; background:#000; -webkit-overflow-scrolling:touch; scroll-behavior:auto; touch-action:pan-y; contain:layout paint; overscroll-behavior:contain; overscroll-behavior-y:contain; }
+  .feed-scroll::-webkit-scrollbar { display:none; }
+  .feed-slide { position:relative; height:100dvh; scroll-snap-align:start; background:#000; overflow:hidden; will-change:transform; transform:translateZ(0); backface-visibility:hidden; contain:layout paint style; }
+  .feed-video { width:100%; height:100%; object-fit:contain; background:#000; transform:translateZ(0); }
+  .feed-gradient { position:absolute; left:0; right:0; bottom:0; height:45%; background:linear-gradient(to top, rgba(0,0,0,0.8), transparent); pointer-events:none; z-index:5; }
+  .feed-prompt { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.35; }
+  .feed-actions { position:absolute; right:10px; bottom:96px; display:flex; flex-direction:column; align-items:center; gap:14px; z-index:10; }
+  .feed-action { display:flex; flex-direction:column; align-items:center; gap:2px; color:#fff; font-size:10px; text-shadow:0 1px 4px rgba(0,0,0,0.8); min-width:52px; min-height:40px; cursor:pointer; }
+  .feed-action-icon { font-size:24px; filter:drop-shadow(0 1px 3px rgba(0,0,0,0.7)); }
+  .feed-mute-btn { position:absolute; top:14px; right:14px; z-index:30; width:44px; height:44px; border-radius:9999px; background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.15); display:flex; align-items:center; justify-content:center; font-size:18px; cursor:pointer; backdrop-filter:blur(4px); }
+  .feed-video-error { position:absolute; inset:0; z-index:40; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; color:#d1d5db; font-size:13px; text-align:center; padding:16px; background:rgba(0,0,0,0.6); cursor:pointer; }
+  .feed-play-badge { width:64px; height:64px; border-radius:9999px; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; font-size:24px; }
+  .feed-comments-panel { position:fixed; top:0; right:0; bottom:0; width:min(380px,92vw); background:rgba(10,10,14,0.97); border-left:1px solid var(--line); transform:translateX(100%); transition:transform .25s ease; z-index:50; display:flex; flex-direction:column; }
+  .feed-comments-panel.open { transform:translateX(0); }
+  .feed-profile-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:6px; padding:4px; }
+  .feed-profile-tile { position:relative; aspect-ratio:9/16; border-radius:10px; overflow:hidden; background:#0b0b10; cursor:pointer; }
+  .feed-profile-tile video { width:100%; height:100%; object-fit:cover; display:block; }
+  .feed-profile-tile-overlay { position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,0.75), transparent 45%); display:flex; align-items:flex-end; justify-content:space-between; gap:6px; padding:8px; }
+  .feed-profile-tile-overlay p { font-size:10px; color:#e5e7eb; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-shadow:0 1px 3px rgba(0,0,0,0.9); }
+  .feed-profile-tile-overlay .tile-duration { flex-shrink:0; font-size:9px; color:#9ca3af; background:rgba(0,0,0,0.55); border-radius:6px; padding:2px 5px; white-space:nowrap; }
+  .feed-author-btn { display:flex; align-items:center; gap:8px; cursor:pointer; border-radius:9999px; padding:2px 8px 2px 2px; background:rgba(0,0,0,0.25); transition:background .15s ease; max-width:100%; }
+  .feed-author-btn:hover { background:rgba(255,255,255,0.12); }
+  .feed-author-btn .author-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .profile-avatar-img { width:100%; height:100%; object-fit:cover; border-radius:9999px; background:#1f2937; }
+  body.vibes-modal-open { overflow:hidden !important; }
+  .vibes-modal-overlay { animation:vibesFadeIn .25s ease-out; }
+  .vibes-modal-panel { animation:vibesSlideUp .35s cubic-bezier(.35,0,.25,1); }
+  @keyframes vibesFadeIn { from{opacity:0} to{opacity:1} }
+  @keyframes vibesSlideUp { from{transform:translateY(40px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .vibes-modal-close { position:fixed; top:16px; right:16px; z-index:10002; width:44px; height:44px; min-width:44px; min-height:44px; border-radius:9999px; background:rgba(255,255,255,0.14); color:#fff; font-size:24px; line-height:1; display:flex; align-items:center; justify-content:center; border:1px solid rgba(255,255,255,0.12); cursor:pointer; transition:background .2s ease, transform .2s ease; }
+  .vibes-modal-close:hover { background:rgba(255,255,255,0.28); transform:scale(1.08); }
+  .vibes-modal-close:active { transform:scale(0.95); }
+  .feed-verified-badge { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:9999px; flex-shrink:0; background:linear-gradient(135deg,#1d9bf0,#2563eb); color:#fff; font-size:11px; font-weight:700; box-shadow:0 0 0 1.5px rgba(0,0,0,0.25); }
+  .feed-verified-badge-lg { width:20px; height:20px; font-size:12px; }
+  .feed-follow-btn { margin-top:12px; padding:8px 24px; border-radius:9999px; font-size:12px; font-weight:600; min-height:40px; color:#fff; background:linear-gradient(135deg,#ef4444,#db2777); border:none; cursor:pointer; transition:background .2s ease, transform .2s ease, opacity .2s ease; }
+  .feed-follow-btn:hover { transform:scale(1.04); }
+  .feed-follow-btn.following { background:rgba(255,255,255,0.12); color:#e5e7eb; border:1px solid rgba(255,255,255,0.15); }
+  .feed-follow-btn:disabled { opacity:.6; cursor:wait; }
 
-  .generation-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.02em;
-    backdrop-filter: blur(8px);
-  }
+  /* ── Grille « For You » (accueil) ── */
+  .fy-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(165px,1fr)); gap:13px; }
+  .fy-card { position:relative; aspect-ratio:9/16; border-radius:14px; overflow:hidden; background:#1c1c1e; border:1px solid var(--line); cursor:pointer; transition:transform .2s, box-shadow .2s; }
+  .fy-card:hover { transform:translateY(-3px); box-shadow:0 14px 34px rgba(0,0,0,0.6); }
+  .fy-card video { width:100%; height:100%; object-fit:cover; }
+  .fy-dur { position:absolute; right:8px; bottom:42px; background:rgba(0,0,0,0.6); border-radius:6px; padding:2px 6px; font-size:11px; color:#fff; }
+  .fy-info { position:absolute; left:0; right:0; bottom:0; padding:26px 10px 10px; background:linear-gradient(transparent, rgba(0,0,0,0.85)); display:flex; align-items:center; gap:7px; }
+  .fy-name { font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .fy-likes { font-size:11px; color:#d4d4d4; display:flex; align-items:center; gap:3px; }
 
-  .sora-skeleton {
-    background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 2s ease-in-out infinite;
-    border-radius: 8px;
+  /* ── Responsive ── */
+  @media (max-width: 820px) {
+    nav.header-nav a { font-size:13px; padding:7px 10px; }
+    nav.header-nav .nav-hide-sm { display:none; }
   }
-
-  /* ═════ Mobile optimizations ═════ */
-  * { -webkit-tap-highlight-color: transparent; }
-  html { -webkit-text-size-adjust: 100%; }
-  input, select, textarea, button { font-size: 16px !important; }
-  @media (max-width: 640px) {
-    .header-nav { gap: 0.25rem; }
-    .header-nav a { font-size: 0.75rem; padding: 0.4rem 0.5rem; }
-    .mobile-stack { flex-direction: column !important; }
-    .mobile-grid-3 { grid-template-columns: 1fr !important; }
-    .mobile-grid-2 { grid-template-columns: 1fr !important; }
-    .mobile-full { width: 100% !important; }
-    .mobile-p { padding: 1rem !important; }
-    h1.text-4xl { font-size: 1.75rem !important; }
-    .mobile-hide { display: none !important; }
-    .mobile-gap-2 { gap: 0.5rem !important; }
-    .glass-card { padding: 1rem !important; }
-    .sora-ring { width: 72px !important; height: 72px !important; }
-    .sora-ring-icon { font-size: 20px !important; }
-    .sora-ambient { width: 250px !important; height: 250px !important; }
-    .mobile-pseudo-popover { right: auto !important; left: 0 !important; }
+  @media (max-width: 560px) {
+    header.app-header { height: 56px; padding: 0 12px; }
+    .fy-grid { grid-template-columns:repeat(auto-fill, minmax(130px,1fr)); gap:9px; }
   }
-  @media (max-width: 380px) {
-    .header-title { font-size: 1rem !important; }
-    .header-nav a { font-size: 0.7rem !important; padding: 0.3rem 0.4rem !important; }
-  }
-  /* ═══════ Vibes — Feed plein écran (style Reels/TikTok) ═══════ */
-  .feed-scroll {
-    height: 100dvh;
-    overflow-y: scroll;
-    scroll-snap-type: y mandatory;
-    scrollbar-width: none;
-    background: #000;
-    /* v8.5: scroll fluide + touch optimisé */
-    -webkit-overflow-scrolling: touch;
-    scroll-behavior: auto;
-    touch-action: pan-y;
-    contain: layout paint;
-    /* v8.12: pas de scroll chaining — quand on atteint le début ou la fin du
-       feed, le body ne doit PAS se mettre à défiler derrière (bug « quand on
-       descend, le fond bouge aussi ») */
-    overscroll-behavior: contain;
-    overscroll-behavior-y: contain;
-  }
-  .feed-scroll::-webkit-scrollbar { display: none; }
-  .feed-slide {
-    position: relative;
-    height: 100dvh;
-    scroll-snap-align: start;
-    background: #000;
-    overflow: hidden;
-    /* v8.5: GPU layer pour swipe fluide */
-    will-change: transform;
-    transform: translateZ(0);
-    backface-visibility: hidden;
-    contain: layout paint style;
-  }
-  .feed-video {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    background: #000;
-    /* v8.5: décodage hardware + layer GPU */
-    transform: translateZ(0);
-  }
-  .feed-gradient {
-    position: absolute;
-    left: 0; right: 0; bottom: 0;
-    height: 45%;
-    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
-    pointer-events: none;
-    z-index: 5;
-  }
-  .feed-prompt {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    line-height: 1.35;
-  }
-  .feed-actions {
-    position: absolute;
-    right: 16px;
-    bottom: 150px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    z-index: 10;
-  }
-  /* v9.4: bouton son du feed — l'utilisateur peut TOUJOURS récupérer le son,
-     même si l'autoplay/observer n'a pas dé-muté la vidéo.
-     v9.9: déplacé sous le header TikTok (top 56px) pour ne pas recouvrir la loupe */
-  .feed-mute-btn {
-    position: absolute;
-    top: 56px;
-    right: 14px;
-    z-index: 30;
-    width: 44px;
-    height: 44px;
-    border-radius: 9999px;
-    background: rgba(0,0,0,0.55);
-    border: 1px solid rgba(255,255,255,0.15);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    cursor: pointer;
-    backdrop-filter: blur(4px);
-  }
-  /* ═══════ v9.9 : coque TikTok 2020 (screenshot Agorapulse) ═══════ */
-  /* Header : onglets "Suivant | Pour toi" centrés + loupe à droite */
-  .tt-header {
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    z-index: 20;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 26px;
-    padding: 14px 16px 18px;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.65), transparent);
-    pointer-events: none;
-  }
-  .tt-tab {
-    pointer-events: auto;
-    color: #fff;
-    font-size: 16px;
-    font-weight: 600;
-    opacity: 0.65;
-    padding: 4px 2px 7px;
-    border-bottom: 3px solid transparent;
-    cursor: pointer;
-    transition: opacity 0.15s ease;
-    min-height: 40px;
-    background: transparent;
-    border-top: none; border-left: none; border-right: none;
-    letter-spacing: 0.01em;
-  }
-  .tt-tab:hover { opacity: 0.85; }
-  .tt-tab-active { opacity: 1; border-bottom-color: #fff; }
-  .tt-search {
-    position: absolute;
-    right: 14px;
-    top: 12px;
-    pointer-events: auto;
-    width: 42px;
-    height: 42px;
-    min-width: 42px;
-    min-height: 42px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    color: #fff;
-    font-size: 22px;
-    cursor: pointer;
-    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.7));
-  }
-  /* Colonne d'actions droite (avatar + cœur + commentaires + partage + disque)
-     — position définie plus haut (.feed-actions) */
-  .tt-avatar-wrap {
-    position: relative;
-    display: block;
-    width: 48px;
-    height: 48px;
-    border-radius: 9999px;
-    overflow: hidden;
-    border: 1.5px solid rgba(255,255,255,0.9);
-    background: #1f2937;
-    cursor: pointer;
-  }
-  .tt-avatar-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-  .tt-avatar-initial {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    font-weight: 700;
-    color: #fff;
-    background: linear-gradient(135deg, #fe2c55, #8b00ff);
-  }
-  .tt-add-badge {
-    position: absolute;
-    bottom: -7px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 20px;
-    height: 20px;
-    border-radius: 9999px;
-    background: #fe2c55;
-    color: #fff;
-    font-size: 15px;
-    font-weight: 700;
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 2px solid #000;
-  }
-  /* Disque de musique (rotation continue, comme TikTok) */
-  .tt-disc {
-    width: 48px;
-    height: 48px;
-    border-radius: 9999px;
-    background:
-      radial-gradient(circle at 50% 50%, rgba(0,0,0,0.55) 0 13%, transparent 14%),
-      repeating-radial-gradient(circle at 50% 50%, rgba(255,255,255,0.85) 0 1px, rgba(0,0,0,0.55) 2px 5px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 15px;
-    animation: ttSpin 4s linear infinite;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
-    margin-top: 6px;
-  }
-  @keyframes ttSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-  /* Infos bas-gauche : @user + description + ♬ son original */
-  .tt-info {
-    position: absolute;
-    left: 12px;
-    right: 90px;
-    bottom: 118px;
-    z-index: 10;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    pointer-events: none;
-  }
-  .tt-author {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: #fff;
-    font-size: 16px;
-    font-weight: 700;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.85);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    pointer-events: auto;
-    cursor: pointer;
-    text-align: left;
-    background: transparent;
-    border: none;
-    padding: 0;
-    line-height: 1.3;
-  }
-  .tt-author:hover { text-decoration: underline; }
-  .tt-song {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: #fff;
-    font-size: 12px;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.85);
-    pointer-events: auto;
-    cursor: pointer;
-    min-height: 28px;
-  }
-  .tt-song-icon {
-    font-size: 14px;
-    animation: ttSpin 3s linear infinite;
-    display: inline-block;
-  }
-  .tt-song-name {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  /* Barre de progression verticale fine (bord droit) */
-  .tt-progress {
-    position: absolute;
-    right: 4px;
-    top: 22%;
-    bottom: 26%;
-    width: 4px;
-    border-radius: 2px;
-    background: rgba(255,255,255,0.28);
-    z-index: 10;
-    pointer-events: none;
-    overflow: hidden;
-  }
-  .tt-progress-fill {
-    width: 100%;
-    height: 0%;
-    background: #fff;
-    border-radius: 2px;
-  }
-  /* Barre du bas : Accueil / Découvrir / + / Boîte / Profil */
-  .tt-bottombar {
-    position: absolute;
-    left: 0; right: 0; bottom: 0;
-    z-index: 20;
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-around;
-    padding: 8px 6px calc(10px + env(safe-area-inset-bottom, 0px));
-    background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.55) 60%, transparent);
-    pointer-events: none;
-  }
-  .tt-nav {
-    pointer-events: auto;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-    background: transparent;
-    border: none;
-    color: #fff;
-    font-size: 21px;
-    line-height: 1;
-    cursor: pointer;
-    min-width: 56px;
-    min-height: 48px;
-    padding: 4px;
-    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.7));
-  }
-  .tt-nav span {
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-  }
-  .tt-nav-active span { color: #fff; }
-  .tt-nav:not(.tt-nav-active) { opacity: 0.75; }
-  .tt-create {
-    pointer-events: auto;
-    width: 58px;
-    height: 58px;
-    border-radius: 16px;
-    background: linear-gradient(135deg, #fe2c55, #ff6b6b);
-    color: #fff;
-    font-size: 34px;
-    font-weight: 500;
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    cursor: pointer;
-    box-shadow: 0 4px 14px rgba(254, 44, 85, 0.45);
-    margin-bottom: 6px;
-  }
-  .tt-create:active { transform: scale(0.95); }
-  /* ═══════ v9.9 : thème TikTok appliqué à TOUTE l'interface ═══════ */
-  :root { --tt-red: #fe2c55; }
-  body { background: #000 !important; }
-  .glass-card {
-    background: rgba(13,15,20,0.9) !important;
-    border-color: rgba(255,255,255,0.08);
-  }
-  .glass-card:hover {
-    border-color: rgba(254,44,85,0.25);
-    box-shadow: 0 0 20px rgba(254,44,85,0.06);
-  }
-  .glass-input { background: rgba(22,24,35,0.85); border-color: rgba(255,255,255,0.08); }
-  .glass-input:focus {
-    border-color: rgba(254,44,85,0.6);
-    box-shadow: 0 0 12px rgba(254,44,85,0.15);
-    background: rgba(22,24,35,0.98);
-  }
-  ::selection { background: rgba(254,44,85,0.4); color: #fff; }
-  /* Boutons primaires bleus → rouge TikTok */
-  .bg-blue-600 { background-color: #fe2c55 !important; }
-  .bg-blue-600:hover, .bg-blue-600:focus { background-color: #e2254b !important; }
-  .bg-blue-600\/80 { background-color: rgba(254,44,85,0.85) !important; }
-  .bg-blue-600\/20 { background-color: rgba(254,44,85,0.18) !important; }
-  .border-blue-500\/30 { border-color: rgba(254,44,85,0.5) !important; }
-  .text-blue-300 { color: #ff8ba0 !important; }
-  .text-blue-400 { color: #5ec5ff !important; }
-  .shadow-blue-600\/20 { box-shadow: 0 4px 15px rgba(254,44,85,0.25) !important; }
-  .glow-btn {
-    box-shadow: 0 4px 15px rgba(254,44,85,0.25), 0 0 30px rgba(254,44,85,0.1) !important;
-  }
-  .glow-btn:hover:not(:disabled) {
-    box-shadow: 0 4px 25px rgba(254,44,85,0.4), 0 0 50px rgba(254,44,85,0.15) !important;
-  }
-  /* Header principal façon TikTok : logo blanc, nav texte blanc, avatar rond */
-  .tt-topnav {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .tt-topnav-link {
-    padding: 8px 14px;
-    color: rgba(255,255,255,0.75);
-    font-size: 14px;
-    font-weight: 500;
-    text-decoration: none;
-    border-bottom: 3px solid transparent;
-    transition: color 0.15s ease, border-color 0.15s ease;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-  }
-  .tt-topnav-link:hover { color: #fff; }
-  .tt-topnav-link.active { color: #fff; font-weight: 700; border-bottom-color: #fe2c55; }
-  .tt-avatar-btn {
-    width: 38px;
-    height: 38px;
-    min-width: 38px;
-    min-height: 38px;
-    border-radius: 9999px;
-    border: 1.5px solid rgba(255,255,255,0.85);
-    overflow: hidden;
-    background: #1f2937;
-    cursor: pointer;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .tt-avatar-circle {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    font-weight: 700;
-    color: #fff;
-    background: linear-gradient(135deg, #fe2c55, #8b00ff);
-  }
-  .tt-avatar-circle img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-  /* Barre du bas globale (modes création/tâches) — fixed ; en galerie elle est
-     masquée car le feed a la sienne */
-  .tt-bottombar-global {
-    position: fixed;
-    left: 0; right: 0; bottom: 0;
-    z-index: 30;
-    background: linear-gradient(to top, rgba(0,0,0,0.95), rgba(0,0,0,0.7) 70%, transparent);
-    border-top: 1px solid rgba(255,255,255,0.06);
-  }
-  /* Le contenu principal ne doit pas être caché derrière la barre du bas */
-  main { padding-bottom: 96px !important; }
-  /* v9.4: message clair quand une vidéo est vraiment indisponible (404/corrompue) */
-  .feed-video-error {
-    position: absolute;
-    inset: 0;
-    z-index: 40;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    color: #d1d5db;
-    font-size: 13px;
-    text-align: center;
-    padding: 16px;
-    background: rgba(0,0,0,0.6);
-    cursor: pointer;
-  }
-  .feed-play-badge {
-    width: 64px; height: 64px;
-    border-radius: 9999px;
-    background: rgba(0,0,0,0.5);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 24px;
-  }
-  /* v9.7: fond de chargement façon TikTok (spinner) tant que la vidéo n'a pas
-     de première frame ; remplacé par la vignette JPEG ou la frame réelle. */
-  .feed-loading {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    pointer-events: none;
-    background: #000;
-  }
-  .feed-loading::after {
-    content: '';
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    border: 3px solid rgba(255,255,255,0.18);
-    border-top-color: #fff;
-    animation: feed-spin 0.8s linear infinite;
-  }
-  @keyframes feed-spin { to { transform: rotate(360deg); } }
-  .feed-end {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 60px;
-    color: rgba(255,255,255,0.45);
-    font-size: 12px;
-    letter-spacing: 0.05em;
-  }
-  .feed-comments-panel {
-    position: fixed;
-    top: 0; right: 0; bottom: 0;
-    width: min(380px, 92vw);
-    background: rgba(10,10,14,0.97);
-    border-left: 1px solid rgba(255,255,255,0.08);
-    transform: translateX(100%);
-    transition: transform 0.25s ease;
-    z-index: 50;
-    display: flex;
-    flex-direction: column;
-  }
-  .feed-comments-panel.open { transform: translateX(0); }
-  /* ═══════ Profils utilisateurs (façon TikTok/Instagram) ═══════ */
-  .feed-profile-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 6px;
-    padding: 4px;
-  }
-  .feed-profile-tile {
-    position: relative;
-    aspect-ratio: 9 / 16;
-    border-radius: 10px;
-    overflow: hidden;
-    background: #0b0b10;
-    cursor: pointer;
-  }
-  .feed-profile-tile video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-  .feed-profile-tile-overlay {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(to top, rgba(0,0,0,0.75), transparent 45%);
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 6px;
-    padding: 8px;
-  }
-  .feed-profile-tile-overlay p {
-    font-size: 10px;
-    color: #e5e7eb;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
-  }
-  .feed-profile-tile-overlay .tile-duration {
-    flex-shrink: 0;
-    font-size: 9px;
-    color: #9ca3af;
-    background: rgba(0,0,0,0.55);
-    border-radius: 6px;
-    padding: 2px 5px;
-    white-space: nowrap;
-  }
-  .feed-author-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    border-radius: 9999px;
-    padding: 2px 8px 2px 2px;
-    background: rgba(0,0,0,0.25);
-    transition: background 0.15s ease;
-    max-width: 100%;
-  }
-  .feed-author-btn:hover { background: rgba(255,255,255,0.12); }
-  .feed-author-btn .author-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .profile-avatar-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 9999px;
-    background: #1f2937;
-  }
-  /* ═══════ v8.18 : overlay TikTok fullscreen noir opaque + animations ═══════ */
-  body.vibes-modal-open { overflow: hidden !important; }
-  .vibes-modal-overlay { animation: vibesFadeIn 0.25s ease-out; }
-  .vibes-modal-panel { animation: vibesSlideUp 0.35s cubic-bezier(0.35, 0, 0.25, 1); }
-  @keyframes vibesFadeIn { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes vibesSlideUp {
-    from { transform: translateY(40px); opacity: 0; }
-    to   { transform: translateY(0);    opacity: 1; }
-  }
-  .vibes-modal-close {
-    position: fixed;
-    top: 16px;
-    right: 16px;
-    z-index: 10002;
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
-    border-radius: 9999px;
-    background: rgba(255, 255, 255, 0.14);
-    color: #fff;
-    font-size: 24px;
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    cursor: pointer;
-    transition: background 0.2s ease, transform 0.2s ease;
-  }
-  .vibes-modal-close:hover { background: rgba(255, 255, 255, 0.28); transform: scale(1.08); }
-  .vibes-modal-close:active { transform: scale(0.95); }
-  /* Badge bleu de certification (comme Instagram/TikTok) */
-  .feed-verified-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    border-radius: 9999px;
-    flex-shrink: 0;
-    background: linear-gradient(135deg, #1d9bf0, #2563eb);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 700;
-    box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.25);
-  }
-  .feed-verified-badge-lg {
-    width: 20px;
-    height: 20px;
-    font-size: 12px;
-  }
-  /* Bouton Suivre / Abonné */
-  .feed-follow-btn {
-    margin-top: 12px;
-    padding: 8px 24px;
-    border-radius: 9999px;
-    font-size: 12px;
-    font-weight: 600;
-    min-height: 40px;
-    color: #fff;
-    background: linear-gradient(135deg, #ef4444, #db2777);
-    border: none;
-    cursor: pointer;
-    transition: background 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
-  }
-  .feed-follow-btn:hover { transform: scale(1.04); }
-  .feed-follow-btn.following {
-    background: rgba(255, 255, 255, 0.12);
-    color: #e5e7eb;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-  }
-  .feed-follow-btn:disabled { opacity: 0.6; cursor: wait; }
   @media (max-width: 480px) {
-    .vibes-modal-close { top: 12px; right: 12px; width: 40px; height: 40px; min-width: 40px; min-height: 40px; font-size: 20px; }
+    .vibes-modal-close { top:12px; right:12px; width:40px; height:40px; min-width:40px; min-height:40px; font-size:20px; }
   }
 </style>
 </head>
-<body class="text-gray-100 min-h-screen font-sans overflow-x-hidden" style="touch-action: manipulation; background: radial-gradient(ellipse at 50% 0%, rgba(30,64,175,0.12) 0%, transparent 60%), radial-gradient(ellipse at 80% 100%, rgba(245,158,11,0.06) 0%, transparent 50%), #030712;">
+<body class="text-gray-100 min-h-screen font-sans">
 
-<!-- Header (v9.9 : façon TikTok — logo blanc, nav texte, avatar rond) -->
-<header id="app-header" class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-black/90 backdrop-blur-xl border-b border-white/[0.08]">
-  <div class="max-w-6xl mx-auto px-3 sm:px-6">
-    <div class="flex items-center justify-between h-14 sm:h-16">
-      <a class="flex items-center gap-2 group shrink-0" href="/">
-        <span class="header-title text-xl sm:text-2xl font-extrabold text-white tracking-tight">♬ Vibes</span>
-      </a>
-      <nav class="tt-topnav">
-        <a href="#" onclick="switchMode('video');return false;" id="tt-nav-home" class="tt-topnav-link">Accueil</a>
-        <a href="#" onclick="switchMode('gallery');return false;" id="tt-nav-vibes" class="tt-topnav-link">Vibes</a>
-      </nav>
-      <!-- Avatar profil (popover pseudo) -->
-      <div class="relative" id="pseudo-container">
-        <button id="pseudo-btn" onclick="togglePseudoPopover()" class="tt-avatar-btn" title="Mon profil">
-          <span id="pseudo-avatar" class="tt-avatar-circle">A</span>
-        </button>
-        <div id="pseudo-popover" class="absolute right-0 sm:right-0 left-auto sm:left-auto top-full mt-2 hidden w-56 p-3 rounded-xl bg-[#161823] border border-white/10 shadow-xl backdrop-blur-xl z-50 mobile-pseudo-popover">
-            <label class="block text-[11px] text-gray-500 mb-1.5">Ton pseudo ou prénom</label>
-            <input id="pseudo-input" type="text" maxlength="30" placeholder="ex: JeanDupont" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500/50 mb-2">
-            <button onclick="savePseudo()" class="w-full py-2.5 rounded-lg text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition mb-2">Enregistrer</button>
-            <button onclick="openMyProfileEdit()" class="w-full py-2.5 rounded-lg text-xs font-medium bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition">✨ Mon profil</button>
-          </div>
-        </div>
-      </nav>
-    </div>
+<!-- ═══════════ Header (style Kling) ═══════════ -->
+<header class="app-header">
+  <a class="logo" href="/">
+    <div class="logo-badge">✦</div>
+    <span>Agnes</span>
+  </a>
+
+  <nav class="header-nav">
+    <a onclick="switchMode('video');return false;" data-nav="video">Génération</a>
+    <a onclick="switchMode('gallery');return false;" data-nav="gallery">For You</a>
+    <a onclick="switchMode('image');return false;" data-nav="image" class="nav-hide-sm">Image</a>
+    <a onclick="switchMode('list');return false;" data-nav="list" class="nav-hide-sm">Tâches</a>
+    <a href="#" onclick="togglePseudoPopover();return false;" id="pseudo-btn" style="padding:8px 12px;background:rgba(255,255,255,0.06);border:1px solid var(--line);">
+      <span id="pseudo-display" style="font-size:13px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">👤</span>
+    </a>
+  </nav>
+
+  <div class="header-right">
+    <button class="btn-k btn-primary-k" onclick="scrollToGenerate()">✦ Generate</button>
   </div>
 </header>
 
-<main class="pt-20 sm:pt-24 pb-12 sm:pb-16 px-3 sm:px-4">
-  <div class="max-w-2xl mx-auto">
+<!-- Popover pseudo -->
+<div id="pseudo-popover" class="hidden" style="position:fixed;right:18px;top:70px;width:230px;padding:14px;border-radius:14px;background:#141414;border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,0.7);z-index:60;">
+  <label style="display:block;font-size:11px;color:#777;margin-bottom:6px;">Ton pseudo ou prénom</label>
+  <input id="pseudo-input" type="text" maxlength="30" placeholder="ex: JeanDupont" class="glass-input mb-2">
+  <button onclick="savePseudo()" class="btn-k btn-primary-k w-full mb-2" style="width:100%;padding:10px;font-size:13px;">Enregistrer</button>
+  <button onclick="openMyProfileEdit()" class="btn-k btn-ghost-k" style="width:100%;padding:10px;font-size:13px;">✨ Mon profil</button>
+</div>
 
-    <!-- Title -->
-    <div class="text-center mb-5 sm:mb-8">
-      <h1 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mb-2 sm:mb-3">Accueil</h1>
-      <p class="text-gray-400 text-sm sm:text-lg">Générez des vidéos et images IA en un instant</p>
+<main style="padding-top:86px;padding-bottom:70px;padding-left:18px;padding-right:18px;">
+  <div style="max-width:980px;margin:0 auto;">
+
+    <!-- Titre -->
+    <div style="text-align:center;margin-bottom:22px;">
+      <h1 style="font-size:30px;font-weight:800;letter-spacing:-0.5px;background:linear-gradient(90deg,#fff, #c7d2fe);-webkit-background-clip:text;background-clip:text;color:transparent;">Générer une vidéo IA</h1>
+      <p style="color:var(--txt2);font-size:14px;margin-top:6px;">Décrivez une scène — l'IA crée une vidéo ultra réaliste avec musique de fond.</p>
     </div>
 
     <!-- API Key -->
-    <div id="apikey-section" class="glass-card rounded-2xl mb-4 sm:mb-6 overflow-hidden">
-      <div class="p-3 sm:p-4">
-        <div class="flex items-center justify-between mb-2 sm:mb-3">
-          <div class="flex items-center gap-2">
-            <span class="text-base sm:text-lg">🔑</span>
-            <span class="text-xs sm:text-sm font-medium text-gray-300">Paramètres API Key</span>
-          </div>
-          <span id="apikey-status" class="text-[10px] sm:text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-400 whitespace-nowrap">Non configuré</span>
+    <div id="apikey-section" class="glass-card rounded-2xl mb-4 overflow-hidden" style="padding:14px;">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <span style="font-size:16px;">🔑</span>
+          <span class="text-xs sm:text-sm font-medium text-gray-300">Paramètres API Key</span>
         </div>
-        <div class="flex flex-col sm:flex-row gap-2 sm:gap-3">
-          <input id="apikey-input" type="password" placeholder="Entrez votre clé API Agnes" class="w-full sm:flex-1 glass-input rounded-lg px-4 py-3 sm:py-2.5 text-sm text-gray-100 placeholder-gray-500">
-          <div class="flex gap-2">
-            <button id="apikey-save" class="flex-1 sm:flex-none px-5 py-3 sm:py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition shadow-lg shadow-blue-600/20">Enregistrer</button>
-            <button id="apikey-clear" class="hidden flex-1 sm:flex-none px-5 py-3 sm:py-2.5 bg-red-600/80 hover:bg-red-500 rounded-lg text-sm font-medium transition">Effacer</button>
-          </div>
-        </div>
-        <p class="text-[11px] sm:text-xs text-gray-500 mt-2">Obtenez votre clé API gratuite sur : <a href="https://platform.agnes-ai.com" target="_blank" class="text-blue-400 hover:underline">platform.agnes-ai.com</a></p>
+        <span id="apikey-status" class="text-[10px] sm:text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-400 whitespace-nowrap">Non configuré</span>
       </div>
+      <div class="flex flex-col sm:flex-row gap-2 sm:gap-3">
+        <input id="apikey-input" type="password" placeholder="Entrez votre clé API Agnes" class="k-field sm:flex-1">
+        <div class="flex gap-2">
+          <button id="apikey-save" class="btn-k btn-primary-k" style="flex:1;">Enregistrer</button>
+          <button id="apikey-clear" class="hidden btn-k" style="flex:1;background:rgba(220,38,38,0.8);">Effacer</button>
+        </div>
+      </div>
+      <p class="k-note mt-2">Obtenez votre clé API gratuite sur <a href="https://platform.agnes-ai.com" target="_blank" style="color:#7ea6ff;text-decoration:underline;">platform.agnes-ai.com</a></p>
     </div>
 
-    <!-- Mode Tabs -->
-    <div class="flex gap-2 mb-4 sm:mb-6">
-      <button onclick="switchMode('video')" id="tab-video" class="flex-1 px-3 sm:px-4 py-3 sm:py-3 rounded-xl text-xs sm:text-sm font-medium bg-blue-600/20 border border-blue-500/30 text-blue-300 transition hover:bg-blue-600/30 min-h-[48px]">
-        <span class="text-base sm:text-lg">🎬</span><br><span class="hidden sm:inline">Vidéo</span><span class="sm:hidden">Vidéo</span>
-      </button>
-      <button onclick="switchMode('image')" id="tab-image" class="flex-1 px-3 sm:px-4 py-3 sm:py-3 rounded-xl text-xs sm:text-sm font-medium bg-gray-800/50 border border-gray-700/50 text-gray-400 transition hover:bg-gray-700/50 min-h-[48px]">
-        <span class="text-base sm:text-lg">🖼️</span><br><span class="hidden sm:inline">Image</span><span class="sm:hidden">Image</span>
-      </button>
-    </div>
-
-    <!-- v8.6: Bandeau lancement — fonctionnalités en cours de finition
-         (affichage #1 dans le mode Vidéo ; la carte « bientôt disponible » de
-         l'onglet Image est l'affichage #2 — pas plus, volontairement)
-         v8.16: affiché UNE SEULE FOIS — la fermeture est mémorisée dans
-         localStorage ; aux chargements suivants le bandeau reste masqué. -->
+    <!-- Bandeau WIP -->
     <div id="wip-banner" class="mb-4 rounded-xl p-3 sm:p-4 text-[11px] sm:text-xs" style="display:none;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.25);color:#fcd34d;">
       <div class="flex items-start justify-between gap-3">
         <div>
@@ -1007,9 +332,6 @@
       </div>
     </div>
     <script>
-      // v8.16: le bandeau 🚧 ne s'affiche qu'une seule fois (premier chargement).
-      // La fermeture (✕) est mémorisée dans localStorage — plus de rappel à
-      // chaque rechargement de page.
       if (!localStorage.getItem('wip_banner_dismissed')) {
         document.getElementById('wip-banner').style.display = '';
       }
@@ -1017,26 +339,59 @@
         localStorage.setItem('wip_banner_dismissed', '1');
         document.getElementById('wip-banner').style.display = 'none';
       }
+      // Scroll vers le formulaire de génération (bouton Generate du header)
+      function scrollToGenerate() {
+        switchMode('video');
+        const el = document.getElementById('s_prompt');
+        if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => el.focus(), 400); }
+      }
+      // Mise en surbrillance de l'onglet actif du header
+      function syncHeaderNav(mode) {
+        document.querySelectorAll('nav.header-nav a[data-nav]').forEach(a => {
+          a.classList.toggle('active-nav', a.dataset.nav === mode);
+        });
+      }
     </script>
 
-    <!-- Video Form -->
+    <!-- Onglets mode -->
+    <div class="flex gap-2 mb-4" id="mode-tabs">
+      <button onclick="switchMode('video')" id="tab-video" class="mode-tab bg-blue-600/20 border-blue-500/30 text-blue-300">
+        <span class="ico">🎬</span>Vidéo
+      </button>
+      <button onclick="switchMode('image')" id="tab-image" class="mode-tab bg-gray-800/50 border-gray-700/50 text-gray-400">
+        <span class="ico">🖼️</span>Image
+      </button>
+    </div>
+
+    <!-- ═══════ Formulaire Vidéo (style Kling) ═══════ -->
     <div id="form-video" class="sora-form-collapse">
-      <div class="glass-card rounded-2xl p-4 sm:p-6 mb-4">
-        <div class="mb-3 sm:mb-4">
-          <label class="block text-xs sm:text-sm text-gray-400 mb-1 sm:mb-1.5">Description vidéo (prompt) <span class="text-red-400">*</span></label>
-          <textarea id="s_prompt" rows="3" placeholder="Décrivez la vidéo souhaitée..." class="w-full glass-input rounded-lg px-4 py-3 sm:py-2.5 text-sm resize-y text-gray-100 placeholder-gray-500"></textarea>
+      <div class="k-card p-4 sm:p-6 mb-4" id="gen-card">
+        <!-- Prompt -->
+        <div style="margin-bottom:16px;">
+          <label class="k-label">Description vidéo (prompt) <span style="color:#f87171;">*</span></label>
+          <textarea id="s_prompt" rows="4" placeholder="Décrivez votre scène… Ex : un coucher de soleil doré sur la mer, vagues qui se brisent, oiseaux en vol, caméra lente ultra réaliste" class="k-field resize-y" style="min-height:120px;"></textarea>
+          <div class="flex items-center justify-between mt-2 flex-wrap gap-2">
+            <div class="flex gap-2 flex-wrap">
+              <span class="k-chip">✨ Ultra réaliste</span>
+              <span class="k-chip">🔊 Musique de fond</span>
+              <span class="k-chip">🎬 720p → 1080p</span>
+            </div>
+            <span id="char-count" class="k-note"></span>
+          </div>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-3 sm:mb-4">
+
+        <!-- Options principales -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
           <div>
-            <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Mode</label>
-            <select id="s_mode" onchange="onSimpleModeChange()" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+            <label class="k-label">Mode</label>
+            <select id="s_mode" onchange="onSimpleModeChange()" class="k-field">
               <option value="t2v">Texte → vidéo</option>
               <option value="i2v">Image → vidéo</option>
             </select>
           </div>
           <div>
-            <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Durée</label>
-            <select id="s_duration" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+            <label class="k-label">Durée</label>
+            <select id="s_duration" class="k-field">
               <option value="5">5s (rapide)</option>
               <option value="7">7s</option>
               <option value="10">10s</option>
@@ -1046,8 +401,8 @@
             <p id="s_duration_note" class="hidden text-[10px] sm:text-[11px] text-amber-400/90 mt-1.5">⚠️ En Full HD, l'API génère ~11 s max : la durée demandée sera complétée automatiquement (dernière image figée) pour obtenir exactement 15 s.</p>
           </div>
           <div>
-            <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Résolution</label>
-            <select id="s_resolution" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+            <label class="k-label">Format</label>
+            <select id="s_resolution" class="k-field">
               <option value="768x1152">Portrait 9:16 (720p)</option>
               <option value="1152x768">Paysage 16:9 (720p)</option>
               <option value="1024x1024">Carré 1:1 (1024)</option>
@@ -1056,46 +411,46 @@
             </select>
           </div>
         </div>
-        <!-- v9.3: Sélecteur de modèle vidéo Agnes — visible dans la grille principale.
-             Le choix est persisté via POST /api/config/models → toutes les pipelines
-             l'utilisent (simple + creative/manuscript/poetry/anchor). -->
-        <div class="mb-3 sm:mb-4">
+
+        <!-- Modèle vidéo -->
+        <div class="mb-4">
           <div class="flex items-center justify-between gap-2 mb-1">
-            <label class="block text-[11px] sm:text-xs text-gray-500">🎬 Modèle vidéo Agnes</label>
+            <label class="k-label" style="margin-bottom:0;">🎬 Modèle vidéo Agnes</label>
             <button id="btn-refresh-video-models" onclick="refreshVideoModels()" class="shrink-0 text-[10px] sm:text-[11px] px-2.5 py-1.5 rounded-lg border border-white/10 text-gray-400 hover:text-gray-200 hover:border-white/20 transition">Actualiser</button>
           </div>
-          <select id="s_video_model" onchange="onVideoModelChange()" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+          <select id="s_video_model" onchange="onVideoModelChange()" class="k-field">
             <option value="agnes-video-v2.0">agnes-video-v2.0 (par défaut, gratuit)</option>
           </select>
-          <p class="text-[10px] sm:text-[11px] text-gray-500 leading-relaxed mt-1.5">Liste chargée depuis l'API Agnes (GET /v1/models). <b class="text-gray-400">Agnes-Video-2.5</b> (préview : ~2× plus rapide, meilleure cohérence mouvement/physique) est proposé ici : s'il échoue pour votre compte, repassez sur v2.0.</p>
+          <p class="k-note mt-1.5">Liste chargée depuis l'API Agnes (GET /v1/models). <b class="text-gray-400">Agnes-Video-2.5</b> (préview : ~2× plus rapide) est proposé ici : s'il échoue, repassez sur v2.0.</p>
         </div>
-        <!-- Reference Image (i2v) -->
-        <div id="s_ref_section" class="hidden mb-3 sm:mb-4">
-          <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Image de référence</label>
-          <input id="s_ref_image" type="file" accept="image/*" class="w-full text-sm text-gray-400 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-200 hover:file:bg-gray-600 file:min-h-[44px]">
+
+        <!-- Image de référence (i2v) -->
+        <div id="s_ref_section" class="hidden mb-4">
+          <label class="k-label">Image de référence</label>
+          <input id="s_ref_image" type="file" accept="image/*" class="text-sm text-gray-400 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-200 hover:file:bg-gray-600 file:min-h-[44px]">
         </div>
-        <!-- Advanced -->
-        <details class="border-t border-white/5 pt-2 sm:pt-3 mt-2 sm:mt-3">
-          <summary class="text-[11px] sm:text-xs text-gray-500 cursor-pointer hover:text-gray-300 py-1">Paramètres avancés</summary>
+
+        <!-- Paramètres avancés -->
+        <details class="border-t" style="border-color:var(--line);padding-top:12px;margin-top:12px;">
+          <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300 py-1" style="font-size:13px;">⚙️ Paramètres avancés</summary>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
             <div>
-              <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Seed fixe (reproductibilité)</label>
-              <input id="s_seed" type="number" value="42" placeholder="42" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+              <label class="k-label">Seed fixe (reproductibilité)</label>
+              <input id="s_seed" type="number" value="42" placeholder="42" class="k-field">
             </div>
             <div>
-              <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Negative prompt</label>
-              <textarea id="s_negative" rows="3" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm resize-y text-gray-100 placeholder-gray-500">deformation, morphing, flicker, ghosting, distortion, blur, noise, pixelation, artifacts, wobble, shaking, unnatural, jitter, tremor, plastic, fake, doll, melting, stretching, aliasing, banding, compression, oversaturated, cartoon, low quality, dull, halo, lens flare, grain, shimmer, papillonnement, pixelise, smooth plastic skin, oversaturated colors, unnatural proportions, floating objects, discontinuous movement, frame inconsistency</textarea>
+              <label class="k-label">Negative prompt</label>
+              <textarea id="s_negative" rows="3" class="k-field resize-y" style="white-space:pre-wrap;">deformation, morphing, flicker, ghosting, distortion, blur, noise, pixelation, artifacts, wobble, shaking, unnatural, jitter, tremor, plastic, fake, doll, melting, stretching, aliasing, banding, compression, oversaturated, cartoon, low quality, dull, halo, lens flare, grain, shimmer, papillonnement, pixelise, smooth plastic skin, oversaturated colors, unnatural proportions, floating objects, discontinuous movement, frame inconsistency</textarea>
             </div>
           </div>
           <div class="mt-3">
-            <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Prompt système (optionnel)</label>
-            <textarea id="s_system" rows="2" placeholder="Instructions supplémentaires..." class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm resize-y text-gray-100 placeholder-gray-500"></textarea>
+            <label class="k-label">Prompt système (optionnel)</label>
+            <textarea id="s_system" rows="2" placeholder="Instructions supplémentaires..." class="k-field resize-y"></textarea>
           </div>
-          <!-- v7.0: Audio + Qualité -->
-          <div class="border-t border-white/5 pt-3 mt-3">
-            <p class="text-[11px] sm:text-xs text-gray-500 mb-2 font-medium">🔊 Narration audio (TTS)</p>
-            <div class="flex items-center gap-2 mb-3">
-              <label class="relative inline-flex items-center cursor-pointer min-h-[44px]">
+          <div class="border-t mt-3 pt-3" style="border-color:var(--line);">
+            <p class="k-label">🔊 Narration audio (TTS)</p>
+            <div class="flex items-center gap-2 mb-3 min-h-[44px]">
+              <label class="relative inline-flex items-center cursor-pointer">
                 <input id="s_audio_enabled" type="checkbox" class="sr-only peer">
                 <div class="w-10 sm:w-9 h-6 sm:h-5 bg-gray-700 rounded-full peer peer-checked:bg-blue-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-1 after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
               </label>
@@ -1103,8 +458,8 @@
             </div>
             <div id="s_audio_options" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Voix</label>
-                <select id="s_audio_voice" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+                <label class="k-label">Voix</label>
+                <select id="s_audio_voice" class="k-field">
                   <option value="fr-FR-VivienneMultilingualNeural">Vivienne (Multilingue)</option>
                   <option value="fr-FR-DeniseNeural">Denise (Féminin)</option>
                   <option value="fr-FR-HenriNeural">Henri (Masculin)</option>
@@ -1116,8 +471,8 @@
                 </select>
               </div>
               <div>
-                <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Vitesse</label>
-                <select id="s_audio_rate" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
+                <label class="k-label">Vitesse</label>
+                <select id="s_audio_rate" class="k-field">
                   <option value="-20%">Lent (-20%)</option>
                   <option value="-10%">Modéré (-10%)</option>
                   <option value="+0%" selected>Normal</option>
@@ -1127,7 +482,7 @@
               </div>
             </div>
           </div>
-          <div class="border-t border-white/5 pt-3 mt-3">
+          <div class="border-t mt-3 pt-3" style="border-color:var(--line);">
             <div class="flex items-center gap-2 min-h-[44px]">
               <label class="relative inline-flex items-center cursor-pointer">
                 <input id="s_quality_boost" type="checkbox" class="sr-only peer" checked>
@@ -1135,159 +490,138 @@
               </label>
               <span class="text-[11px] sm:text-xs text-gray-400">✨ Amélioration qualité HD (1080p + audio)</span>
             </div>
-           </div>
-         </details>
-
-         <!-- v8.0: Mode avancé -->
-         <div class="border-t border-white/5 pt-3 mt-3">
-           <div class="flex items-center gap-2 min-h-[44px]">
-             <label class="relative inline-flex items-center cursor-pointer">
-               <input id="s_advanced_mode" type="checkbox" class="sr-only peer" checked>
-               <div class="w-10 sm:w-9 h-6 sm:h-5 bg-gray-700 rounded-full peer peer-checked:bg-purple-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-1 after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
-             </label>
-             <span class="text-[11px] sm:text-xs text-gray-400">🚀 Mode avancé (pipeline IA complet : upscaling, débruitage, amélioration visage, HDR)</span>
-           </div>
-           <div id="s_advanced_options" class="hidden mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-             <div>
-               <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Qualité</label>
-               <select id="s_quality" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
-                 <option value="standard">Standard (480p)</option>
-                 <option value="hd">HD (720p)</option>
-                 <option value="full_hd" selected>Full HD (1080p)</option>
-                 <option value="2k">2K (1440p)</option>
-                 <option value="4k">4K Ultra (2160p)</option>
-               </select>
-             </div>
-             <div>
-               <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Style</label>
-               <select id="s_style" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
-                 <option value="ultra_realistic" selected>Ultra Realistic</option>
-                 <option value="cinema">Cinema</option>
-                 <option value="anime">Anime</option>
-                 <option value="photorealistic">Photorealistic</option>
-                 <option value="hyper_realistic">Hyper Realistic</option>
-               </select>
-             </div>
-             <div>
-               <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Débruitage</label>
-               <select id="s_denoise" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
-                 <option value="true" selected>Oui</option>
-                 <option value="false">Non</option>
-               </select>
-             </div>
-             <div>
-               <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Amélioration visage</label>
-               <select id="s_face_enhance" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
-                 <option value="true" selected>Oui</option>
-                 <option value="false">Non</option>
-               </select>
-             </div>
-              <div>
-                <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">HDR</label>
-                <select id="s_hdr" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
-                  <option value="true" selected>Oui</option>
-                  <option value="false">Non</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-[11px] sm:text-xs text-gray-500 mb-1">Optimisation prompt IA</label>
-                <select id="s_optimize_prompt" class="w-full glass-input rounded-lg px-3 py-3 sm:py-2 text-sm text-gray-100 min-h-[44px]">
-                  <option value="true" selected>Oui</option>
-                  <option value="false">Non</option>
-                </select>
-              </div>
-            </div>
-            <p class="text-[10px] sm:text-[11px] text-purple-300/80 mt-2 leading-relaxed">🎬 <strong>Réglages Cinéma Pro</strong> : seed fixe (42), negative prompt cinéma, HDR Oui. Pour un rendu optimal : prompt détaillé (250+ mots), éclairage nommé (three-point/key/fill/backlight), caméra immobile, textures explicites, finir par « ultra-réaliste 4K, zéro déformation, zéro flicker ».</p>
           </div>
-       </div>
-       <button id="btn-simple" onclick="submitSimple()" class="w-full py-4 sm:py-3.5 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 hover:from-blue-500 hover:via-blue-400 hover:to-blue-500 rounded-xl text-base font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed glow-btn min-h-[50px]">
-         🎬 Générer la vidéo
-       </button>
+        </details>
+
+        <!-- Mode avancé -->
+        <div class="border-t mt-3 pt-3" style="border-color:var(--line);">
+          <div class="flex items-center gap-2 min-h-[44px]">
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input id="s_advanced_mode" type="checkbox" class="sr-only peer" checked>
+              <div class="w-10 sm:w-9 h-6 sm:h-5 bg-gray-700 rounded-full peer peer-checked:bg-purple-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-1 after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+            </label>
+            <span class="text-[11px] sm:text-xs text-gray-400">🚀 Mode avancé (pipeline IA complet : upscaling, débruitage, amélioration visage, HDR)</span>
+          </div>
+          <div id="s_advanced_options" class="hidden mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="k-label">Qualité</label>
+              <select id="s_quality" class="k-field">
+                <option value="standard">Standard (480p)</option>
+                <option value="hd">HD (720p)</option>
+                <option value="full_hd" selected>Full HD (1080p)</option>
+                <option value="2k">2K (1440p)</option>
+                <option value="4k">4K Ultra (2160p)</option>
+              </select>
+            </div>
+            <div>
+              <label class="k-label">Style</label>
+              <select id="s_style" class="k-field">
+                <option value="ultra_realistic" selected>Ultra Realistic</option>
+                <option value="cinema">Cinema</option>
+                <option value="anime">Anime</option>
+                <option value="photorealistic">Photorealistic</option>
+                <option value="hyper_realistic">Hyper Realistic</option>
+              </select>
+            </div>
+            <div>
+              <label class="k-label">Débruitage</label>
+              <select id="s_denoise" class="k-field">
+                <option value="true" selected>Oui</option>
+                <option value="false">Non</option>
+              </select>
+            </div>
+            <div>
+              <label class="k-label">Amélioration visage</label>
+              <select id="s_face_enhance" class="k-field">
+                <option value="true" selected>Oui</option>
+                <option value="false">Non</option>
+              </select>
+            </div>
+            <div>
+              <label class="k-label">HDR</label>
+              <select id="s_hdr" class="k-field">
+                <option value="true" selected>Oui</option>
+                <option value="false">Non</option>
+              </select>
+            </div>
+            <div>
+              <label class="k-label">Optimisation prompt IA</label>
+              <select id="s_optimize_prompt" class="k-field">
+                <option value="true" selected>Oui</option>
+                <option value="false">Non</option>
+              </select>
+            </div>
+          </div>
+          <p class="k-note mt-2" style="color:rgba(192,132,252,0.8);">🎬 <strong>Réglages Cinéma Pro</strong> : seed fixe (42), negative prompt cinéma, HDR Oui. Pour un rendu optimal : prompt détaillé (250+ mots), éclairage nommé, caméra immobile, textures explicites, finir par « ultra-réaliste 4K, zéro déformation, zéro flicker ».</p>
+        </div>
+
+        <button id="btn-simple" onclick="submitSimple()" class="gen-btn mt-4" style="margin-top:20px;">
+          ✦ Générer la vidéo
+        </button>
+      </div>
     </div>
 
     <!-- Image Form - Coming Soon -->
     <div id="form-image" class="hidden sora-form-collapse">
-      <div class="glass-card rounded-2xl p-4 sm:p-6 mb-4 text-center">
+      <div class="k-card p-6 mb-4 text-center">
         <div class="text-4xl mb-3">🔒</div>
         <h3 class="text-base sm:text-lg font-semibold text-gray-200 mb-2">Génération d'images</h3>
         <p class="text-gray-400 text-sm">Cette fonctionnalité sera bientôt disponible !</p>
         <p class="text-gray-500 text-xs mt-2">Revenez bientôt pour générer des images IA.</p>
       </div>
     </div>
-    <!-- Sora 2 Inspired Progress Panel -->
+
+    <!-- Progression -->
     <div id="progress-panel" class="hidden mt-4 sm:mt-6 relative overflow-hidden">
-      <!-- Ambient glow background -->
       <div class="sora-ambient"></div>
-
-      <div class="relative z-10 rounded-2xl p-4 sm:p-6 md:p-8" style="background: rgba(17,24,39,0.8); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.06);">
-
-        <!-- Header row -->
+      <div class="relative z-10 rounded-2xl p-4 sm:p-6 md:p-8" style="background:rgba(18,18,18,0.85);backdrop-filter:blur(20px);border:1px solid var(--line);">
         <div class="flex items-center justify-between mb-4 sm:mb-7">
           <div class="flex items-center gap-2 sm:gap-3">
-            <div class="generation-badge text-[10px] sm:text-xs" style="background: rgba(59,130,246,0.15); color: #93bbfc;">
+            <div class="generation-badge" style="background:rgba(91,140,255,0.15);color:#93bbfc;">
               <span id="progress-state-dot" class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
               <span id="progress-state-label">Génération en cours</span>
             </div>
           </div>
           <div class="flex items-center gap-2 sm:gap-3">
-            <span id="progress-pct" class="text-base sm:text-lg font-mono font-bold tabular-nums" style="background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">0%</span>
-            <button id="btn-stop" onclick="stopTask()" class="hidden text-xs px-3 py-2 sm:py-1.5 rounded-lg transition font-medium min-h-[36px]" style="background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.2);">Arrêter</button>
+            <span id="progress-pct" class="text-base sm:text-lg font-mono font-bold tabular-nums" style="background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">0%</span>
+            <button id="btn-stop" onclick="stopTask()" class="hidden text-xs px-3 py-2 sm:py-1.5 rounded-lg transition font-medium min-h-[36px]" style="background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.2);">Arrêter</button>
           </div>
         </div>
-
-        <!-- Center ring + status -->
         <div class="flex flex-col items-center mb-4 sm:mb-7">
-          <!-- Animated ring -->
           <div class="sora-ring mb-3 sm:mb-4">
             <div class="sora-ring-pulse"></div>
             <div class="sora-ring-inner"></div>
             <div class="sora-ring-inner-2"></div>
-            <div class="sora-ring-icon">
-              <span id="progress-ring-icon">🎬</span>
-            </div>
+            <div class="sora-ring-icon"><span id="progress-ring-icon">🎬</span></div>
           </div>
-          <!-- Current step name -->
           <div id="progress-step-name" class="text-xs sm:text-sm font-medium text-gray-200 mb-1.5 text-center">Initialisation...</div>
-          <!-- Animated dots -->
           <div class="flex gap-1.5 items-center h-4">
-            <span class="w-1 h-1 rounded-full bg-blue-400 sora-dot-1" style="animation: dots-pulse 1.4s ease-in-out infinite;"></span>
-            <span class="w-1 h-1 rounded-full bg-purple-400 sora-dot-2" style="animation: dots-pulse 1.4s ease-in-out 0.15s infinite;"></span>
-            <span class="w-1 h-1 rounded-full bg-blue-400 sora-dot-3" style="animation: dots-pulse 1.4s ease-in-out 0.3s infinite;"></span>
+            <span class="w-1 h-1 rounded-full bg-blue-400 sora-dot-1" style="animation:dots-pulse 1.4s ease-in-out infinite;"></span>
+            <span class="w-1 h-1 rounded-full bg-purple-400 sora-dot-2" style="animation:dots-pulse 1.4s ease-in-out 0.15s infinite;"></span>
+            <span class="w-1 h-1 rounded-full bg-blue-400 sora-dot-3" style="animation:dots-pulse 1.4s ease-in-out 0.3s infinite;"></span>
           </div>
         </div>
-
-        <!-- Progress bar -->
         <div class="sora-progress-track mb-3 sm:mb-5">
           <div id="progress-bar" class="sora-progress-bar" style="width:0%"></div>
         </div>
-
-        <!-- Time info -->
-        <div class="flex justify-between text-[11px] sm:text-xs mb-4 sm:mb-6" style="color: rgba(156,163,175,0.7);">
+        <div class="flex justify-between text-[11px] sm:text-xs mb-4 sm:mb-6" style="color:rgba(156,163,175,0.7);">
           <span id="progress-elapsed" class="tabular-nums">0s écoulé</span>
           <span id="progress-remaining" class="tabular-nums">~calcul...</span>
         </div>
-
-        <!-- Steps flow -->
         <div id="steps-container" class="space-y-1.5 sm:space-y-2 mb-3 sm:mb-4"></div>
-
-        <!-- Status message -->
         <div id="progress-message" class="mt-3 sm:mt-4">
-          <div class="sora-status-text text-xs sm:text-sm" style="color: rgba(156,163,175,0.6);">Préparation...</div>
+          <div class="sora-status-text text-xs sm:text-sm" style="color:rgba(156,163,175,0.6);">Préparation...</div>
         </div>
-
-        <!-- Artifacts -->
-        <div id="artifacts-area" class="hidden mt-4 sm:mt-5 p-3 sm:p-4 rounded-xl" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.04);">
+        <div id="artifacts-area" class="hidden mt-4 sm:mt-5 p-3 sm:p-4 rounded-xl" style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.04);">
           <div class="flex items-center justify-between mb-2 sm:mb-3">
-            <span class="text-[11px] sm:text-xs font-medium" style="color: rgba(156,163,175,0.5);">Produits intermédiaires</span>
-            <button onclick="loadArtifacts()" class="text-xs transition min-h-[36px] min-w-[36px]" style="color: rgba(156,163,175,0.4);">↻</button>
+            <span class="text-[11px] sm:text-xs font-medium" style="color:rgba(156,163,175,0.5);">Produits intermédiaires</span>
+            <button onclick="loadArtifacts()" class="text-xs transition min-h-[36px] min-w-[36px]" style="color:rgba(156,163,175,0.4);">↻</button>
           </div>
           <div id="artifacts-container" class="space-y-2 max-h-48 sm:max-h-72 overflow-y-auto"></div>
         </div>
-
-        <!-- Result reveal -->
         <div id="result-area" class="hidden mt-4 sm:mt-6 sora-result">
-          <div class="rounded-xl overflow-hidden mb-3" style="background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.06);">
-            <video id="result-video" controls class="w-full max-h-72 sm:max-h-96" style="background: #000;"></video>
+          <div class="rounded-xl overflow-hidden mb-3" style="background:rgba(0,0,0,0.4);border:1px solid var(--line);">
+            <video id="result-video" controls class="w-full max-h-72 sm:max-h-96" style="background:#000;"></video>
           </div>
           <div class="flex items-center gap-2">
             <span class="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center text-xs text-white font-bold sora-check shrink-0">✓</span>
@@ -1300,40 +634,33 @@
       </div>
     </div>
 
-    <!-- Task List Button -->
+    <!-- Bouton tâches + liste -->
     <div class="text-center mt-4 sm:mt-6">
-      <button onclick="switchMode('list')" id="tab-list" class="px-5 sm:px-6 py-3 sm:py-2.5 rounded-lg text-sm font-medium bg-gray-800/50 border border-gray-700/50 text-gray-400 transition hover:bg-gray-700/50 min-h-[44px]">
-        📋 Voir les tâches
-      </button>
+      <button onclick="switchMode('list')" id="tab-list" class="btn-k btn-ghost-k bg-gray-800/50 border-gray-700/50 text-gray-400" style="border:1px solid var(--line);">📋 Voir les tâches</button>
     </div>
-
-    <!-- Task List Panel -->
     <div id="panel-list" class="hidden mt-4">
       <div id="task-list-container" class="space-y-2 sm:space-y-3">
         <p class="text-gray-500 text-xs sm:text-sm">Chargement...</p>
       </div>
-      <button onclick="switchMode('video')" class="mt-4 w-full py-3 sm:py-2.5 rounded-lg text-sm font-medium bg-gray-800/50 border border-gray-700/50 text-gray-400 transition hover:bg-gray-700/50 min-h-[44px]">← Retour</button>
+      <button onclick="switchMode('video')" class="btn-k btn-ghost-k mt-4 w-full">← Retour</button>
     </div>
 
-    <!-- Gallery Panel — Feed plein écran (style Reels/TikTok) -->
+    <!-- ═══════ For You (accueil) ═══════ -->
+    <div id="home-feed-section" style="margin-top:44px;display:none;">
+      <div class="flex items-center justify-between mb-4">
+        <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.3px;">For You</h2>
+        <button onclick="switchMode('gallery')" class="btn-k btn-ghost-k" style="font-size:13px;padding:8px 14px;">Tout voir →</button>
+      </div>
+      <div id="home-grid" class="fy-grid"></div>
+    </div>
+
+    <!-- Gallery Panel — feed plein écran -->
     <div id="panel-gallery" class="hidden fixed inset-0 z-40 bg-black">
-      <!-- Header du feed (v9.9 : coque TikTok 2020 — onglets Suivant | Pour toi + loupe) -->
-      <div class="tt-header">
-        <button class="tt-tab" id="tt-tab-following" onclick="setFeedTab('following')">Suivant</button>
-        <button class="tt-tab tt-tab-active" id="tt-tab-foryou" onclick="setFeedTab('foryou')">Pour toi</button>
-        <button class="tt-search" onclick="showToast('🔍 Recherche bientôt disponible', 2200)" title="Rechercher">🔍</button>
+      <div class="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/70 to-transparent pointer-events-none">
+        <h2 class="text-sm font-semibold text-white drop-shadow pointer-events-auto">✨ Vibes</h2>
+        <button onclick="switchMode('video')" class="pointer-events-auto px-3 py-2 rounded-xl text-xs font-medium bg-white/10 border border-white/15 text-gray-200 hover:bg-white/20 transition min-h-[40px]">+ Créer</button>
       </div>
-      <!-- Liste des slides (scroll vertical plein écran) -->
       <div id="feed-container" class="feed-scroll"></div>
-      <!-- Barre du bas (v9.9 : Accueil / Découvrir / + / Boîte / Profil) -->
-      <div class="tt-bottombar">
-        <button class="tt-nav tt-nav-active" onclick="scrollFeedTop()"><span>🏠</span><span>Accueil</span></button>
-        <button class="tt-nav" onclick="showToast('🔍 Découvrir bientôt disponible', 2200)"><span>🔎</span><span>Découvrir</span></button>
-        <button class="tt-create" onclick="switchMode('video')" title="Créer une vidéo">+</button>
-        <button class="tt-nav" onclick="showToast('📥 Boîte bientôt disponible', 2200)"><span>💬</span><span>Boîte</span></button>
-        <button class="tt-nav" onclick="openMyProfile()"><span>👤</span><span>Profil</span></button>
-      </div>
-      <!-- Panneau commentaires (glisse depuis la droite) -->
       <div id="feed-comments-panel" class="feed-comments-panel">
         <div class="flex items-center justify-between px-4 py-3 border-b border-white/10">
           <h3 id="feed-comments-title" class="text-sm font-semibold text-gray-100">💬 Commentaires</h3>
@@ -1347,7 +674,7 @@
       </div>
     </div>
 
-    <!-- Overlay profil utilisateur (façon TikTok/Instagram) -->
+    <!-- Overlay profil -->
     <div id="feed-profile-overlay" class="hidden fixed inset-0 z-[60] bg-black vibes-modal-overlay">
       <div class="absolute inset-0 overflow-y-auto" onclick="if (event.target === this) closeFeedProfile()">
         <div class="min-h-full flex items-start sm:items-center justify-center p-3 sm:p-6 pointer-events-none">
@@ -1357,13 +684,13 @@
       <button class="vibes-modal-close" onclick="closeFeedProfile()" aria-label="Fermer">&times;</button>
     </div>
 
-    <!-- Viewer vidéo (lecture plein écran depuis le profil) -->
+    <!-- Viewer vidéo -->
     <div id="feed-video-viewer" class="hidden fixed inset-0 z-[65] bg-black vibes-modal-overlay flex items-center justify-center" onclick="closeFeedVideoViewer()">
       <video id="feed-viewer-video" class="w-full h-full object-contain" controls autoplay loop playsinline></video>
       <button class="vibes-modal-close" onclick="closeFeedVideoViewer()" aria-label="Fermer">&times;</button>
     </div>
 
-    <!-- Modal édition du profil courant (accessible depuis le header) -->
+    <!-- Modal édition profil -->
     <div id="profile-edit-overlay" class="hidden fixed inset-0 z-[70] bg-black vibes-modal-overlay flex items-center justify-center p-4" onclick="if (event.target === this) closeProfileEdit()">
       <div class="w-full max-w-sm bg-gray-900 border border-white/10 rounded-2xl p-5 shadow-2xl vibes-modal-panel">
         <h3 class="text-sm font-semibold text-gray-100 mb-4">✨ Mon profil</h3>
@@ -1388,21 +715,84 @@
   </div>
 </main>
 
-<!-- v9.9 : barre du bas globale façon TikTok (visible hors galerie ; le feed a la sienne) -->
-<div class="tt-bottombar tt-bottombar-global" id="tt-bottombar-global">
-  <button class="tt-nav tt-nav-active" onclick="switchMode('video')"><span>🏠</span><span>Accueil</span></button>
-  <button class="tt-nav" onclick="showToast('🔍 Découvrir bientôt disponible', 2200)"><span>🔎</span><span>Découvrir</span></button>
-  <button class="tt-create" onclick="switchMode('video')" title="Créer une vidéo">+</button>
-  <button class="tt-nav" onclick="switchMode('list')"><span>💬</span><span>Boîte</span></button>
-  <button class="tt-nav" onclick="openMyProfileEdit()"><span>👤</span><span>Profil</span></button>
-</div>
-
 <!-- Footer -->
-<footer class="text-center pb-6 sm:pb-8">
-  <div class="border-t border-white/[0.04] pt-6 sm:pt-8 mt-3 sm:mt-4">
-    <p class="text-[10px] sm:text-xs text-gray-600">Agnes Video Generator &copy; 2026</p>
+<footer style="text-align:center;padding-bottom:26px;">
+  <div style="border-top:1px solid var(--line);padding-top:22px;margin-top:8px;">
+    <p style="font-size:11px;color:#4a4a4a;">Agnes Video Generator © 2026 — interface inspirée de Kling AI</p>
   </div>
 </footer>
+
+<!-- Scripts additionnels (grille For You accueil) -->
+<script>
+  // ── Grille « For You » sur l'accueil : derniers vidéos communautaires ──
+  // (reprend l'endpoint du feed Vibes ; clic → ouvre le feed plein écran)
+  async function loadHomeGrid() {
+    const section = document.getElementById('home-feed-section');
+    const grid = document.getElementById('home-grid');
+    if (!section || !grid) return;
+    try {
+      const res = await fetchWithAuth(API_BASE + '/api/community/videos?per_page=12');
+      const d = await res.json();
+      const vids = (d && d.videos) || [];
+      if (!vids.length) { section.style.display = 'none'; return; }
+      section.style.display = '';
+      grid.innerHTML = '';
+      vids.forEach(v => {
+        const card = document.createElement('div');
+        card.className = 'fy-card';
+        card.innerHTML =
+          '<video muted playsinline preload="metadata" src="' + escapeHtml(v.video_url) + '"></video>' +
+          '<span class="fy-dur">' + fmtDuration(v.duration || 5) + '</span>' +
+          '<div class="fy-info">' +
+            avatarHtml(v.avatar_url, (v.author || 'A').charAt(0), 'w-5 h-5 text-[9px]') +
+            '<span class="fy-name" style="color:#fff;">' + escapeHtml(v.author || 'Anonyme') + '</span>' +
+            '<span class="fy-likes" style="margin-left:auto;">❤ ' + (v.likes || 0) + '</span>' +
+          '</div>';
+        card.onclick = () => switchMode('gallery');
+        grid.appendChild(card);
+        const vid = card.querySelector('video');
+        vid.addEventListener('loadedmetadata', () => { if (vid.paused) vid.currentTime = 0.5; });
+      });
+    } catch (e) { section.style.display = 'none'; }
+  }
+  // Compteur de caractères du prompt
+  document.addEventListener('DOMContentLoaded', () => {
+    const ta = document.getElementById('s_prompt');
+    const cc = document.getElementById('char-count');
+    if (ta && cc) {
+      const upd = () => { cc.textContent = ta.value.length + ' caractères'; };
+      ta.addEventListener('input', upd); upd();
+    }
+  });
+
+  // Fermeture du popover pseudo au clic extérieur (le JS principal gère
+  // #pseudo-container qui n'existe plus dans ce layout : on reprend la main ici)
+  document.addEventListener('click', (e) => {
+    const pop = document.getElementById('pseudo-popover');
+    const btn = document.getElementById('pseudo-btn');
+    if (!pop || pop.classList.contains('hidden')) return;
+    if (btn && btn.contains(e.target)) return;
+    if (pop.contains(e.target)) return;
+    pop.classList.add('hidden');
+  });
+
+  // ── Finitions dépendantes du JS principal (chargé ci-dessous) ──
+  // Wrapper switchMode → met en surbrillance l'onglet actif du header ;
+  // charge la grille « For You » de l'accueil une fois tout le JS chargé.
+  window.addEventListener('load', () => {
+    try {
+      const orig = window.switchMode;
+      if (typeof orig === 'function') {
+        window.switchMode = function (mode) {
+          const r = orig.apply(this, arguments);
+          try { syncHeaderNav(mode); } catch (err) {}
+          return r;
+        };
+      }
+    } catch (err) {}
+    try { loadHomeGrid(); } catch (err) {}
+  });
+</script>
 
 <!-- v8.19: Puter.js — moteur de génération vidéo bonus (Kling / Sora / Veo), zéro clé API -->
 <script src="https://js.puter.com/v2/"></script>
@@ -1565,19 +955,6 @@ function switchMode(mode) {
       tab.className = tab.className.replace(/bg-blue-600\/20 border-blue-500\/30 text-blue-300/g, 'bg-gray-800\/50 border-gray-700\/50 text-gray-400');
     }
   });
-  // v9.9: onglets du header façon TikTok (Accueil actif sauf en galerie)
-  const navHome = document.getElementById('tt-nav-home');
-  const navVibes = document.getElementById('tt-nav-vibes');
-  if (navHome) navHome.classList.toggle('active', mode !== 'gallery');
-  if (navVibes) navVibes.classList.toggle('active', mode === 'gallery');
-  // v9.9: barre du bas globale — Accueil actif sauf en liste (Boîte)
-  const bbGlobal = document.getElementById('tt-bottombar-global');
-  if (bbGlobal) {
-    bbGlobal.querySelectorAll('.tt-nav').forEach(n => n.classList.remove('tt-nav-active'));
-    const bbIdx = mode === 'list' ? 2 : 0;
-    const bbItems = bbGlobal.querySelectorAll('.tt-nav');
-    if (bbItems[bbIdx]) bbItems[bbIdx].classList.add('tt-nav-active');
-  }
   if (mode === 'list') loadTaskList();
   if (mode !== 'list' && taskListTimer) { clearInterval(taskListTimer); taskListTimer = null; }
   if (mode === 'list' && !taskListTimer) taskListTimer = setInterval(loadTaskList, 5000);
@@ -2422,14 +1799,6 @@ function getPseudo() {
   return localStorage.getItem('agnes_pseudo') || 'Anonyme';
 }
 
-// v9.9: avatar rond du header (initiale du pseudo, façon TikTok)
-function updatePseudoAvatar() {
-  const el = document.getElementById('pseudo-avatar');
-  if (!el) return;
-  const p = getPseudo();
-  el.textContent = (p === 'Anonyme' ? 'A' : p.charAt(0).toUpperCase());
-}
-
 function togglePseudoPopover() {
   const pop = document.getElementById('pseudo-popover');
   const isHidden = pop.classList.contains('hidden');
@@ -2443,26 +1812,17 @@ function savePseudo() {
   const val = document.getElementById('pseudo-input').value.trim();
   if (val) {
     localStorage.setItem('agnes_pseudo', val);
+    document.getElementById('pseudo-display').textContent = '👤 ' + val;
   } else {
     localStorage.removeItem('agnes_pseudo');
+    document.getElementById('pseudo-display').textContent = '👤 Pseudo';
   }
-  updatePseudoAvatar();
   document.getElementById('pseudo-popover').classList.add('hidden');
   showToast(val ? '✅ Pseudo enregistré : ' + val : '👤 Pseudo réinitialisé', 2000);
 }
 document.addEventListener('DOMContentLoaded', () => {
-  updatePseudoAvatar();
-  // v9.9: état initial des onglets TikTok + barre du bas (Accueil actif)
-  const navHome = document.getElementById('tt-nav-home');
-  const navVibes = document.getElementById('tt-nav-vibes');
-  if (navHome) navHome.classList.toggle('active', currentMode !== 'gallery');
-  if (navVibes) navVibes.classList.toggle('active', currentMode === 'gallery');
-  const bbGlobal = document.getElementById('tt-bottombar-global');
-  if (bbGlobal) {
-    bbGlobal.querySelectorAll('.tt-nav').forEach(n => n.classList.remove('tt-nav-active'));
-    const bbFirst = bbGlobal.querySelector('.tt-nav');
-    if (bbFirst) bbFirst.classList.add('tt-nav-active');
-  }
+  const saved = localStorage.getItem('agnes_pseudo');
+  if (saved) document.getElementById('pseudo-display').textContent = '👤 ' + saved;
   // Close popover on outside click
   document.addEventListener('click', (e) => {
     const container = document.getElementById('pseudo-container');
@@ -2507,17 +1867,9 @@ async function publishVideo() {
 // Vibes — Feed plein écran (style Reels/TikTok)
 // ═══════════════════════════════════════════════════
 let feedObserver = null;
-let feedInfinityObserver = null;
 let feedVideos = [];         // dernière liste de vidéos chargée
 let feedCommentsOpen = null; // video_id du panneau commentaires ouvert
 let feedUserInteracted = false; // le navigateur autorise le son (interaction requise)
-// v9.7: pagination du feed — on charge 10 vidéos puis on en charge plus en
-// scrollant (fini les 50 connexions vidéo d'un coup qui figeaient le chargement)
-const FEED_PER_PAGE = 10;
-let feedPage = 1;
-let feedTotal = 0;
-let feedLoadingMore = false;
-let feedCount = 0; // slides construits au total (index global)
 
 // v9.4: synchronise l'icône du bouton son avec l'état réel de la vidéo
 function updateFeedMuteIcon(video) {
@@ -2546,57 +1898,30 @@ function feedActivateVideo(video) {
   if (video.preload !== 'auto') video.preload = 'auto';
 }
 
-// v9.7: lecture façon TikTok — UN contrôleur central décide quelle vidéo joue.
-// (Le bug corrigé : l'ancien IntersectionObserver pausait la vidéo dès que le
-// ratio passait sous le seuil pendant le scroll/snap, puis ne la relançait
-// jamais s'il atterrissait entre deux seuils → « la vidéo se met sur pause
-// alors que ça marche ».)
-let feedPlayTimer = null;
-let feedActiveIndex = -1;
-
-function stopFeedPlayController() {
-  if (feedPlayTimer) { clearInterval(feedPlayTimer); feedPlayTimer = null; }
-  feedActiveIndex = -1;
+// v8.5: préchargement intelligent des vidéos adjacentes
+const preloadedUrls = new Set();
+function preloadVideo(url) {
+  if (!url || preloadedUrls.has(url)) return;
+  preloadedUrls.add(url);
+  const link = document.createElement('link');
+  link.rel = 'prefetch';
+  link.href = url;
+  link.as = 'video';
+  document.head.appendChild(link);
+  // Aussi créer un élément video caché pour forcer le préchargement navigateur
+  const v = document.createElement('video');
+  v.src = url;
+  v.preload = 'auto';
+  v.style.display = 'none';
+  v.muted = true;
+  document.body.appendChild(v);
+  // Nettoyer après un délai
+  setTimeout(() => { v.remove(); }, 30000);
 }
 
-function startFeedPlayController() {
-  stopFeedPlayController();
-  feedPlayTimer = setInterval(feedPlayTick, 250);
-}
-
-function feedPlayTick() {
-  const container = document.getElementById('feed-container');
-  if (!container) return;
-  const cRect = container.getBoundingClientRect();
-  let best = -1, bestRatio = 0;
-  container.querySelectorAll('.feed-slide').forEach(s => {
-    const idx = parseInt(s.dataset.index || '-1', 10);
-    if (idx < 0) return;
-    const r = s.getBoundingClientRect();
-    const top = Math.max(r.top, cRect.top);
-    const bottom = Math.min(r.bottom, cRect.bottom);
-    const visible = Math.max(0, bottom - top);
-    const ratio = r.height > 0 ? visible / r.height : 0;
-    if (ratio > bestRatio) { bestRatio = ratio; best = idx; }
-  });
-  if (best < 0 || bestRatio <= 0.3) return;
-  // On n'agit QUE si le slide le plus visible change : jamais de pause/replay
-  // intempestifs, et un tap « pause » de l'utilisateur reste respecté.
-  if (best === feedActiveIndex) return;
-  feedActiveIndex = best;
-  container.querySelectorAll('.feed-slide').forEach(s => {
-    const idx = parseInt(s.dataset.index || '-1', 10);
-    const v = s.querySelector('.feed-video');
-    if (!v || idx < 0) return;
-    if (idx === best) {
-      feedActivateVideo(v);
-      // buffer la suivante pendant que celle-ci joue
-      const next = container.querySelector('.feed-slide[data-index="' + (best + 1) + '"] .feed-video');
-      if (next && next.preload !== 'auto') next.preload = 'auto';
-    } else {
-      v.pause();
-    }
-  });
+function preloadAdjacentVideos(currentIndex, total) {
+  if (currentIndex > 0) preloadVideo(feedVideos[currentIndex - 1]?.video_url);
+  if (currentIndex < total - 1) preloadVideo(feedVideos[currentIndex + 1]?.video_url);
 }
 
 // Dès la première interaction (clic/tap n'importe où), activer le son de TOUTES
@@ -2625,45 +1950,26 @@ function openGalleryFeed() {
   panel.classList.remove('hidden');
   panel.style.display = 'block';
   document.body.style.overflow = 'hidden';
-  // v9.9: plein écran TikTok — on masque le header principal et la barre du bas
-  // globale (le feed a les siens), on les restaure à la fermeture
-  const appHeader = document.getElementById('app-header');
-  if (appHeader) appHeader.style.display = 'none';
-  const bbGlobal = document.getElementById('tt-bottombar-global');
-  if (bbGlobal) bbGlobal.style.display = 'none';
   loadGallery();
 }
 
 function closeGalleryFeed() {
   closeFeedProfile();
   closeFeedVideoViewer();
-  stopFeedPlayController();
   if (feedObserver) { feedObserver.disconnect(); feedObserver = null; }
-  if (feedInfinityObserver) { feedInfinityObserver.disconnect(); feedInfinityObserver = null; }
   document.querySelectorAll('.feed-video').forEach(v => { v.pause(); v.removeAttribute('src'); });
   const panel = document.getElementById('panel-gallery');
   panel.classList.add('hidden');
   panel.style.display = 'none';
   document.body.style.overflow = '';
-  // v9.9: restauration du header principal et de la barre du bas globale
-  const appHeader = document.getElementById('app-header');
-  if (appHeader) appHeader.style.display = '';
-  const bbGlobal = document.getElementById('tt-bottombar-global');
-  if (bbGlobal) bbGlobal.style.display = '';
   closeFeedComments();
-  // v9.7: reset de la pagination
-  feedPage = 1;
-  feedTotal = 0;
-  feedLoadingMore = false;
-  feedCount = 0;
 }
 
 async function loadGallery() {
   const container = document.getElementById('feed-container');
   container.innerHTML = '<div class="flex items-center justify-center h-full"><p class="text-gray-400 text-sm">Chargement...</p></div>';
   try {
-    // v9.7: chargement paginé (10 vidéos, pas 50) → le premier rendu arrive vite
-    const r = await fetchWithAuth(API_BASE + '/api/community/videos?per_page=' + FEED_PER_PAGE);
+    const r = await fetchWithAuth(API_BASE + '/api/community/videos?per_page=50');
     const d = await r.json();
     if (!d.videos || d.videos.length === 0) {
       container.innerHTML = '<div class="flex flex-col items-center justify-center h-full text-center px-6"><p class="text-gray-400 text-sm mb-2">Aucune vidéo publiée pour le moment.</p><p class="text-gray-600 text-xs">Soyez le premier à partager votre création !</p><button onclick="closeGalleryFeed()" class="mt-6 px-4 py-2 rounded-lg text-xs font-medium bg-white/10 text-gray-200 hover:bg-white/20 min-h-[44px]">✕ Fermer</button></div>';
@@ -2671,80 +1977,22 @@ async function loadGallery() {
     }
     container.innerHTML = '';
     feedVideos = d.videos;
-    feedTotal = d.total || d.videos.length;
-    feedPage = 1;
-    feedCount = 0;
-    d.videos.forEach((v) => container.appendChild(buildFeedSlide(v, feedCount++)));
-    // v9.7: sentinelle d'infinite scroll DANS le conteneur de scroll
-    const endMarker = document.createElement('div');
-    endMarker.id = 'feed-end-marker';
-    endMarker.style.height = '8px';
-    endMarker.style.background = 'transparent';
-    container.appendChild(endMarker);
-    // v9.7: la 1ère vidéo se charge tout de suite, la 2ème buffer derrière
+    const total = d.videos.length;
+    d.videos.forEach((v, i) => container.appendChild(buildFeedSlide(v, i, total)));
+    setupFeedObserver();
+    // v9.4: activer immédiatement la 1ère vidéo — l'observer peut ne pas se
+    // déclencher au tout premier rendu, ce qui laissait le feed muet ET figé
+    // sur la vignette (bug « plus de son + vidéos qui ne veulent pas marcher »).
     const firstVideo = container.querySelector('.feed-video');
     if (firstVideo) feedActivateVideo(firstVideo);
-    // v9.7: contrôleur de lecture centralisé (une seule vidéo visible joue)
-    startFeedPlayController();
-    setupFeedObserver();
-    // v9.7: infinite scroll — observer le dernier slide pour charger la suite
-    setupFeedInfinity();
+    // v8.5: précharger la 2ème vidéo dès le début
+    if (total > 1) preloadVideo(d.videos[1].video_url);
   } catch(e) {
     container.innerHTML = '<div class="flex flex-col items-center justify-center h-full"><p class="text-gray-400 text-sm">Erreur de chargement : ' + escapeHtml(e.message) + '</p></div>';
   }
 }
 
-// v9.7: infinite scroll façon TikTok — quand le dernier slide approche du
-// bas, on charge la page suivante (les anciens slides restent en place).
-function setupFeedInfinity() {
-  if (feedInfinityObserver) feedInfinityObserver.disconnect();
-  const sentinel = document.getElementById('feed-end-marker');
-  if (!sentinel) return;
-  feedInfinityObserver = new IntersectionObserver((entries) => {
-    if (entries.some(e => e.isIntersecting)) loadMoreFeed();
-  }, { root: document.getElementById('feed-container'), rootMargin: '600px 0px', threshold: 0 });
-  feedInfinityObserver.observe(sentinel);
-}
-
-async function loadMoreFeed() {
-  if (feedLoadingMore) return;
-  if (feedPage * FEED_PER_PAGE >= feedTotal) {
-    // fin du flux : marqueur discret
-    const end = document.getElementById('feed-end-marker');
-    if (end && !end.classList.contains('feed-end')) end.className = 'feed-end';
-    return;
-  }
-  feedLoadingMore = true;
-  try {
-    const next = feedPage + 1;
-    const r = await fetchWithAuth(API_BASE + '/api/community/videos?per_page=' + FEED_PER_PAGE + '&page=' + next);
-    const d = await r.json();
-    const container = document.getElementById('feed-container');
-    const end = document.getElementById('feed-end-marker');
-    const items = d.videos || [];
-    items.forEach((v) => {
-      const slide = buildFeedSlide(v, feedCount++);
-      if (end && end.parentNode === container) container.insertBefore(slide, end);
-      else container.appendChild(slide);
-      feedVideos.push(v);
-    });
-    feedPage = next;
-    feedTotal = d.total || feedTotal;
-    // re-câbler l'observer des slides + l'infinity sur le nouveau dernier slide
-    if (items.length > 0) {
-      if (feedObserver) {
-        container.querySelectorAll('.feed-slide').forEach(s => feedObserver.observe(s));
-      }
-      setupFeedInfinity();
-    }
-  } catch(e) {
-    console.error('loadMoreFeed error', e);
-  } finally {
-    feedLoadingMore = false;
-  }
-}
-
-function buildFeedSlide(v, index) {
+function buildFeedSlide(v, index, total) {
   const slide = document.createElement('div');
   slide.className = 'feed-slide';
   slide.dataset.videoId = v.id;
@@ -2757,79 +2005,45 @@ function buildFeedSlide(v, index) {
   video.muted = true;
   video.loop = true;
   video.playsInline = true;
-  // v9.7: lazy — seules les 2 premières se chargent, le reste en none (0 requête).
-  // La suivante passe en auto à l'approche (observer) et au démarrage (contrôleur).
-  video.preload = index < 2 ? 'auto' : 'none';
-  // v9.7: vraie vignette JPEG si disponible → affichage immédiat façon TikTok
-  const thumb = (v.thumbnail && v.thumbnail !== v.video_url) ? v.thumbnail : '';
-  if (thumb) video.poster = thumb;
-  // v9.7: spinner tant que la 1ère frame n'est pas prête (si pas de vignette)
-  let loadingEl = null;
-  if (!thumb) {
-    loadingEl = document.createElement('div');
-    loadingEl.className = 'feed-loading';
-    slide.appendChild(loadingEl);
-  }
+  // v8.5: preload metadata pour la 1ère, auto pour la vidéo active
+  video.preload = index === 0 ? 'auto' : 'metadata';
   // v8.5: hint décodage hardware
   video.setAttribute('playsinline', '');
   video.setAttribute('webkit-playsinline', '');
   slide.appendChild(video);
-
-  // v9.7: retirer le spinner dès qu'une frame est dispo (ou que la lecture part)
-  function dropLoading() {
-    if (loadingEl && loadingEl.parentNode) loadingEl.remove();
-    loadingEl = null;
-  }
-  video.addEventListener('loadeddata', dropLoading);
-  video.addEventListener('playing', dropLoading);
-  // garde-fou : si la vidéo est en erreur, le gestionnaire d'erreur affiche
-  // son message par-dessus ; on retire le spinner pour ne pas le cacher
-  video.addEventListener('error', dropLoading);
 
   // Dégradé bas
   const grad = document.createElement('div');
   grad.className = 'feed-gradient';
   slide.appendChild(grad);
 
-  // v9.9: infos bas-gauche façon TikTok — @user + description + ♬ son original
+  // Info bas-gauche (auteur cliquable → profil + prompt + temps)
   const info = document.createElement('div');
-  info.className = 'tt-info';
+  info.className = 'absolute bottom-0 left-0 right-0 p-4 pb-6 z-10';
   const authorBtn = document.createElement('button');
-  authorBtn.className = 'tt-author';
+  authorBtn.className = 'feed-author-btn mb-1.5';
   authorBtn.title = 'Voir le profil';
-  authorBtn.innerHTML = '@' + escapeHtml(v.author || 'Anonyme') +
+  authorBtn.innerHTML = avatarHtml(v.avatar_url, (v.author || 'A').charAt(0), 'w-8 h-8 text-xs') +
+    '<span class="author-name text-sm font-semibold text-white drop-shadow">' + escapeHtml(v.author || 'Anonyme') + '</span>' +
     (v.author_verified ? '<span class="feed-verified-badge" title="Créateur certifié">✓</span>' : '');
   authorBtn.onclick = (e) => { e.stopPropagation(); openFeedProfile(v.user_id || '', v.author || 'Anonyme'); };
   info.appendChild(authorBtn);
+  const meta = document.createElement('div');
+  meta.className = 'flex items-center gap-2 mb-1.5';
+  meta.innerHTML = '<span class="text-[10px] text-gray-400">' + timeAgo(v.published_at) + '</span>';
+  info.appendChild(meta);
   if (v.prompt) {
     const pr = document.createElement('p');
-    pr.className = 'feed-prompt text-[12px] text-gray-200/90 drop-shadow';
+    pr.className = 'feed-prompt text-[11px] text-gray-200/90 max-w-[60%] drop-shadow';
     pr.title = v.prompt;
     pr.textContent = v.prompt;
     info.appendChild(pr);
   }
-  const song = document.createElement('div');
-  song.className = 'tt-song';
-  song.title = 'Activer / couper le son';
-  song.innerHTML = '<span class="tt-song-icon">♬</span><span class="tt-song-name">son original – ' + escapeHtml(v.author || 'Anonyme') + '</span>';
-  song.onclick = (e) => { e.stopPropagation(); muteBtn.click(); };
-  info.appendChild(song);
   slide.appendChild(info);
 
-  // v9.9: colonne d'actions droite façon TikTok — avatar + cœur + commentaires
-  // + partage + disque de musique (barre de progression à l'extrême droite)
+  // Barre d'actions droite (side rail, comme Reels/TikTok)
   const actions = document.createElement('div');
   actions.className = 'feed-actions';
-
-  const avatarWrap = document.createElement('button');
-  avatarWrap.className = 'tt-avatar-wrap';
-  avatarWrap.title = 'Voir le profil';
-  avatarWrap.innerHTML = (v.avatar_url
-      ? '<img class="tt-avatar-img" src="' + escapeHtml(v.avatar_url) + '" alt="" loading="lazy">'
-      : '<span class="tt-avatar-initial">' + escapeHtml((v.author || 'A').charAt(0).toUpperCase()) + '</span>') +
-    '<span class="tt-add-badge">+</span>';
-  avatarWrap.onclick = (e) => { e.stopPropagation(); openFeedProfile(v.user_id || '', v.author || 'Anonyme'); };
-  actions.appendChild(avatarWrap);
 
   const likeBtn = document.createElement('button');
   likeBtn.className = 'feed-action';
@@ -2844,50 +2058,23 @@ function buildFeedSlide(v, index) {
   commentBtn.onclick = (e) => { e.stopPropagation(); openFeedComments(v); };
   actions.appendChild(commentBtn);
 
-  const shareBtn = document.createElement('button');
-  shareBtn.className = 'feed-action';
-  shareBtn.title = 'Copier le lien';
-  shareBtn.innerHTML = '<div class="feed-action-icon">↗️</div><span>Partager</span>';
-  shareBtn.onclick = (e) => { e.stopPropagation(); shareFeedVideo(v); };
-  actions.appendChild(shareBtn);
+  if (v.duration && v.duration > 0) {
+    const dur = document.createElement('div');
+    dur.className = 'feed-action';
+    dur.innerHTML = '<div class="feed-action-icon">⏱️</div><span>' + fmtDuration(v.duration) + '</span>';
+    actions.appendChild(dur);
+  }
 
-  const disc = document.createElement('div');
-  disc.className = 'tt-disc';
-  disc.title = '♬ son original – ' + (v.author || 'Anonyme');
-  disc.textContent = '♬';
-  actions.appendChild(disc);
-
-  slide.appendChild(actions);
-
-  // v9.9: barre de progression verticale fine (bord droit, façon TikTok)
-  const progress = document.createElement('div');
-  progress.className = 'tt-progress';
-  progress.innerHTML = '<div class="tt-progress-fill"></div>';
-  slide.appendChild(progress);
-  const progressFill = progress.querySelector('.tt-progress-fill');
-  const updateProgress = () => {
-    if (!video.duration || !isFinite(video.duration)) { progressFill.style.height = '0%'; return; }
-    progressFill.style.height = Math.min(100, (video.currentTime / video.duration) * 100) + '%';
-  };
-  video.addEventListener('timeupdate', updateProgress);
-  video.addEventListener('loadedmetadata', updateProgress);
-
-  // Suppression réservée au créateur de la publication (user_id) — discret,
-  // sous le bouton son (v9.9 : sorti de la colonne d'actions façon TikTok)
+  // Suppression réservée au créateur de la publication (user_id)
   if (v.user_id && v.user_id === agnesUserId) {
     const delBtn = document.createElement('button');
     delBtn.className = 'feed-action';
     delBtn.title = 'Supprimer (créateur)';
-    delBtn.style.position = 'absolute';
-    delBtn.style.top = '108px';
-    delBtn.style.right = '14px';
-    delBtn.style.zIndex = '30';
-    delBtn.style.minWidth = '44px';
-    delBtn.style.minHeight = '38px';
-    delBtn.innerHTML = '<div class="feed-action-icon" style="font-size:22px;">🗑</div><span style="font-size:9px;">Suppr.</span>';
+    delBtn.innerHTML = '<div class="feed-action-icon">🗑</div><span>Suppr.</span>';
     delBtn.onclick = (e) => { e.stopPropagation(); deleteGalleryVideo(v.id); };
-    slide.appendChild(delBtn);
+    actions.appendChild(delBtn);
   }
+  slide.appendChild(actions);
 
   // Badge lecture/pause au tap
   const playBadge = document.createElement('div');
@@ -2912,7 +2099,7 @@ function buildFeedSlide(v, index) {
 
   // Tap = lecture / pause ; actions + auteur + bouton son + erreur = stopPropagation
   slide.addEventListener('click', (e) => {
-    if (e.target.closest('.feed-actions') || e.target.closest('.tt-author') || e.target.closest('.tt-song') || e.target.closest('.feed-mute-btn') || e.target.closest('.feed-video-error')) return;
+    if (e.target.closest('.feed-actions') || e.target.closest('.feed-author-btn') || e.target.closest('.feed-mute-btn') || e.target.closest('.feed-video-error')) return;
     if (video.paused) { feedActivateVideo(video); } else { video.pause(); }
   });
   video.addEventListener('play', () => { const b = playBadge.querySelector('.feed-play-badge'); if (b) b.classList.add('hidden'); updateFeedMuteIcon(video); });
@@ -2920,8 +2107,10 @@ function buildFeedSlide(v, index) {
   // Première frame comme vignette
   video.addEventListener('loadedmetadata', () => { if (video.paused) video.currentTime = 0.5; });
 
-  // v9.7: plus de preload ciblé ici — le contrôleur feedPlayTick bufferise la
-  // suivante quand la vidéo devient active, et l'observer précharge à l'approche.
+  // v8.5: précharger la vidéo suivante/précédente quand celle-ci devient active
+  video.addEventListener('play', () => {
+    preloadAdjacentVideos(index, total);
+  });
 
   // v9.4: vidéo cassée (404 Supabase / fichier corrompu / CORS) → retry via le
   // proxy Render une seule fois, puis message clair avec bouton réessayer
@@ -2962,24 +2151,27 @@ function buildFeedSlide(v, index) {
   return slide;
 }
 
-// v9.7: l'observer ne fait PLUS que précharger : quand un slide entre dans le
-// buffer (800px), sa vidéo passe en preload=auto (le navigateur télécharge les
-// premières données) SANS démarrer la lecture — le contrôleur feedPlayTick
-// décide seul qui joue. Fini l'écran noir au scroll ET les pauses intempestives.
 function setupFeedObserver() {
   if (feedObserver) feedObserver.disconnect();
   feedObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
-      if (!entry.isIntersecting) return;
-      const idx = parseInt(entry.target.dataset.index || '-1', 10);
-      if (idx < 0) return;
-      const v = entry.target.querySelector('.feed-video');
-      if (v && v.preload !== 'auto') v.preload = 'auto';
+      const video = entry.target.querySelector('.feed-video');
+      if (!video) return;
+      // v9.4: seuil assoupli 0.4 (au lieu de 0.6) — avec 0.6, un slide jamais
+      // assez visible (viewport partagé, barre d'infos…) ne démarrait JAMAIS :
+      // feed figé sur la vignette + muet.
+      if (entry.isIntersecting && entry.intersectionRatio > 0.4) {
+        feedActivateVideo(video);
+      } else {
+        video.pause();
+        // v9.4: ne plus re-muter en sortie — l'état du son appartient à
+        // l'utilisateur (un mute manuel ne doit pas être annulé au scroll).
+      }
     });
-  }, {
+  }, { 
     root: document.getElementById('feed-container'),
-    rootMargin: '800px 0px 800px 0px',
-    threshold: 0
+    rootMargin: '0px',
+    threshold: [0.4, 0.6, 0.75]
   });
   document.querySelectorAll('.feed-slide').forEach(s => feedObserver.observe(s));
 }
@@ -3022,46 +2214,6 @@ function avatarHtml(avatarUrl, initiale, sizeClass) {
 
 function pauseFeedVideo() {
   document.querySelectorAll('.feed-video').forEach(v => { if (!v.paused) v.pause(); });
-}
-
-// v9.9: coque TikTok — onglets "Suivant | Pour toi" (bascule visuelle + retour en haut)
-function setFeedTab(which) {
-  document.getElementById('tt-tab-following').classList.toggle('tt-tab-active', which === 'following');
-  document.getElementById('tt-tab-foryou').classList.toggle('tt-tab-active', which === 'foryou');
-  scrollFeedTop();
-  if (which === 'following') showToast('Le flux « Suivant » réunit les comptes que tu suis', 2600);
-}
-
-function scrollFeedTop() {
-  const c = document.getElementById('feed-container');
-  if (c) c.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-// v9.9: profil courant (barre du bas "Profil") → modal d'édition du profil local
-function openMyProfile() {
-  feedUserInteracted = true;
-  pauseFeedVideo();
-  const el = document.getElementById('profile-edit-overlay');
-  if (el && el.classList.contains('hidden')) el.classList.remove('hidden');
-}
-
-// v9.9: partager = copier le lien de la vidéo
-function shareFeedVideo(v) {
-  const url = (v && v.video_url) || '';
-  if (!url) { showToast('Lien indisponible', 2000); return; }
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(url).then(() => showToast('🔗 Lien copié', 2200)).catch(() => fallbackShare(url));
-  } else { fallbackShare(url); }
-}
-function fallbackShare(url) {
-  const ta = document.createElement('textarea');
-  ta.value = url;
-  ta.style.position = 'fixed';
-  ta.style.opacity = '0';
-  document.body.appendChild(ta);
-  ta.select();
-  try { document.execCommand('copy'); showToast('🔗 Lien copié', 2200); } catch (e) { showToast('Copie impossible', 2000); }
-  ta.remove();
 }
 
 async function openFeedProfile(userId, author) {
@@ -3256,7 +2408,8 @@ async function saveMyProfile() {
     if (!r.ok || !d.ok) throw new Error(d.detail || 'Échec');
     if (pseudo) {
       localStorage.setItem('agnes_pseudo', pseudo);
-      updatePseudoAvatar();
+      const disp = document.getElementById('pseudo-display');
+      if (disp) disp.textContent = '👤 ' + pseudo;
     }
     showToast('✅ Profil enregistré', 2500);
     closeProfileEdit();

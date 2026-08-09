@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agnes — Preview style Kling</title>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --bg-2: #121212;
+    --card: #161616;
+    --line: rgba(255,255,255,0.08);
+    --txt: #f5f5f5;
+    --txt-2: #9a9a9a;
+    --acc1: #5b8cff;
+    --acc2: #8b5cf6;
+    --acc3: #22d3ee;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--txt); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; min-height: 100vh; }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+
+  /* ── Header ─────────────────────────────────────────── */
+  header {
+    position: sticky; top: 0; z-index: 50;
+    height: 64px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; background: rgba(10,10,10,0.85); backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--line);
+  }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; letter-spacing: -0.3px; }
+  .logo-badge {
+    width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--acc1), var(--acc2)); font-size: 15px; color: #fff;
+    box-shadow: 0 4px 14px rgba(91,140,255,0.35);
+  }
+  nav { display: flex; align-items: center; gap: 4px; }
+  nav a {
+    padding: 8px 14px; border-radius: 10px; color: var(--txt-2); text-decoration: none;
+    font-size: 14px; font-weight: 500; transition: all .18s ease;
+  }
+  nav a:hover { color: var(--txt); background: rgba(255,255,255,0.05); }
+  nav a.active { color: #fff; background: rgba(255,255,255,0.09); }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .btn {
+    border: none; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 600;
+    border-radius: 10px; padding: 9px 16px; transition: all .18s ease; color: #fff;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--acc1), var(--acc2));
+    box-shadow: 0 4px 18px rgba(91,140,255,0.35);
+  }
+  .btn-primary:hover { box-shadow: 0 6px 26px rgba(139,92,246,0.5); transform: translateY(-1px); }
+  .btn-ghost { background: rgba(255,255,255,0.07); color: var(--txt); }
+  .btn-ghost:hover { background: rgba(255,255,255,0.12); }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--acc2), var(--acc3)); display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+
+  /* ── Conteneur ──────────────────────────────────────── */
+  .container { max-width: 1280px; margin: 0 auto; padding: 28px 20px 80px; }
+  .page { display: none; animation: fade .25s ease; }
+  .page.active { display: block; }
+  @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  /* ── Page Génération (style Kling) ─────────────────── */
+  .gen-title { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 4px; }
+  .gen-sub { color: var(--txt-2); font-size: 14px; margin-bottom: 24px; }
+  .gen-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  }
+  .prompt-box { position: relative; }
+  .prompt-box textarea {
+    width: 100%; min-height: 140px; resize: vertical; background: var(--bg-2);
+    border: 1px solid var(--line); border-radius: 14px; color: var(--txt); font-size: 15px;
+    font-family: inherit; line-height: 1.55; padding: 16px; outline: none; transition: border .2s;
+  }
+  .prompt-box textarea:focus { border-color: rgba(91,140,255,0.6); box-shadow: 0 0 0 3px rgba(91,140,255,0.12); }
+  .prompt-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+  .prompt-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+    background: rgba(255,255,255,0.06); border: 1px solid var(--line); color: var(--txt-2);
+    font-size: 12.5px; cursor: pointer; transition: all .18s;
+  }
+  .chip:hover { color: var(--txt); border-color: rgba(255,255,255,0.2); }
+  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 18px; }
+  .opt { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .opt label { display: block; font-size: 11.5px; color: var(--txt-2); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; }
+  .seg { display: flex; gap: 6px; }
+  .seg button {
+    flex: 1; padding: 8px 0; border-radius: 8px; border: 1px solid transparent; cursor: pointer;
+    background: rgba(255,255,255,0.05); color: var(--txt-2); font-size: 13px; font-weight: 600; transition: all .15s;
+  }
+  .seg button.on { background: rgba(91,140,255,0.16); color: #fff; border-color: rgba(91,140,255,0.45); }
+  .gen-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 20px; gap: 12px; flex-wrap: wrap; }
+  .gen-btn {
+    padding: 13px 34px; font-size: 15px; border-radius: 12px;
+    background: linear-gradient(135deg, var(--acc1), var(--acc2));
+    box-shadow: 0 6px 24px rgba(91,140,255,0.4); border: none; color: #fff; font-weight: 700;
+    cursor: pointer; transition: all .2s; display: inline-flex; align-items: center; gap: 8px;
+  }
+  .gen-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 30px rgba(139,92,246,0.55); }
+  .gen-note { color: var(--txt-2); font-size: 12.5px; }
+
+  /* ── Page For You (feed) ───────────────────────────── */
+  .feed-head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
+  .feed-tab { padding: 8px 16px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--txt-2); cursor: pointer; transition: all .18s; border: 1px solid transparent; }
+  .feed-tab.on { background: rgba(255,255,255,0.09); color: #fff; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+  .vcard {
+    position: relative; aspect-ratio: 9/16; border-radius: 16px; overflow: hidden; background: #1c1c1e;
+    border: 1px solid var(--line); cursor: pointer; transition: transform .2s, box-shadow .2s;
+  }
+  .vcard:hover { transform: translateY(-3px); box-shadow: 0 14px 34px rgba(0,0,0,0.6); }
+  .vthumb { width: 100%; height: 100%; object-fit: cover; }
+  .vdur { position: absolute; right: 8px; bottom: 44px; background: rgba(0,0,0,0.6); border-radius: 6px; padding: 2px 6px; font-size: 11px; }
+  .vinfo { position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 10px 10px; background: linear-gradient(transparent, rgba(0,0,0,0.85)); }
+  .vwho { display: flex; align-items: center; gap: 7px; }
+  .vava { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, var(--acc1), var(--acc2)); display: grid; place-items: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+  .vname { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vlikes { display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: #d4d4d4; margin-top: 2px; }
+
+  /* ── Footer léger ──────────────────────────────────── */
+  footer { border-top: 1px solid var(--line); padding: 22px 20px; text-align: center; color: var(--txt-2); font-size: 12.5px; }
+
+  /* ── Responsive ────────────────────────────────────── */
+  @media (max-width: 860px) {
+    nav { display: none; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .gen-title { font-size: 21px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="logo-badge">✦</div>Agnes</div>
+  <nav>
+    <a href="#" data-page="gen" class="active">Génération vidéo</a>
+    <a href="#" data-page="feed">For You</a>
+    <a href="#" data-page="gen">Image</a>
+    <a href="#" data-page="gen">Tâches</a>
+  </nav>
+  <div class="header-right">
+    <button class="btn btn-ghost" onclick="go('gen')">Mes créations</button>
+    <button class="btn btn-primary" onclick="go('gen')">Generate</button>
+    <div class="avatar">M</div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ════════ Page Génération ════════ -->
+  <section id="page-gen" class="page active">
+    <h1 class="gen-title">Générer une vidéo</h1>
+    <p class="gen-sub">Décrivez une scène : l'IA crée une vidéo ultra réaliste avec musique de fond.</p>
+
+    <div class="gen-card">
+      <div class="prompt-box">
+        <textarea id="prompt" placeholder="Décrivez votre vidéo… Ex : un coucher de soleil doré sur la mer, vagues qui se brisent, oiseaux en vol, caméra lente ultra réaliste"></textarea>
+        <div class="prompt-actions">
+          <div class="prompt-chips">
+            <span class="chip">✨ Ultra réaliste</span>
+            <span class="chip">🔊 Musique de fond</span>
+            <span class="chip">🖼 Référence</span>
+          </div>
+          <span class="gen-note" id="charCount">0 caractères</span>
+        </div>
+      </div>
+
+      <div class="opts">
+        <div class="opt">
+          <label>Format</label>
+          <div class="seg" id="segRatio">
+            <button class="on">16:9</button>
+            <button>9:16</button>
+            <button>1:1</button>
+          </div>
+        </div>
+        <div class="opt">
+          <label>Durée</label>
+          <div class="seg" id="segDur">
+            <button class="on">5 s</button>
+            <button>10 s</button>
+          </div>
+        </div>
+        <div class="opt">
+          <label>Qualité</label>
+          <div class="seg" id="segQual">
+            <button class="on">HD</button>
+            <button>Full HD</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="gen-footer">
+        <button class="gen-btn" onclick="toast()">✦ &nbsp;Générer la vidéo</button>
+        <span class="gen-note">Génération gratuite · plan Render Free · 1 vidéo à la fois</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ Page For You ════════ -->
+  <section id="page-feed" class="page">
+    <div class="feed-head">
+      <span class="feed-tab on">For You</span>
+      <span class="feed-tab">Suivis</span>
+      <span class="feed-tab">Événements</span>
+    </div>
+    <div class="grid" id="feedGrid"></div>
+  </section>
+
+</div>
+
+<footer>Agnes Video Generator — interface inspirée de Kling AI · aperçu de style</footer>
+
+<script>
+  // Navigation
+  const pages = { gen: 'page-gen', feed: 'page-feed' };
+  function go(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(pages[name]).classList.add('active');
+    document.querySelectorAll('nav a').forEach(a => a.classList.toggle('active', a.dataset.page === name));
+  }
+  document.querySelectorAll('nav a').forEach(a => a.addEventListener('click', e => { e.preventDefault(); go(a.dataset.page); }));
+
+  // Segments
+  document.querySelectorAll('.seg').forEach(seg => {
+    seg.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      seg.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+    });
+  });
+
+  // Compteur de caractères
+  const ta = document.getElementById('prompt');
+  ta.addEventListener('input', () => document.getElementById('charCount').textContent = ta.value.length + ' caractères');
+
+  // Feed factice
+  const creators = [
+    ['Léa Martin', '🏔', 'nature'], ['Thomas Bernard', '🍳', 'cuisine'], ['Emma Dubois', '✈️', 'voyages'],
+    ['Lucas Moreau', '🤖', 'tech'], ['Chloé Petit', '👗', 'mode'], ['Hugo Lefèvre', '⚽', 'sport'],
+    ['Manon Girard', '🎨', 'art'], ['Nathan Rousseau', '🦊', 'animaux'], ['Camille Morel', '🌿', 'jardin'],
+    ['Antoine Lefebvre', '🎬', 'cinéma'], ['Juliette Roux', '💃', 'danse'], ['Maxime Laurent', '🔭', 'astro'],
+    ['Inès Fontaine', '🧁', 'pâtisserie'], ['Romain Mercier', '🏙', 'archi'], ['Louise Garnier', '🧘', 'bien-être'],
+    ['Théo Blanchard', '🎮', 'gaming'],
+  ];
+  const grid = document.getElementById('feedGrid');
+  creators.forEach((c, i) => {
+    const likes = (1234 + i * 977) % 9000 + 200;
+    const dur = 5 + (i % 5);
+    const hue = (i * 47) % 360;
+    const card = document.createElement('div');
+    card.className = 'vcard';
+    card.innerHTML = `
+      <div class="vthumb" style="background:linear-gradient(160deg, hsl(${hue},60%,32%), hsl(${(hue+40)%360},65%,18%))"></div>
+      <span class="vdur">00:0${dur}</span>
+      <div class="vinfo">
+        <div class="vwho"><div class="vava">${c[1]}</div><span class="vname">${c[0]}</span></div>
+        <div class="vlikes">❤ ${likes.toLocaleString('fr-FR')}</div>
+      </div>`;
+    grid.appendChild(card);
+  });
+
+  function toast() { alert('Aperçu : la génération réelle sera branchée sur le serveur Agnes.'); }
+</script>
+</body>
+</html>

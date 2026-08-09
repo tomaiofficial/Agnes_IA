@@ -607,6 +607,102 @@
     margin-bottom: 6px;
   }
   .tt-create:active { transform: scale(0.95); }
+  /* ═══════ v9.9 : thème TikTok appliqué à TOUTE l'interface ═══════ */
+  :root { --tt-red: #fe2c55; }
+  body { background: #000 !important; }
+  .glass-card {
+    background: rgba(13,15,20,0.9) !important;
+    border-color: rgba(255,255,255,0.08);
+  }
+  .glass-card:hover {
+    border-color: rgba(254,44,85,0.25);
+    box-shadow: 0 0 20px rgba(254,44,85,0.06);
+  }
+  .glass-input { background: rgba(22,24,35,0.85); border-color: rgba(255,255,255,0.08); }
+  .glass-input:focus {
+    border-color: rgba(254,44,85,0.6);
+    box-shadow: 0 0 12px rgba(254,44,85,0.15);
+    background: rgba(22,24,35,0.98);
+  }
+  ::selection { background: rgba(254,44,85,0.4); color: #fff; }
+  /* Boutons primaires bleus → rouge TikTok */
+  .bg-blue-600 { background-color: #fe2c55 !important; }
+  .bg-blue-600:hover, .bg-blue-600:focus { background-color: #e2254b !important; }
+  .bg-blue-600\/80 { background-color: rgba(254,44,85,0.85) !important; }
+  .bg-blue-600\/20 { background-color: rgba(254,44,85,0.18) !important; }
+  .border-blue-500\/30 { border-color: rgba(254,44,85,0.5) !important; }
+  .text-blue-300 { color: #ff8ba0 !important; }
+  .text-blue-400 { color: #5ec5ff !important; }
+  .shadow-blue-600\/20 { box-shadow: 0 4px 15px rgba(254,44,85,0.25) !important; }
+  .glow-btn {
+    box-shadow: 0 4px 15px rgba(254,44,85,0.25), 0 0 30px rgba(254,44,85,0.1) !important;
+  }
+  .glow-btn:hover:not(:disabled) {
+    box-shadow: 0 4px 25px rgba(254,44,85,0.4), 0 0 50px rgba(254,44,85,0.15) !important;
+  }
+  /* Header principal façon TikTok : logo blanc, nav texte blanc, avatar rond */
+  .tt-topnav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tt-topnav-link {
+    padding: 8px 14px;
+    color: rgba(255,255,255,0.75);
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    border-bottom: 3px solid transparent;
+    transition: color 0.15s ease, border-color 0.15s ease;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+  .tt-topnav-link:hover { color: #fff; }
+  .tt-topnav-link.active { color: #fff; font-weight: 700; border-bottom-color: #fe2c55; }
+  .tt-avatar-btn {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    min-height: 38px;
+    border-radius: 9999px;
+    border: 1.5px solid rgba(255,255,255,0.85);
+    overflow: hidden;
+    background: #1f2937;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tt-avatar-circle {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #fe2c55, #8b00ff);
+  }
+  .tt-avatar-circle img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  /* Barre du bas globale (modes création/tâches) — fixed ; en galerie elle est
+     masquée car le feed a la sienne */
+  .tt-bottombar-global {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 30;
+    background: linear-gradient(to top, rgba(0,0,0,0.95), rgba(0,0,0,0.7) 70%, transparent);
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  /* Le contenu principal ne doit pas être caché derrière la barre du bas */
+  main { padding-bottom: 96px !important; }
   /* v9.4: message clair quand une vidéo est vraiment indisponible (404/corrompue) */
   .feed-video-error {
     position: absolute;
@@ -828,22 +924,23 @@
 </head>
 <body class="text-gray-100 min-h-screen font-sans overflow-x-hidden" style="touch-action: manipulation; background: radial-gradient(ellipse at 50% 0%, rgba(30,64,175,0.12) 0%, transparent 60%), radial-gradient(ellipse at 80% 100%, rgba(245,158,11,0.06) 0%, transparent 50%), #030712;">
 
-<!-- Header -->
-<header class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-gray-950/80 backdrop-blur-xl border-b border-white/[0.06] shadow-lg shadow-blue-900/10">
+<!-- Header (v9.9 : façon TikTok — logo blanc, nav texte, avatar rond) -->
+<header id="app-header" class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-black/90 backdrop-blur-xl border-b border-white/[0.08]">
   <div class="max-w-6xl mx-auto px-3 sm:px-6">
     <div class="flex items-center justify-between h-14 sm:h-16">
       <a class="flex items-center gap-2 group shrink-0" href="/">
-        <span class="header-title text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-400 via-cyan-300 to-amber-400 bg-clip-text text-transparent">Agnes Video</span>
+        <span class="header-title text-xl sm:text-2xl font-extrabold text-white tracking-tight">♬ Vibes</span>
       </a>
-      <nav class="header-nav flex items-center gap-1 sm:gap-1">
-        <a href="/" onclick="switchMode('video');return false;" class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors text-cyan-300/90 hover:text-cyan-100 hover:bg-cyan-500/10">Accueil</a>
-        <a href="#" onclick="switchMode('gallery');return false;" class="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors text-cyan-300/90 hover:text-cyan-100 hover:bg-cyan-500/10">Vibes</a>
-        <!-- Pseudo popover -->
-        <div class="relative ml-1 sm:ml-2" id="pseudo-container">
-          <button id="pseudo-btn" onclick="togglePseudoPopover()" class="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors bg-white/5 border border-white/10 text-gray-400 hover:text-gray-200 hover:bg-white/10 whitespace-nowrap">
-            <span id="pseudo-display" class="truncate max-w-[60px] sm:max-w-none">👤</span>
-          </button>
-          <div id="pseudo-popover" class="absolute right-0 sm:right-0 left-auto sm:left-auto top-full mt-2 hidden w-56 p-3 rounded-xl bg-gray-900 border border-white/10 shadow-xl backdrop-blur-xl z-50 mobile-pseudo-popover">
+      <nav class="tt-topnav">
+        <a href="#" onclick="switchMode('video');return false;" id="tt-nav-home" class="tt-topnav-link">Accueil</a>
+        <a href="#" onclick="switchMode('gallery');return false;" id="tt-nav-vibes" class="tt-topnav-link">Vibes</a>
+      </nav>
+      <!-- Avatar profil (popover pseudo) -->
+      <div class="relative" id="pseudo-container">
+        <button id="pseudo-btn" onclick="togglePseudoPopover()" class="tt-avatar-btn" title="Mon profil">
+          <span id="pseudo-avatar" class="tt-avatar-circle">A</span>
+        </button>
+        <div id="pseudo-popover" class="absolute right-0 sm:right-0 left-auto sm:left-auto top-full mt-2 hidden w-56 p-3 rounded-xl bg-[#161823] border border-white/10 shadow-xl backdrop-blur-xl z-50 mobile-pseudo-popover">
             <label class="block text-[11px] text-gray-500 mb-1.5">Ton pseudo ou prénom</label>
             <input id="pseudo-input" type="text" maxlength="30" placeholder="ex: JeanDupont" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500/50 mb-2">
             <button onclick="savePseudo()" class="w-full py-2.5 rounded-lg text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition mb-2">Enregistrer</button>
@@ -860,7 +957,7 @@
 
     <!-- Title -->
     <div class="text-center mb-5 sm:mb-8">
-      <h1 class="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-400 via-cyan-300 to-amber-400 bg-clip-text text-transparent mb-2 sm:mb-3">Accueil</h1>
+      <h1 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mb-2 sm:mb-3">Accueil</h1>
       <p class="text-gray-400 text-sm sm:text-lg">Générez des vidéos et images IA en un instant</p>
     </div>
 
@@ -1291,6 +1388,15 @@
   </div>
 </main>
 
+<!-- v9.9 : barre du bas globale façon TikTok (visible hors galerie ; le feed a la sienne) -->
+<div class="tt-bottombar tt-bottombar-global" id="tt-bottombar-global">
+  <button class="tt-nav tt-nav-active" onclick="switchMode('video')"><span>🏠</span><span>Accueil</span></button>
+  <button class="tt-nav" onclick="showToast('🔍 Découvrir bientôt disponible', 2200)"><span>🔎</span><span>Découvrir</span></button>
+  <button class="tt-create" onclick="switchMode('video')" title="Créer une vidéo">+</button>
+  <button class="tt-nav" onclick="switchMode('list')"><span>💬</span><span>Boîte</span></button>
+  <button class="tt-nav" onclick="openMyProfileEdit()"><span>👤</span><span>Profil</span></button>
+</div>
+
 <!-- Footer -->
 <footer class="text-center pb-6 sm:pb-8">
   <div class="border-t border-white/[0.04] pt-6 sm:pt-8 mt-3 sm:mt-4">
@@ -1459,6 +1565,19 @@ function switchMode(mode) {
       tab.className = tab.className.replace(/bg-blue-600\/20 border-blue-500\/30 text-blue-300/g, 'bg-gray-800\/50 border-gray-700\/50 text-gray-400');
     }
   });
+  // v9.9: onglets du header façon TikTok (Accueil actif sauf en galerie)
+  const navHome = document.getElementById('tt-nav-home');
+  const navVibes = document.getElementById('tt-nav-vibes');
+  if (navHome) navHome.classList.toggle('active', mode !== 'gallery');
+  if (navVibes) navVibes.classList.toggle('active', mode === 'gallery');
+  // v9.9: barre du bas globale — Accueil actif sauf en liste (Boîte)
+  const bbGlobal = document.getElementById('tt-bottombar-global');
+  if (bbGlobal) {
+    bbGlobal.querySelectorAll('.tt-nav').forEach(n => n.classList.remove('tt-nav-active'));
+    const bbIdx = mode === 'list' ? 2 : 0;
+    const bbItems = bbGlobal.querySelectorAll('.tt-nav');
+    if (bbItems[bbIdx]) bbItems[bbIdx].classList.add('tt-nav-active');
+  }
   if (mode === 'list') loadTaskList();
   if (mode !== 'list' && taskListTimer) { clearInterval(taskListTimer); taskListTimer = null; }
   if (mode === 'list' && !taskListTimer) taskListTimer = setInterval(loadTaskList, 5000);
@@ -2303,6 +2422,14 @@ function getPseudo() {
   return localStorage.getItem('agnes_pseudo') || 'Anonyme';
 }
 
+// v9.9: avatar rond du header (initiale du pseudo, façon TikTok)
+function updatePseudoAvatar() {
+  const el = document.getElementById('pseudo-avatar');
+  if (!el) return;
+  const p = getPseudo();
+  el.textContent = (p === 'Anonyme' ? 'A' : p.charAt(0).toUpperCase());
+}
+
 function togglePseudoPopover() {
   const pop = document.getElementById('pseudo-popover');
   const isHidden = pop.classList.contains('hidden');
@@ -2316,17 +2443,26 @@ function savePseudo() {
   const val = document.getElementById('pseudo-input').value.trim();
   if (val) {
     localStorage.setItem('agnes_pseudo', val);
-    document.getElementById('pseudo-display').textContent = '👤 ' + val;
   } else {
     localStorage.removeItem('agnes_pseudo');
-    document.getElementById('pseudo-display').textContent = '👤 Pseudo';
   }
+  updatePseudoAvatar();
   document.getElementById('pseudo-popover').classList.add('hidden');
   showToast(val ? '✅ Pseudo enregistré : ' + val : '👤 Pseudo réinitialisé', 2000);
 }
 document.addEventListener('DOMContentLoaded', () => {
-  const saved = localStorage.getItem('agnes_pseudo');
-  if (saved) document.getElementById('pseudo-display').textContent = '👤 ' + saved;
+  updatePseudoAvatar();
+  // v9.9: état initial des onglets TikTok + barre du bas (Accueil actif)
+  const navHome = document.getElementById('tt-nav-home');
+  const navVibes = document.getElementById('tt-nav-vibes');
+  if (navHome) navHome.classList.toggle('active', currentMode !== 'gallery');
+  if (navVibes) navVibes.classList.toggle('active', currentMode === 'gallery');
+  const bbGlobal = document.getElementById('tt-bottombar-global');
+  if (bbGlobal) {
+    bbGlobal.querySelectorAll('.tt-nav').forEach(n => n.classList.remove('tt-nav-active'));
+    const bbFirst = bbGlobal.querySelector('.tt-nav');
+    if (bbFirst) bbFirst.classList.add('tt-nav-active');
+  }
   // Close popover on outside click
   document.addEventListener('click', (e) => {
     const container = document.getElementById('pseudo-container');
@@ -2489,6 +2625,12 @@ function openGalleryFeed() {
   panel.classList.remove('hidden');
   panel.style.display = 'block';
   document.body.style.overflow = 'hidden';
+  // v9.9: plein écran TikTok — on masque le header principal et la barre du bas
+  // globale (le feed a les siens), on les restaure à la fermeture
+  const appHeader = document.getElementById('app-header');
+  if (appHeader) appHeader.style.display = 'none';
+  const bbGlobal = document.getElementById('tt-bottombar-global');
+  if (bbGlobal) bbGlobal.style.display = 'none';
   loadGallery();
 }
 
@@ -2503,6 +2645,11 @@ function closeGalleryFeed() {
   panel.classList.add('hidden');
   panel.style.display = 'none';
   document.body.style.overflow = '';
+  // v9.9: restauration du header principal et de la barre du bas globale
+  const appHeader = document.getElementById('app-header');
+  if (appHeader) appHeader.style.display = '';
+  const bbGlobal = document.getElementById('tt-bottombar-global');
+  if (bbGlobal) bbGlobal.style.display = '';
   closeFeedComments();
   // v9.7: reset de la pagination
   feedPage = 1;
@@ -3109,8 +3256,7 @@ async function saveMyProfile() {
     if (!r.ok || !d.ok) throw new Error(d.detail || 'Échec');
     if (pseudo) {
       localStorage.setItem('agnes_pseudo', pseudo);
-      const disp = document.getElementById('pseudo-display');
-      if (disp) disp.textContent = '👤 ' + pseudo;
+      updatePseudoAvatar();
     }
     showToast('✅ Profil enregistré', 2500);
     closeProfileEdit();

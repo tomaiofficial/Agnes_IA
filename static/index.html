@@ -65,30 +65,72 @@
   nav.header-nav a.active-nav { color: #fff; background: rgba(255,255,255,0.09); }
   .header-right { display: flex; align-items: center; gap: 10px; }
 
-  /* ── Bandeau d'annonce (v10.1) ── */
-  .announce-bar {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 60;
-    height: 34px; display: flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 0 44px;
-    background: linear-gradient(90deg, var(--acc1), var(--acc2));
-    color: #fff; font-size: 12px; font-weight: 600; letter-spacing: 0.1px;
-    box-shadow: 0 2px 14px rgba(91,140,255,0.3);
+  /* ── Annonce au lancement (v10.1) : modale pro centrée, texte rouge ── */
+  #announce-overlay {
+    position: fixed; inset: 0; z-index: 30000;
+    background: rgba(0,0,0,0.78); backdrop-filter: blur(6px);
+    display: grid; place-items: center;
   }
-  .announce-bar b { font-weight: 800; }
+  #announce-overlay.hidden { display: none; }
+  body.announce-open { overflow: hidden !important; }
+  .announce-modal {
+    position: relative; max-width: 460px; width: 92%; margin: 0 14px;
+    background: #171717; border: 1px solid rgba(255,82,82,0.35);
+    border-radius: 20px; overflow: hidden; text-align: center;
+    box-shadow: 0 30px 90px rgba(0,0,0,0.9), 0 0 50px rgba(255,82,82,0.15);
+    animation: announcePop .32s cubic-bezier(.2,.9,.3,1.2);
+  }
+  @keyframes announcePop {
+    from { transform: scale(0.88) translateY(12px); opacity: 0; }
+    to   { transform: scale(1) translateY(0); opacity: 1; }
+  }
+  .announce-hero {
+    position: relative; padding: 26px 18px 20px;
+    background: linear-gradient(160deg, #2a0d0d, #1a1010 55%, #171717);
+    border-bottom: 1px solid rgba(255,82,82,0.25);
+  }
+  .announce-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 14px; border-radius: 999px;
+    background: rgba(255,82,82,0.16); border: 1px solid rgba(255,82,82,0.45);
+    color: #ff8a8a; font-size: 10.5px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase;
+  }
+  .announce-title {
+    margin: 12px 0 0; font-size: 21px; font-weight: 800; color: #fff; letter-spacing: -0.3px;
+  }
+  .announce-title .grad { background: linear-gradient(90deg, #ff8a8a, #ff5252); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .announce-body { padding: 22px 20px 6px; }
+  .announce-text {
+    color: #ff5252; font-size: 24px; font-weight: 800; line-height: 1.4; margin: 0;
+    text-shadow: 0 2px 20px rgba(255,82,82,0.35);
+  }
+  .announce-text b { color: #ffb0b0; }
+  .announce-features {
+    margin: 20px 0 0; display: flex; flex-direction: column; gap: 9px; text-align: left;
+  }
+  .announce-feat {
+    display: flex; align-items: center; gap: 11px;
+    padding: 10px 13px; border-radius: 12px;
+    background: rgba(255,255,255,0.045); border: 1px solid rgba(255,255,255,0.07);
+    font-size: 13.5px; color: #d7d7d7;
+  }
+  .announce-feat .ico { font-size: 17px; flex-shrink: 0; }
+  .announce-feat b { color: #ff8a8a; font-weight: 700; }
+  .announce-ok {
+    width: calc(100% - 40px); margin: 22px 20px 20px; padding: 13px; border: none; border-radius: 13px;
+    cursor: pointer; background: linear-gradient(135deg, #ff5252, #e53935); color: #fff;
+    font-size: 15px; font-weight: 800; letter-spacing: 0.4px;
+    box-shadow: 0 8px 24px rgba(229,57,53,0.35); transition: filter .15s ease, transform .1s ease;
+  }
+  .announce-ok:hover { filter: brightness(1.12); transform: translateY(-1px); }
+  .announce-ok:active { transform: scale(0.98); }
   .announce-close {
-    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-    width: 22px; height: 22px; border-radius: 50%; border: none; cursor: pointer;
-    background: rgba(255,255,255,0.18); color: #fff; font-size: 13px; line-height: 1;
-    display: grid; place-items: center; transition: background .15s ease;
+    position: absolute; top: 12px; right: 12px; width: 30px; height: 30px; border-radius: 50%;
+    border: none; cursor: pointer; background: rgba(255,255,255,0.1);
+    color: #aaa; font-size: 17px; line-height: 1; display: grid; place-items: center;
+    transition: all .15s ease;
   }
-  .announce-close:hover { background: rgba(255,255,255,0.35); }
-  /* Visible dès le lancement ; masqué si fermé ou pendant le feed plein écran */
-  body:not(.announce-visible) .announce-bar { display: none; }
-  body.announce-visible header.app-header { top: 34px; }
-  body.announce-visible main { padding-top: 120px !important; }
-  body.vibes-modal-open .announce-bar { display: none; }
-  body.vibes-modal-open header.app-header { top: 0; }
-  body.vibes-modal-open main { padding-top: 86px !important; }
+  .announce-close:hover { background: rgba(255,255,255,0.22); color: #fff; }
   .avatar-mini {
     width: 32px; height: 32px; border-radius: 50%;
     background: linear-gradient(135deg, var(--acc2), #22d3ee);
@@ -290,21 +332,40 @@
 </head>
 <body class="text-gray-100 min-h-screen font-sans">
 
-<!-- ═══════════ Bandeau d'annonce (v10.1) ═══════════ -->
-<div class="announce-bar" id="announce-bar" role="status">
-  <span>✨ <b>tom.ai.official</b> améliore l'API de l'IA&nbsp;: génération de vidéo en cours d'amélioration — <b>génération d'image dès la fin de semaine</b>&nbsp;!</span>
-  <button class="announce-close" onclick="dismissAnnounce()" aria-label="Fermer l'annonce">&times;</button>
+<!-- ═══════════ Annonce au lancement (v10.1) ═══════════ -->
+<div id="announce-overlay" class="hidden" onclick="if (event.target === this) dismissAnnounce()">
+  <div class="announce-modal">
+    <div class="announce-hero">
+      <button class="announce-close" onclick="dismissAnnounce()" aria-label="Fermer">&times;</button>
+      <div class="announce-badge">✨ Mise à jour</div>
+      <h2 class="announce-title">L'API de l'IA <span class="grad">évolue</span></h2>
+    </div>
+    <div class="announce-body">
+      <p class="announce-text"><b>tom.ai.official</b> améliore la génération de vidéo —<br>l'<b>image</b> arrive dès la fin de semaine&nbsp;!</p>
+      <div class="announce-features">
+        <div class="announce-feat"><span class="ico">🎬</span><span>Génération vidéo <b>en cours d'amélioration</b></span></div>
+        <div class="announce-feat"><span class="ico">🖼️</span><span>Génération d'image <b>dès la fin de semaine</b></span></div>
+      </div>
+    </div>
+    <button class="announce-ok" onclick="dismissAnnounce()">Fermer</button>
+  </div>
 </div>
 <script>
-  // v10.1: annonce persistante, affichée dès le lancement (masquable pour la session)
+  // v10.1: annonce au lancement (modale centrée), masquable pour la session
   function dismissAnnounce() {
-    document.body.classList.remove('announce-visible');
+    var o = document.getElementById('announce-overlay');
+    if (o) o.classList.add('hidden');
+    document.body.classList.remove('announce-open');
     try { sessionStorage.setItem('announce_closed', '1'); } catch (e) {}
   }
   (function () {
     var closed = false;
     try { closed = sessionStorage.getItem('announce_closed') === '1'; } catch (e) {}
-    if (!closed) document.body.classList.add('announce-visible');
+    if (!closed) {
+      var o = document.getElementById('announce-overlay');
+      if (o) o.classList.remove('hidden');
+      document.body.classList.add('announce-open');
+    }
   })();
 </script>
 

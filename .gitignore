@@ -47,3 +47,8 @@ error_logs/
 
 # Validation suite report (generated)
 advanced_suite_report.md
+
+# Serveur local (logs de debug)
+server-local.log
+server-local.err.log
+

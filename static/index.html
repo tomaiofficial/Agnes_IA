@@ -64,6 +64,31 @@
   nav.header-nav a:hover { color: var(--txt); background: rgba(255,255,255,0.05); }
   nav.header-nav a.active-nav { color: #fff; background: rgba(255,255,255,0.09); }
   .header-right { display: flex; align-items: center; gap: 10px; }
+
+  /* ── Bandeau d'annonce (v10.1) ── */
+  .announce-bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 60;
+    height: 34px; display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 0 44px;
+    background: linear-gradient(90deg, var(--acc1), var(--acc2));
+    color: #fff; font-size: 12px; font-weight: 600; letter-spacing: 0.1px;
+    box-shadow: 0 2px 14px rgba(91,140,255,0.3);
+  }
+  .announce-bar b { font-weight: 800; }
+  .announce-close {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    width: 22px; height: 22px; border-radius: 50%; border: none; cursor: pointer;
+    background: rgba(255,255,255,0.18); color: #fff; font-size: 13px; line-height: 1;
+    display: grid; place-items: center; transition: background .15s ease;
+  }
+  .announce-close:hover { background: rgba(255,255,255,0.35); }
+  /* Visible dès le lancement ; masqué si fermé ou pendant le feed plein écran */
+  body:not(.announce-visible) .announce-bar { display: none; }
+  body.announce-visible header.app-header { top: 34px; }
+  body.announce-visible main { padding-top: 120px !important; }
+  body.vibes-modal-open .announce-bar { display: none; }
+  body.vibes-modal-open header.app-header { top: 0; }
+  body.vibes-modal-open main { padding-top: 86px !important; }
   .avatar-mini {
     width: 32px; height: 32px; border-radius: 50%;
     background: linear-gradient(135deg, var(--acc2), #22d3ee);
@@ -264,6 +289,24 @@
 </style>
 </head>
 <body class="text-gray-100 min-h-screen font-sans">
+
+<!-- ═══════════ Bandeau d'annonce (v10.1) ═══════════ -->
+<div class="announce-bar" id="announce-bar" role="status">
+  <span>✨ <b>tom.ai.official</b> améliore l'API de l'IA&nbsp;: génération de vidéo en cours d'amélioration — <b>génération d'image dès la fin de semaine</b>&nbsp;!</span>
+  <button class="announce-close" onclick="dismissAnnounce()" aria-label="Fermer l'annonce">&times;</button>
+</div>
+<script>
+  // v10.1: annonce persistante, affichée dès le lancement (masquable pour la session)
+  function dismissAnnounce() {
+    document.body.classList.remove('announce-visible');
+    try { sessionStorage.setItem('announce_closed', '1'); } catch (e) {}
+  }
+  (function () {
+    var closed = false;
+    try { closed = sessionStorage.getItem('announce_closed') === '1'; } catch (e) {}
+    if (!closed) document.body.classList.add('announce-visible');
+  })();
+</script>
 
 <!-- ═══════════ Header (style Kling) ═══════════ -->
 <header class="app-header">

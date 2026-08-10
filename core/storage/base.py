@@ -27,11 +27,14 @@ class CommunityStore(ABC):
         resolution: str,
         video_path: str,
         user_id: str = "",
+        genre: str = "",
     ) -> dict:
         """Publie une vidéo (upload du fichier + enregistrement des métadonnées).
 
         user_id : identifiant opaque du créateur ('' pour les publications
         héritées). Sert à réserver la suppression au créateur.
+
+        genre : genre de mini-film de la publication (v10.0, '' = non renseigné).
 
         Returns:
             {"video_id": str, "video_url": str}

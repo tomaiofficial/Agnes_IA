@@ -50,7 +50,7 @@ class LocalCommunityStore(CommunityStore):
         os.replace(tmp, path)
 
     def publish(self, task_id, author, prompt, duration, resolution, video_path,
-                user_id: str = "") -> dict:
+                user_id: str = "", genre: str = "") -> dict:
         import uuid
 
         video_id = uuid.uuid4().hex[:12]
@@ -65,6 +65,7 @@ class LocalCommunityStore(CommunityStore):
             "resolution": resolution,
             "published_at": time.time(),
             "user_id": user_id or "",
+            "genre": genre or "",
             "likes": [],
             "comments": [],
         }
@@ -91,6 +92,7 @@ class LocalCommunityStore(CommunityStore):
                 "resolution": meta.get("resolution", ""),
                 "published_at": meta.get("published_at", 0),
                 "user_id": uid,
+                "genre": meta.get("genre", ""),
                 "avatar_url": avatar_url,
                 "author_verified": bool(verified.get(uid, False)),
                 "likes": len(meta.get("likes", [])),

@@ -246,6 +246,8 @@
   .fy-info { position:absolute; left:0; right:0; bottom:0; padding:26px 10px 10px; background:linear-gradient(transparent, rgba(0,0,0,0.85)); display:flex; align-items:center; gap:7px; }
   .fy-name { font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .fy-likes { font-size:11px; color:#d4d4d4; display:flex; align-items:center; gap:3px; }
+  .fy-genre { font-size:10px; font-weight:600; padding:2px 8px; border-radius:9999px; background:linear-gradient(135deg,#5b8cff,#8b5cf6); color:#fff; white-space:nowrap; }
+  .feed-genre { display:inline-block; font-size:10px; font-weight:600; padding:2px 9px; border-radius:9999px; background:linear-gradient(135deg,#5b8cff,#8b5cf6); color:#fff; margin-bottom:5px; }
 
   /* ── Responsive ── */
   @media (max-width: 820px) {
@@ -746,6 +748,7 @@
           '<div class="fy-info">' +
             avatarHtml(v.avatar_url, (v.author || 'A').charAt(0), 'w-5 h-5 text-[9px]') +
             '<span class="fy-name" style="color:#fff;">' + escapeHtml(v.author || 'Anonyme') + '</span>' +
+            (v.genre ? '<span class="fy-genre">' + escapeHtml(v.genre) + '</span>' : '') +
             '<span class="fy-likes" style="margin-left:auto;">❤ ' + (v.likes || 0) + '</span>' +
           '</div>';
         card.onclick = () => switchMode('gallery');
@@ -2030,7 +2033,8 @@ function buildFeedSlide(v, index, total) {
   info.appendChild(authorBtn);
   const meta = document.createElement('div');
   meta.className = 'flex items-center gap-2 mb-1.5';
-  meta.innerHTML = '<span class="text-[10px] text-gray-400">' + timeAgo(v.published_at) + '</span>';
+  meta.innerHTML = (v.genre ? '<span class="feed-genre">' + escapeHtml(v.genre) + '</span>' : '') +
+    '<span class="text-[10px] text-gray-400">' + timeAgo(v.published_at) + '</span>';
   info.appendChild(meta);
   if (v.prompt) {
     const pr = document.createElement('p');

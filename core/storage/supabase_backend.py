@@ -62,7 +62,8 @@ CREATE TABLE IF NOT EXISTS community_videos (
     resolution    TEXT NOT NULL DEFAULT '',
     published_at  DOUBLE PRECISION NOT NULL,
     storage_path  TEXT NOT NULL DEFAULT '',
-    created_at    DOUBLE PRECISION NOT NULL
+    created_at    DOUBLE PRECISION NOT NULL,
+    genre         TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS community_likes (
@@ -130,6 +131,9 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS resume_attempts INT NOT NULL DEFAULT 
 -- Migration idempotente : user_id du créateur d'une publication galerie
 -- ('' = publication héritée, créée avant l'isolation par créateur).
 ALTER TABLE community_videos ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT '';
+
+-- Migration idempotente : genre de mini-film de la publication (v10.0)
+ALTER TABLE community_videos ADD COLUMN IF NOT EXISTS genre TEXT NOT NULL DEFAULT '';
 
 -- Configuration applicative (clé API, filigrane, modèles, domaine, workspaces…)
 -- : survit aux redéploiements Render (miroir + restauration au démarrage)
@@ -365,7 +369,7 @@ class SupabaseCommunityStore(CommunityStore):
         return self._public_url(f"{_THUMB_PREFIX}{video_id}.jpg")
 
     def publish(self, task_id, author, prompt, duration, resolution, video_path,
-                user_id: str = "") -> dict:
+                user_id: str = "", genre: str = "") -> dict:
         import uuid
 
         client = _get_client()
@@ -386,6 +390,7 @@ class SupabaseCommunityStore(CommunityStore):
             "storage_path": storage_path,
             "created_at": now,
             "user_id": user_id or "",
+            "genre": genre or "",
         }).execute()
         logger.info(
             f"[CommunityStore] Published {video_id} -> supabase storage "
@@ -446,6 +451,7 @@ class SupabaseCommunityStore(CommunityStore):
             "resolution": row.get("resolution", "") or "",
             "published_at": row.get("published_at", 0) or 0,
             "user_id": row.get("user_id", "") or "",
+            "genre": row.get("genre", "") or "",
             "avatar_url": avatars.get(row.get("user_id") or "", "") or "",
             "author_verified": bool(verified.get(row.get("user_id") or "")),
             "likes": like_counts.get(vid, 0),

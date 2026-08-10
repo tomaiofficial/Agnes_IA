@@ -11,6 +11,7 @@ Chaque persona est un « créateur » autonome avec :
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 
 
@@ -356,6 +357,303 @@ FALLBACK_PROMPTS: dict[str, list[str]] = {
         "Un avatar héroïque qui s'avance dans un monde fantastique numérique, particules magiques, lumière spectaculaire, ultra réaliste",
     ],
 }
+
+
+# ─────────────────────────────────────────────────────────────
+# v10.0: Genres de mini-films — variété maximale des bots
+# ─────────────────────────────────────────────────────────────
+# Jusqu'ici chaque bot était enfermé dans son thème unique (nature,
+# cuisine, tech…), d'où un feed répétitif. Désormais chaque publication
+# tire UN GENRE au hasard (comédie, horreur, action, SF…) et écrit un
+# mini-scénario de film dans ce genre. Les bots publient « tout et
+# n'importe quoi » : films drôles, frissons, spectaculaires.
+
+@dataclass(frozen=True)
+class VideoGenre:
+    id: str                       # identifiant technique stable
+    name: str                     # nom affiché (ex : « Comédie »)
+    instruction: str              # directive pour le chat IA (personnalité du genre)
+    prompts: tuple = field(default_factory=tuple)  # prompts de secours variés du genre
+
+
+VIDEO_GENRES: tuple[VideoGenre, ...] = (
+    VideoGenre(
+        id="comedie",
+        name="Comédie",
+        instruction=(
+            "Ta spécialité : la comédie française absurde et drôle. Tu inventes des situations "
+            "cocasses, des quiproquos, des personnages maladroits et des gags visuels irrésistibles."
+        ),
+        prompts=(
+            "Une baguette géante qui traverse la place de la Bastille, un pigeon perché dessus tente de la garder, passants hilares, Paris ensoleillé, caméra drone qui suit, comédie burlesque, ultra réaliste, 4K",
+            "Un mime coincé dans une boîte invisible au milieu du marché de Montmartre, il essaie de s'échapper sans briser son illusion, enfants qui rient, lumière dorée, comédie française, ultra réaliste",
+            "Trois fromages de chèvre qui glissent sur un plateau en marbre comme des mini-voitures de course, départ en trombe, chute spectaculaire dans un bol de soupe, cuisine ensoleillée, comédie absurde, ultra réaliste",
+            "Un cycliste parisien avec une baguette et des fleurs qui slalome entre des pigeons indifférents, évite un chien endormi et termine dans une fontaine, rue pavée, lumière de fin de journée, cascade comique, ultra réaliste",
+            "Un chat obèse qui tente de sauter sur une étagère, rate son saut et atterrit sur un matou endormi, chaos de pelage, salon bourgeois, lumière chaleureuse, comédie, ultra réaliste",
+        ),
+    ),
+    VideoGenre(
+        id="horreur",
+        name="Horreur",
+        instruction=(
+            "Ta spécialité : l'horreur et le suspense. Tu crées des ambiances angoissantes, "
+            "des ombres menaçantes, des créatures effrayantes, des moments qui glacent le sang."
+        ),
+        prompts=(
+            "Un long couloir sombre d'un manoir français, une silhouette floue au fond, les portes claquent une à une, chandeliers qui tremblent, caméra tremblante au ras du sol, ambiance horreur, ultra réaliste",
+            "Une jeune femme se retourne dans un miroir poussiéreux : son reflet reste immobile puis sourit, lumière de bougie vacillante, grenier inquiétant, horreur psychologique, ultra réaliste",
+            "Une main décharnée sort lentement d'un puits de pierre ancien au crépuscule, brume au sol, corbeaux en alerte, forêt sombre en arrière-plan, caméra rapprochée, horreur gothique, ultra réaliste",
+            "Un mannequin de vitrine parisienne bouge seul au milieu de la nuit, tête qui tourne vers la caméra, néons rouges vacillants, rue déserte sous la pluie, horreur urbaine, ultra réaliste",
+            "Des silhouettes enfantines aux longs cheveux noirs qui avancent en courant dans un champ de maïs brumeux, s'approchant de la caméra, crépuscule orageux, horreur, ultra réaliste",
+        ),
+    ),
+    VideoGenre(
+        id="action",
+        name="Action",
+        instruction=(
+            "Ta spécialité : l'action spectaculaire. Courses-poursuites, cascades dangereuses, "
+            "explosions contrôlées, bagarres chorégraphiées dignes du grand écran."
+        ),
+        prompts=(
+            "Une course-poursuite à moto sur le périphérique parisien au coucher du soleil, cascades entre les voitures, étincelles, caméra embarquée nerveuse, action spectaculaire, ultra réaliste, 4K",
+            "Un agent spécial saute d'un hélicoptère sur le toit d'un train en marche, roule et se relève en pleine vitesse, Alpes en arrière-plan, action, ultra réaliste",
+            "Une explosion contrôlée derrière un cascadeur qui marche sans se retourner, mèche de cheveux dans le vent, ralenti épique, lumière orange, action, ultra réaliste",
+            "Deux ninjas s'affrontent sur les toits d'un quartier la nuit, pluie fine, néons, sabres qui claquent, acrobaties impossibles, ralenti, action, ultra réaliste",
+        ),
+    ),
+    VideoGenre(
+        id="science-fiction",
+        name="Science-fiction",
+        instruction=(
+            "Ta spécialité : la science-fiction. Univers futuristes, robots, vaisseaux spatiaux, "
+            "aliens, technologies impossibles et décors époustouflants."
+        ),
+        prompts=(
+            "Un vaisseau spatial argenté traverse une nébuleuse violette et turquoise, traîne de particules lumineuses, Terre au loin, caméra large, science-fiction spectaculaire, ultra réaliste, 4K",
+            "Un androïde aux yeux lumineux assemble un moteur à fusion dans une station spatiale, néons froids, reflets sur le métal, macro, science-fiction, ultra réaliste",
+            "Une ville futuriste sous dôme la nuit, hovercars, hologrammes publicitaires, pluie de néons bleus et roses, caméra drone, cyberpunk, ultra réaliste",
+            "Une porte dimensionnelle s'ouvre dans un laboratoire, un astronaute hésite devant le vortex bleu, instruments qui flottent, science-fiction, ultra réaliste",
+        ),
+    ),
+    VideoGenre(
+        id="fantastique",
+        name="Fantastique",
+        instruction=(
+            "Ta spécialité : le fantastique et la magie. Créatures légendaires, dragons, fées, "
+            "sortilèges et mondes enchantés."
+        ),
+        prompts=(
+            "Un dragon de glace déploie ses ailes au-dessus d'un fjord norvégien, cristaux qui se forment dans l'air, lumière arctique, caméra aérienne, fantastique épique, ultra réaliste, 4K",
+            "Une fée lumineuse au milieu d'une clairière enchantée, poussière dorée, champignons géants, ruisseau scintillant, macro, fantastique, ultra réaliste",
+            "Une licorne galope dans un champ de lavande au lever du soleil, crinière arc-en-ciel, brume légère, Provence, caméra latérale fluide, fantastique, ultra réaliste",
+            "Un vieux grimoire s'ouvre tout seul dans une bibliothèque poussiéreuse, des lettres d'or s'envolent des pages, rayon de lumière, magie ancienne, ultra réaliste",
+        ),
+    ),
+    VideoGenre(
+        id="thriller",
+        name="Thriller",
+        instruction=(
+            "Ta spécialité : le thriller et le mystère. Suspense oppressant, enquêtes, fuites "
+            "dans la nuit, tensions insoutenables."
+        ),
+        prompts=(
+            "Un détective au pardessus inspecte une chambre d'hôtel sens dessus dessous, lampe torche, rideaux qui bougent, Paris pluvieux la nuit, plan-séquence tendu, thriller, ultra réaliste",
+            "Un homme court dans une rame de métro vide, lumières qui clignotent, une enveloppe à la main, reflets dans les vitres noires, thriller urbain, caméra nerveuse, ultra réaliste",
+            "Une porte blindée se verrouille lentement derrière une femme qui se retourne, système de sécurité rougeoyant, entrepôt désaffecté, éclairage froid, thriller, ultra réaliste",
+            "Deux ombres se poursuivent sur les toits de Paris sous la lune, funambules de l'ombre, gargouilles, caméra dynamique, thriller nocturne, ultra réaliste",
+        ),
+    ),
+    VideoGenre(
+        id="western",
+        name="Western",
+        instruction=(
+            "Ta spécialité : le western. Déserts poussiéreux, saloons, duels au soleil couchant, "
+            "trains à vapeur et grands espaces."
+        ),
+        prompts=(
+            "Un cow-boy solitaire traverse une rue poussiéreuse, éperons qui tintent, saloon, roue de chariot qui grince, soleil de plomb, duel imminent, western, ultra réaliste, 4K",
+            "Un duel au crépuscule entre deux pistoleros, mains qui hésitent au-dessus des holsters, poussière dorée en suspension, cactus, western spaghetti, ultra réaliste",
+            "Un train à vapeur fonce dans les Rocheuses, un bandit court sur les wagons, fumée, sifflet, caméra latérale, western aventure, ultra réaliste",
+            "Un mustang qui galope dans une plaine aride, poussière soulevée, ciel immense orange, coucher de soleil, western majestueux, ultra réaliste",
+        ),
+    ),
+    VideoGenre(
+        id="film-noir",
+        name="Film noir",
+        instruction=(
+            "Ta spécialité : le film noir. Paris 1955 en noir et blanc, détectives, bars enfumés, "
+            "pluie sur les vitres, femmes mystérieuses."
+        ),
+        prompts=(
+            "Un détective privé fume devant une fenêtre à stores, néon du bar qui clignote dehors, pluie sur la vitre, Paris 1955, noir et blanc, film noir, ultra réaliste",
+            "Une femme mystérieuse en trench remonte un escalier en colimaçon, ombres parallèles des rambardes, lumière d'un projecteur, noir et blanc, film noir, ultra réaliste",
+            "Un verre de whisky sur un comptoir en zinc, un chapeau déposé, fumée de cigarette, phonographe qui tourne, salle enfumée, noir et blanc, film noir, ultra réaliste",
+            "Un homme marche sous les réverbères dans une rue mouillée, chapeau baissé, reflets des enseignes, vapeur d'égout, Paris nocturne, noir et blanc, film noir, ultra réaliste",
+        ),
+    ),
+    VideoGenre(
+        id="romance",
+        name="Romance",
+        instruction=(
+            "Ta spécialité : la romance parisienne. Rendez-vous sous la pluie, premiers baisers, "
+            "regards qui se croisent, moments tendres et lumineux."
+        ),
+        prompts=(
+            "Un couple danse sous la pluie sur le pont des Arts au coucher du soleil, parapluie abandonné, reflets dorés sur la Seine, romance parisienne, ralenti, ultra réaliste, 4K",
+            "Deux mains qui se frôlent au-dessus d'une table de café, deux expressos, la Tour Eiffel scintillante au loin, lumière chaude du soir, romance, ultra réaliste",
+            "Un homme offre un bouquet de lavande sur un quai de gare, le train démarre, regards qui se croisent, aube dorée, Provence, romance, ultra réaliste",
+            "Un premier baiser timide sous les guirlandes d'un marché de Noël, flocons de neige, lanternes chaudes, Strasbourg, romance, ralenti, ultra réaliste",
+        ),
+    ),
+    VideoGenre(
+        id="drame",
+        name="Drame",
+        instruction=(
+            "Ta spécialité : le drame et l'émotion. Scènes poignantes, personnages bouleversants, "
+            "lumières mélancoliques et moments qui touchent."
+        ),
+        prompts=(
+            "Un vieil homme contemple la mer depuis une falaise bretonne, un mouchoir à la main, embruns, lumière grise émouvante, plan large, drame, ultra réaliste",
+            "Une musicienne de rue joue du violon sous la pluie, pièces dans la capuche, passants pressés, reflets mélancoliques, drame urbain, ultra réaliste",
+            "Un boxeur épuisé se relève dans un ring de quartier, projecteurs aveuglants, sueur et adversaire flous, foule silencieuse, drame sportif, ultra réaliste",
+            "Une femme range les affaires de son père dans une malle, une photo jaunie dans les mains, lumière de fenêtre poussiéreuse, émotion, drame, ultra réaliste",
+        ),
+    ),
+    VideoGenre(
+        id="documentaire-animalier",
+        name="Documentaire animalier",
+        instruction=(
+            "Ta spécialité : le documentaire animalier. Faune sauvage, instants de vie capturés "
+            "avec un réalisme époustouflant, comme National Geographic."
+        ),
+        prompts=(
+            "Un guépard bondit sur sa proie dans la savane au lever du soleil, flou de mouvement, poussière dorée, caméra téléobjectif, documentaire animalier, ultra réaliste, 4K",
+            "Une raie manta glisse dans un océan turquoise, banc de poissons argentés qui s'écarte, rayons de soleil sous-marins, documentaire, ultra réaliste",
+            "Un colibri suspendu en vol, battement d'ailes au ralenti, fleur tropicale, lumière du matin, macro extrême, documentaire animalier, ultra réaliste",
+            "Une meute de loups traverse une forêt enneigée au crépuscule, souffle visible, regards ambrés, silence, documentaire animalier, ultra réaliste",
+        ),
+    ),
+    VideoGenre(
+        id="animation-pixar",
+        name="Animation style Pixar",
+        instruction=(
+            "Ta spécialité : l'animation façon Pixar. Objets et animaux expressifs, couleurs vives, "
+            "émotions enfantines, univers attachants et lumineux."
+        ),
+        prompts=(
+            "Une petite lampe de bureau curieuse qui découvre une fleur dans un atelier, mouvements expressifs, couleurs vives, lumière douce, style animation Pixar, ultra réaliste",
+            "Un robot de cuisine miniature qui affronte une pâte à crêpes rebelle dans une cuisine géante, gouttes qui voltigent, couleurs saturées, animation Pixar, ultra réaliste",
+            "Un ballon rouge et un parapluie bleu qui deviennent amis dans un parc, dansent dans le vent, feuilles d'automne, animation Pixar, ultra réaliste",
+            "Une petite souris astronaute qui flotte dans sa fusée en carton vers la lune, étoiles souriantes, couleurs pastel, animation Pixar, ultra réaliste",
+        ),
+    ),
+    VideoGenre(
+        id="catastrophe",
+        name="Catastrophe",
+        instruction=(
+            "Ta spécialité : les films catastrophe. Raz-de-marée, tornades, éruptions, immeubles "
+            "qui vacillent — des scènes d'apocalypse spectaculaires."
+        ),
+        prompts=(
+            "Un immense raz-de-marée s'approche d'une ville côtière, immeubles qui frémissent, ciel vert, caméra héliportée, catastrophe spectaculaire, ultra réaliste, 4K",
+            "Une tornade massive traverse une plaine, débris qui tourbillonnent, un pick-up projeté, éclairs, lumière orange menaçante, catastrophe, ultra réaliste",
+            "Une éruption volcanique crache des cendres et de la lave sur un village italien, coulée incandescente, ciel noir de cendres, catastrophe, ultra réaliste",
+            "Un tremblement de terre fissure une avenue urbaine, voitures qui tanguent, façades qui s'effritent, panique, caméra instable, catastrophe, ultra réaliste",
+        ),
+    ),
+    VideoGenre(
+        id="espionnage",
+        name="Espionnage",
+        instruction=(
+            "Ta spécialité : l'espionnage. Agents secrets, gadgets impossibles, infiltrations, "
+            "poursuites de luxe et plans dignes de James Bond."
+        ),
+        prompts=(
+            "Un espion glisse le long d'un fil dans une salle des coffres aux lasers rouges, contorsions millimétrées, sueur sur le front, éclairage dramatique, espionnage, ultra réaliste, 4K",
+            "Une voiture de sport noire s'élance depuis un yacht en feu, déploie des ailes et file au-dessus de la mer, Monaco, espionnage spectaculaire, ultra réaliste",
+            "Un stylo transformé en gadget laser trace une carte sur un mur de marbre, agent secret en smoking, château français, espionnage, ultra réaliste",
+            "Une poursuite en jet-ski dans les canaux de Venise, rideaux et agents ennemis, eau éclaboussée, bascule spectaculaire, espionnage, ultra réaliste",
+        ),
+    ),
+    VideoGenre(
+        id="medieval-fantastique",
+        name="Médiéval fantastique",
+        instruction=(
+            "Ta spécialité : le médiéval fantastique. Chevaliers en armure, châteaux forts, "
+            "tournois, sorcières et dragons sur les vignobles."
+        ),
+        prompts=(
+            "Un chevalier en armure gravit un escalier de donjon, torches qui flamboient, ombres dansantes, épée tirée, médiéval épique, ultra réaliste, 4K",
+            "Un tournoi de joutes dans un château fort, lances qui s'entrechoquent, étendards, foule en liesse, poussière et soleil, médiéval, ultra réaliste",
+            "Une sorcière prépare une potion violette fumante dans un chaudron, herbes qui flottent, chandelles, chaumière sombre, médiéval fantastique, ultra réaliste",
+            "Un dragon doré survole une vallée de vignobles bordelais, ombre immense qui glisse sur les rangées, médiéval fantastique, ultra réaliste",
+        ),
+    ),
+    VideoGenre(
+        id="post-apocalyptique",
+        name="Post-apocalyptique",
+        instruction=(
+            "Ta spécialité : le post-apocalyptique. Mondes dévastés, nature qui reprend ses droits, "
+            "survivants et déserts de ruines."
+        ),
+        prompts=(
+            "Un survivant en combinaison traverse un Paris en ruines envahi par la végétation, Tour Eiffel tordue, brume, lumière grise, post-apocalyptique, ultra réaliste, 4K",
+            "Une oasis verdoyante au milieu d'un désert de sable illimité, un dôme de verre, reflets, survie, post-apocalyptique, ultra réaliste",
+            "Des véhicules bricolés filent sur une autoroute déserte, poussière et soleil couchant, road movie de survie, post-apocalyptique, ultra réaliste",
+            "Un champ de panneaux solaires rouillés, un robot de soin qui traverse, ciel ocre, silence, post-apocalyptique, ultra réaliste",
+        ),
+    ),
+    VideoGenre(
+        id="sport-extreme",
+        name="Sport extrême",
+        instruction=(
+            "Ta spécialité : le sport extrême. Snowboard vertigineux, wingsuit, escalade en solo, "
+            "tubes de surf géants — l'adrénaline pure."
+        ),
+        prompts=(
+            "Un snowboardeur dévale une pente vierge à toute vitesse, poudreuse qui explose, soleil rasant, Alpes, caméra embarquée, sport extrême, ultra réaliste, 4K",
+            "Un base jumper saute d'une falaise, wingsuit déployée, vallée vertigineuse, nuages en dessous, sport extrême, ultra réaliste",
+            "Un grimpeur en solo intégral escalade une paroi abrupte, doigts rougis, vide immense, lumière du matin, sport extrême, ultra réaliste",
+            "Un surfeur prend un tube parfait à Nazaré, muraille d'eau au-dessus, embruns, lumière dramatique, sport extrême, ultra réaliste",
+        ),
+    ),
+)
+
+
+@dataclass(frozen=True)
+class EditorialChoice:
+    """Style éditorial choisi pour UNE publication : genre de mini-film ou thème du bot."""
+    label: str                        # affiché dans les logs (ex : « Comédie »)
+    instruction: str                  # directive pour le chat IA
+    prompts: tuple = field(default_factory=tuple)  # prompts de secours
+
+
+# Pondération : comédie et horreur sortent plus souvent (goût utilisateur),
+# les autres genres équiprobables.
+_GENRE_WEIGHTS: tuple[int, ...] = tuple(
+    3 if g.id in ("comedie", "horreur") else 1 for g in VIDEO_GENRES
+)
+
+
+def pick_editorial(persona: AgentPersona) -> EditorialChoice:
+    """Choisit le style éditorial d'UNE publication du bot.
+
+    - 20 % de chances : le thème d'origine du persona (garde un peu d'identité)
+    - 80 % : un genre de mini-film tiré au hasard (comédie, horreur, action, SF…)
+      → chaque publication est différente, le feed devient « tout et n'importe quoi ».
+    """
+    if random.random() < 0.20:
+        return EditorialChoice(
+            label=persona.theme,
+            instruction=f"Ta spécialité : {persona.theme}.",
+            prompts=tuple(fallback_prompts(persona)),
+        )
+    genre = random.choices(VIDEO_GENRES, weights=_GENRE_WEIGHTS, k=1)[0]
+    return EditorialChoice(
+        label=genre.name,
+        instruction=genre.instruction,
+        prompts=genre.prompts,
+    )
 
 
 def fallback_prompts(persona: AgentPersona) -> list[str]:

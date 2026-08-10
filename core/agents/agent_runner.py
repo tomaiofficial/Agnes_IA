@@ -17,7 +17,7 @@ import time
 import uuid
 from typing import Optional
 
-from core.agents.personas import AgentPersona, fallback_prompts
+from core.agents.personas import AgentPersona, EditorialChoice, pick_editorial
 from core.api.agnes_chat import AgnesChatAPI
 from core.config import get_working_dir
 from core.storage import get_community_store
@@ -25,39 +25,45 @@ from core.video import AIVideoPipeline, PipelineConfig, TaskPriority, VideoMonit
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT_TEMPLATE = """Tu es {author}, un créateur de vidéos français spécialisé dans {theme}.
+# v10.0: le system prompt demande un MINI-FILM dans le genre choisi
+# (comédie, horreur, action, SF…) : chaque publication est différente.
+SYSTEM_PROMPT_TEMPLATE = """Tu es {author}, un créateur de vidéos français qui publie des mini-films originaux sur les réseaux.
+{instruction}
 {bio}
 {nsfw}
-Rédige UN prompt de génération vidéo en FRANÇAIS, détaillé et cinématographique,
-décrivant une scène ultra réaliste sur le thème « {theme} ».
+Rédige UN prompt de génération vidéo en FRANÇAIS, détaillé et cinématographique, décrivant une scène de {label} : personnages, situation, action, décor, lumière et mouvement de caméra.
 Exigences :
 - 1 à 3 phrases, riche en détails visuels (lumière, mouvement de caméra, textures, ambiance)
 - photoréaliste, digne d'une caméra professionnelle (slow motion, travelling, éclairage cinéma)
-- scène nouvelle et originale à chaque fois, jamais la même
+- scène nouvelle et originale à chaque fois, jamais la même, surprenante et spectaculaire
 - réponds UNIQUEMENT avec le prompt, sans introduction ni guillemets"""
 
 
-def _generate_prompt(persona: AgentPersona, chat: Optional[AgnesChatAPI]) -> str:
-    """Génère un prompt ultra réaliste pour le persona (chat IA + fallback)."""
+def _generate_prompt(
+    persona: AgentPersona,
+    chat: Optional[AgnesChatAPI],
+    editorial: EditorialChoice,
+) -> str:
+    """Génère un prompt « mini-film » pour le persona dans le genre choisi (chat IA + fallback)."""
     if chat is not None:
         try:
             system = SYSTEM_PROMPT_TEMPLATE.format(
                 author=persona.author,
-                theme=persona.theme,
+                instruction=editorial.instruction,
+                label=editorial.label,
                 bio=persona.bio,
                 nsfw=persona.nsfw_policy,
             )
-            prompt = chat.chat(system_prompt=system, user_prompt=persona.theme, max_tokens=300)
+            prompt = chat.chat(system_prompt=system, user_prompt=editorial.label, max_tokens=300)
             prompt = prompt.strip().strip('"').strip("«").strip("»").strip()
             if len(prompt) >= 40 and " " in prompt:
-                logger.info(f"[Agents] {persona.id}: prompt IA généré ({len(prompt)} chars)")
+                logger.info(f"[Agents] {persona.id}: prompt IA généré ({len(prompt)} chars, genre={editorial.label})")
                 return prompt
             logger.warning(f"[Agents] {persona.id}: prompt IA trop court, fallback")
         except Exception as e:
             logger.warning(f"[Agents] {persona.id}: chat échoué ({e}), fallback templates")
-    # Fallback : rotation aléatoire dans les templates du thème
-    templates = fallback_prompts(persona)
-    return random.choice(templates)
+    # Fallback : rotation aléatoire dans les prompts du genre (ou du thème)
+    return random.choice(editorial.prompts)
 
 
 async def generate_and_publish(
@@ -80,7 +86,10 @@ async def generate_and_publish(
     Returns:
         dict avec video_id, video_url, prompt, ou lève une exception en cas d'échec.
     """
-    prompt = await asyncio.to_thread(_generate_prompt, persona, chat)
+    # v10.0: chaque publication tire un genre différent (comédie, horreur,
+    # action…) — les bots ne refont plus jamais « le même type » de vidéo.
+    editorial = pick_editorial(persona)
+    prompt = await asyncio.to_thread(_generate_prompt, persona, chat, editorial)
 
     working_dir = os.path.join(get_working_dir(), f"agent_{persona.id}")
     os.makedirs(working_dir, exist_ok=True)
@@ -134,7 +143,7 @@ async def generate_and_publish(
     # générations 1080p/15 s font OOM le plan Free 512 Mo (cascade de
     # "Ran out of memory" qui tue aussi les tâches des utilisateurs en file).
     bot_width, bot_height, bot_duration = 1280, 720, min(persona.duration, 10)
-    logger.info(f"[Agents] {persona.author} génère (720p/{bot_duration}s): {prompt[:100]}…")
+    logger.info(f"[Agents] {persona.author} génère ({editorial.label}, {bot_width}x{bot_height}/{bot_duration}s): {prompt[:100]}…")
     result = await pipeline.generate(
         prompt=prompt,
         duration=bot_duration,
@@ -158,6 +167,7 @@ async def generate_and_publish(
         resolution=resolution,
         video_path=result.video_path,
         user_id=persona.user_id,
+        genre=editorial.label,
     )
     logger.info(
         f"[Agents] {persona.author} publié: {published.get('video_id')} "

@@ -8,6 +8,7 @@ from datetime import datetime
 sys.path.insert(0, ".")
 
 from core.agents import AGENT_PERSONAS, AgentScheduler, AgentSocial, get_persona  # noqa: E402
+from core.agents.personas import VIDEO_GENRES, pick_editorial  # noqa: E402
 
 
 class TestPersonas(unittest.TestCase):
@@ -133,6 +134,43 @@ class TestSocial(unittest.TestCase):
         self.assertGreaterEqual(likes_after, likes_before)
         # Abonnements : chaque bot a suivi au moins un créateur (bot ou humain)
         self.assertGreaterEqual(self.store.get_following_count("agent:lea-martin"), 1)
+
+
+class TestGenres(unittest.TestCase):
+    """v10.0: variété des bots — genres de mini-films (comédie, horreur, action…)."""
+
+    def test_genres_count_and_fields(self):
+        self.assertGreaterEqual(len(VIDEO_GENRES), 10)
+        seen_ids = set()
+        for g in VIDEO_GENRES:
+            self.assertNotIn(g.id, seen_ids, f"Genre dupliqué: {g.id}")
+            seen_ids.add(g.id)
+            self.assertTrue(g.name.strip(), f"{g.id}: name vide")
+            self.assertTrue(g.instruction.strip(), f"{g.id}: instruction vide")
+            self.assertGreaterEqual(len(g.prompts), 4, f"{g.id}: trop peu de prompts")
+
+    def test_genres_include_fun_and_horror(self):
+        names = {g.id for g in VIDEO_GENRES}
+        self.assertIn("comedie", names)
+        self.assertIn("horreur", names)
+
+    def test_pick_editorial_shape(self):
+        # L'éditorial tiré pour une publication est toujours exploitable
+        # par le runner (label + instruction + prompts non vides).
+        for persona in AGENT_PERSONAS:
+            for _ in range(20):
+                ed = pick_editorial(persona)
+                self.assertTrue(ed.label.strip())
+                self.assertTrue(ed.instruction.strip())
+                self.assertGreaterEqual(len(ed.prompts), 1)
+
+    def test_pick_editorial_varies(self):
+        # Sur 200 tirages pour un même bot, on doit voir plusieurs genres
+        # différents (et pas uniquement son thème unique) : c'est le cœur
+        # du correctif « les bots refont toujours le même type ».
+        persona = get_persona("lea-martin")
+        labels = {pick_editorial(persona).label for _ in range(200)}
+        self.assertGreaterEqual(len(labels), 5, f"Trop peu de variété: {labels}")
 
 
 if __name__ == "__main__":

@@ -51,6 +51,17 @@ _MAX_TOTAL_FOLLOWS = 8    # garde globale par tick
 _BOT_FOLLOW_SEED = 3      # chaque bot s'abonne à 3 autres bots (graphe stable)
 _SOCIAL_INTERVAL_S = 900  # 15 min entre deux ticks (appelé par le scheduler)
 
+# v10.1: likeurs de foule — visiteurs anonymes simulés qui likent les vidéos
+# fraîches, pour que les compteurs continuent de monter au-delà du plafond
+# naturel des 15 bots (16 personas − l'auteur). Le pool est déterministe
+# (crowd-0001 … crowd-N) et idempotent via toggle_like, comme les bots :
+# aucune consommation de quota Agnes, aucun retrait de like.
+_CROWD_SIZE = 300        # taille du pool de visiteurs simulés (plafond par vidéo)
+_CROWD_FRESH_H = 96      # une vidéo attire la foule pendant 4 jours
+_CROWD_VIDEOS = 5        # seules les vidéos les plus fraîches attirent la foule
+_CROWD_MAX_PER_TICK = 3  # likes de foule max par tick (garde globale)
+_CROWD_ATTEMPTS = 8      # tentatives max pour trouver un likeur pas encore passé
+
 
 class AgentSocial:
     """Activité sociale (likes + abonnements) des créateurs IA."""
@@ -115,15 +126,18 @@ class AgentSocial:
             return stats
 
         self._tick_likes(personas, videos, proba, stats)
+        self._tick_crowd_likes(videos, stats)
         self._tick_follows(personas, videos, proba, stats)
 
         self._total_likes += stats["likes"]
         self._total_follows += stats["follows"]
         self._last_activity = time.time()
         if stats["likes"] or stats["follows"]:
+            crowd = stats.get("crowd", 0)
             logger.info(
-                f"[Agents.Social] Tick {now:%H:%M}: {stats['likes']} like(s), "
-                f"{stats['follows']} abonnement(s), {stats['acted_bots']} bot(s) actifs"
+                f"[Agents.Social] Tick {now:%H:%M}: {stats['likes']} like(s) "
+                f"(dont {crowd} de foule), {stats['follows']} abonnement(s), "
+                f"{stats['acted_bots']} bot(s) actifs"
             )
         return stats
 
@@ -158,6 +172,52 @@ class AgentSocial:
                     continue
             if done:
                 stats["acted_bots"] += 1
+
+    # ── Likes de foule (v10.1) ─────────────────────────────────────────
+    def _tick_crowd_likes(self, videos, stats: dict) -> None:
+        """Likes de visiteurs anonymes simulés sur les vidéos fraîches.
+
+        Sans cette couche, les compteurs plafonnent à 15 likes : seuls les
+        16 bots likent (l'auteur s'exclut lui-même). La foule fait monter
+        les compteurs au fil du temps, avec un rythme réaliste : seules les
+        vidéos récentes attirent, les anciennes refroidissent.
+        """
+        store = self._store()
+        now = time.time()
+        fresh = [
+            v for v in videos
+            if v.get("id") and now - float(v.get("published_at") or 0) < _CROWD_FRESH_H * 3600
+        ]
+        if not fresh:
+            return
+        fresh.sort(key=lambda v: float(v.get("published_at") or 0), reverse=True)
+        fresh = fresh[:_CROWD_VIDEOS]
+        remaining = _CROWD_MAX_PER_TICK
+        for video in fresh:
+            if remaining <= 0:
+                break
+            vid = video["id"]
+            for _per_video in range(2):  # max 2 likes de foule par vidéo et par tick
+                if remaining <= 0:
+                    break
+                liked_ok = False
+                for _attempt in range(_CROWD_ATTEMPTS):
+                    liker = "crowd-%04d" % random.randint(1, _CROWD_SIZE)
+                    try:
+                        result = store.toggle_like(vid, liker)
+                    except KeyError:
+                        return  # vidéo supprimée entre la liste et le like
+                    except Exception as e:
+                        logger.debug(f"[Agents.Social] Crowd like {vid}: {e}")
+                        return
+                    if result.get("liked"):
+                        liked_ok = True
+                        break
+                if not liked_ok:
+                    break  # pool saturé sur cette vidéo (tirage sans succès)
+                remaining -= 1
+                stats["likes"] += 1
+                stats["crowd"] = stats.get("crowd", 0) + 1
 
     # ── Abonnements ──────────────────────────────────────────────────
     def _tick_follows(self, personas, videos, proba: float, stats: dict) -> None:

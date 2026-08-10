@@ -135,6 +135,33 @@ class TestSocial(unittest.TestCase):
         # Abonnements : chaque bot a suivi au moins un créateur (bot ou humain)
         self.assertGreaterEqual(self.store.get_following_count("agent:lea-martin"), 1)
 
+    def test_crowd_likes_break_15_cap(self):
+        """v10.1: les likeurs de foule font monter les compteurs au-delà des 15 bots."""
+        import core.agents.social as social_mod
+        orig = {
+            "size": social_mod._CROWD_SIZE,
+            "max_tick": social_mod._CROWD_MAX_PER_TICK,
+            "videos": social_mod._CROWD_VIDEOS,
+        }
+        try:
+            # Petit pool pour le test : assez pour dépasser 15, épuisable en 2 ticks
+            social_mod._CROWD_SIZE = 40
+            social_mod._CROWD_MAX_PER_TICK = 30
+            social_mod._CROWD_VIDEOS = 5
+            v = self._publish("c1", "Camille Morel", "agent:camille-morel", 0)["video_id"]
+            self.social.run_tick()
+            after1 = len(self.store.get_meta(v)["likes"])
+            # La foule continue de liker au 2e tick : le compteur ne stagne pas
+            self.social.run_tick()
+            after2 = len(self.store.get_meta(v)["likes"])
+            self.assertGreater(after2, after1)
+            # Plafond naturel des bots = 15 (16 personas − l'auteur) : dépassé
+            self.assertGreater(after2, 15)
+        finally:
+            social_mod._CROWD_SIZE = orig["size"]
+            social_mod._CROWD_MAX_PER_TICK = orig["max_tick"]
+            social_mod._CROWD_VIDEOS = orig["videos"]
+
 
 class TestGenres(unittest.TestCase):
     """v10.0: variété des bots — genres de mini-films (comédie, horreur, action…)."""

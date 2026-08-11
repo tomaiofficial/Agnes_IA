@@ -262,93 +262,6 @@
   @media (max-width: 480px) {
     .vibes-modal-close { top:12px; right:12px; width:40px; height:40px; min-width:40px; min-height:40px; font-size:20px; }
   }
-
-  /* ── Mini-film — écran principal plein écran (v10.3) ── */
-  .minifilm-stage { position: relative; overflow: hidden; }
-  .minifilm-ambient { width:900px; height:900px; opacity:.7; }
-  .minifilm-ambient2 { position:absolute; top:12%; right:-12%; width:520px; height:520px; border-radius:50%; background:radial-gradient(circle, rgba(255,82,82,0.10) 0%, rgba(139,92,246,0.05) 45%, transparent 70%); animation:ambient-drift 11s ease-in-out infinite; pointer-events:none; z-index:0; }
-  .minifilm-ambient3 { position:absolute; bottom:-18%; left:-10%; width:560px; height:560px; border-radius:50%; background:radial-gradient(circle, rgba(91,140,255,0.08) 0%, rgba(139,92,246,0.04) 45%, transparent 70%); animation:ambient-drift 13s ease-in-out infinite reverse; pointer-events:none; z-index:0; }
-  .minifilm-hero {
-    position:relative; z-index:1; min-height:calc(100dvh - 62px);
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    text-align:center; max-width:760px; margin:0 auto; padding:56px 20px 48px;
-  }
-  .minifilm-badge {
-    display:inline-flex; align-items:center; gap:6px; padding:7px 16px; border-radius:999px;
-    font-size:11px; font-weight:800; letter-spacing:.14em; text-transform:uppercase;
-    background:linear-gradient(135deg,rgba(255,82,82,0.16),rgba(167,139,250,0.16));
-    border:1px solid rgba(255,82,82,0.4); color:#ffb0b0;
-    box-shadow:0 0 24px rgba(255,82,82,0.12);
-  }
-  .minifilm-title {
-    font-size:clamp(34px, 5.6vw, 58px); font-weight:900; letter-spacing:-1.4px; line-height:1.05;
-    margin:16px 0 12px;
-    background:linear-gradient(135deg,#fff 25%,#c7d2fe 55%,#f0abfc 90%);
-    -webkit-background-clip:text; background-clip:text; color:transparent;
-    text-shadow:0 10px 40px rgba(91,140,255,0.15);
-  }
-  .minifilm-sub { color:var(--txt2); font-size:15px; line-height:1.6; max-width:540px; margin-bottom:28px; }
-  .minifilm-idea-box {
-    width:100%; max-width:640px; text-align:left;
-    background:rgba(22,22,22,0.72); border:1px solid rgba(255,255,255,0.10);
-    border-radius:18px; padding:14px 16px 10px;
-    backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
-    box-shadow:0 20px 60px rgba(0,0,0,0.45);
-    transition:border-color .25s ease, box-shadow .25s ease;
-  }
-  .minifilm-idea-box:focus-within { border-color:rgba(255,82,82,0.45); box-shadow:0 0 0 4px rgba(255,82,82,0.07), 0 20px 60px rgba(0,0,0,0.45); }
-  .minifilm-idea-input {
-    width:100%; background:transparent; border:none; outline:none; resize:none;
-    color:var(--txt); font-size:16px; line-height:1.55; min-height:88px; font-family:inherit;
-  }
-  .minifilm-idea-input::placeholder { color:#6b6b6b; }
-  .minifilm-idea-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-top:6px; }
-  .minifilm-durations { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; width:100%; max-width:640px; margin-top:18px; }
-  .mf-dur-card {
-    border-radius:16px; padding:14px 16px; text-align:left; cursor:pointer;
-    display:flex; align-items:center; gap:12px; color:#fff;
-    transition:transform .18s ease, box-shadow .18s ease;
-  }
-  .mf-dur-card:hover { transform:translateY(-2px); box-shadow:0 12px 30px rgba(0,0,0,0.4); }
-  .mf-dur-ico { font-size:22px; flex-shrink:0; }
-  .mf-dur-name { font-weight:800; font-size:15px; }
-  .mf-dur-meta { display:block; font-size:11.5px; color:var(--txt2); margin-top:2px; }
-  .minifilm-quota {
-    width:100%; max-width:640px; margin-top:18px;
-    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
-    background:rgba(255,255,255,0.04); border:1px solid var(--line);
-    border-radius:14px; padding:12px 16px;
-  }
-  .minifilm-quota .quota-text { font-size:12.5px; color:#9ca3af; }
-  .minifilm-quota .quota-text b { color:#fbbf24; }
-  #mf-quota-badge {
-    font-size:11px; font-weight:800; padding:5px 12px; border-radius:999px; white-space:nowrap;
-    background:rgba(251,191,36,0.12); color:#fbbf24; border:1px solid rgba(251,191,36,0.3);
-  }
-  .minifilm-cta {
-    width:100%; max-width:640px; margin-top:16px; padding:17px 20px;
-    font-size:16px; font-weight:800; border-radius:16px; border:none; cursor:pointer; color:#fff;
-    background:linear-gradient(135deg,#ff5252,#a78bfa);
-    box-shadow:0 10px 34px rgba(255,82,82,0.32);
-    transition:all .2s ease; display:inline-flex; align-items:center; justify-content:center; gap:9px;
-  }
-  .minifilm-cta:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 14px 44px rgba(167,139,250,0.45); }
-  .minifilm-cta:disabled { opacity:.5; cursor:not-allowed; }
-  .minifilm-note { margin-top:12px; font-size:11px; color:#777; }
-
-  /* Mode mini-film : le reste de l'app se replie, le film occupe tout l'écran */
-  body.mode-minifilm main { padding-top:62px !important; }
-  body.mode-minifilm .app-wrap { max-width:none !important; }
-  body.mode-minifilm #page-title,
-  body.mode-minifilm #apikey-section,
-  body.mode-minifilm #wip-banner,
-  body.mode-minifilm #mode-tabs,
-  body.mode-minifilm #tab-list-outer { display:none !important; }
-  body.mode-minifilm #progress-panel { max-width:820px; margin-left:auto; margin-right:auto; }
-  @media (max-width:560px) {
-    .minifilm-hero { padding-top:44px; }
-    .minifilm-durations { grid-template-columns:1fr; }
-  }
 </style>
 </head>
 <body class="text-gray-100 min-h-screen font-sans">
@@ -361,7 +274,6 @@
   </a>
 
   <nav class="header-nav">
-    <a onclick="switchMode('minifilm');return false;" data-nav="minifilm" style="background:linear-gradient(135deg,rgba(255,82,82,0.18),rgba(167,139,250,0.18));border:1px solid rgba(255,82,82,0.35);border-radius:999px;padding:8px 14px;">🎬 Mini-film</a>
     <a onclick="switchMode('video');return false;" data-nav="video">Génération</a>
     <a onclick="switchMode('gallery');return false;" data-nav="gallery">For You</a>
     <a onclick="switchMode('image');return false;" data-nav="image" class="nav-hide-sm">Image</a>
@@ -385,55 +297,6 @@
 </div>
 
 <main style="padding-top:86px;padding-bottom:70px;padding-left:18px;padding-right:18px;">
-
-  <!-- ═══════ MINI-FILM — écran principal plein écran (v10.3) ═══════ -->
-  <section id="form-minifilm" class="hidden sora-form-collapse minifilm-stage">
-    <div class="sora-ambient minifilm-ambient"></div>
-    <div class="minifilm-ambient2"></div>
-    <div class="minifilm-ambient3"></div>
-    <div class="minifilm-hero">
-      <div class="minifilm-badge">✨&nbsp;Mini-film IA</div>
-      <h1 class="minifilm-title">Une phrase.<br>Un film complet.</h1>
-      <p class="minifilm-sub">Scénario, storyboard, scènes, voix française et sous-titres — l'IA réalise tout. Un vrai court-métrage prêt à publier.</p>
-
-      <div class="minifilm-idea-box">
-        <textarea id="mf_idea" rows="3" maxlength="400" placeholder="Ex : un agent secret doit retrouver un chaton disparu dans Paris la nuit…" class="minifilm-idea-input"></textarea>
-        <div class="minifilm-idea-foot">
-          <div class="flex gap-2 flex-wrap">
-            <span class="k-chip">✍️ Scénario auto</span>
-            <span class="k-chip">🖼️ Storyboard</span>
-            <span class="k-chip">🔊 Voix + sous-titres</span>
-          </div>
-          <span id="mf_char-count" class="k-note"></span>
-        </div>
-      </div>
-
-      <div class="minifilm-durations">
-        <button type="button" id="mf-dur-court" onclick="setMiniFilmDuration('court')" class="mf-dur-card" style="background:linear-gradient(135deg,rgba(255,82,82,0.16),rgba(255,82,82,0.05));border:1px solid rgba(255,82,82,0.45);">
-          <span class="mf-dur-ico">⚡</span>
-          <span>
-            <span class="mf-dur-name">Court</span>
-            <span class="mf-dur-meta">~15 s · 3 scènes · rapide</span>
-          </span>
-        </button>
-        <button type="button" id="mf-dur-moyen" onclick="setMiniFilmDuration('moyen')" class="mf-dur-card" style="background:rgba(255,255,255,0.04);border:1px solid var(--line);">
-          <span class="mf-dur-ico">🎬</span>
-          <span>
-            <span class="mf-dur-name">Moyen</span>
-            <span class="mf-dur-meta">~36 s · 6 scènes · plus riche</span>
-          </span>
-        </button>
-      </div>
-
-      <div class="minifilm-quota">
-        <span class="quota-text">✨ <b id="mf-quota-label">3 créations gratuites par jour</b></span>
-        <span id="mf-quota-badge">3 restants</span>
-      </div>
-
-      <button id="btn-minifilm" onclick="submitMiniFilm()" class="minifilm-cta">🎬&nbsp;✦&nbsp;Générer mon mini-film</button>
-      <p class="minifilm-note">100 % IA, gratuit — aucun paiement requis</p>
-    </div>
-  </section>
 
   <div class="app-wrap" style="max-width:980px;margin:0 auto;">
 
@@ -501,9 +364,6 @@
       </button>
       <button onclick="switchMode('image')" id="tab-image" class="mode-tab bg-gray-800/50 border-gray-700/50 text-gray-400">
         <span class="ico">🖼️</span>Image
-      </button>
-      <button onclick="switchMode('minifilm')" id="tab-minifilm" class="mode-tab bg-gray-800/50 border-gray-700/50 text-gray-400">
-        <span class="ico">🎞️</span>Mini-film
       </button>
     </div>
 
@@ -1014,8 +874,6 @@ let taskListTimer = null;
 let currentMode = 'video';
 // v10.2: type de la tâche actuellement suivie — choisit la liste d'étapes affichée
 let currentTaskType = 'simple';
-// v10.2: tâches créées via le flux Mini-film (type serveur "creative" → étapes "minifilm")
-const miniFilmTaskIds = new Set();
 // v8.19: moteur de génération — 'agnes' (serveur, illimité) ou 'puter' (SDK client)
 let currentEngine = 'agnes';
 // v9.2: modèles Agnes sélectionnés côté serveur (d.models depuis /api/config)
@@ -1049,21 +907,6 @@ const STEPS = {
     { key: 'subtitle', label: 'Sous-titres' },
     { key: 'concatenate', label: 'Concaténation' },
   ],
-  // v10.2: étapes grand public du mini-film (labels pour visiteurs)
-  minifilm: [
-    { key: 'init', label: 'Création du scénario' },
-    { key: 'scene_config', label: 'Découpage en scènes' },
-    { key: 'story', label: 'Écriture de l’histoire' },
-    { key: 'script', label: 'Écriture du script' },
-    { key: 'character_ref', label: 'Création des personnages' },
-    { key: 'image_analysis', label: 'Analyse des images' },
-    { key: 'end_frame_prompts', label: 'Préparation du storyboard' },
-    { key: 'end_frame_gen', label: 'Dessin du storyboard' },
-    { key: 'video_gen', label: 'Génération des scènes' },
-    { key: 'audio', label: 'Voix & son' },
-    { key: 'subtitle', label: 'Sous-titres' },
-    { key: 'concatenate', label: 'Montage final' },
-  ],
   manuscript: [
     { key: 'split_text', label: 'Division texte' },
     { key: 'scene_prompts', label: 'Prompts scènes' },
@@ -1092,10 +935,8 @@ const STEPS = {
 // ═══════════════════════════════════════════════════
 function switchMode(mode) {
   currentMode = mode;
-  document.body.classList.toggle('mode-minifilm', mode === 'minifilm');
   document.getElementById('form-video').classList.toggle('hidden', mode !== 'video');
   document.getElementById('form-image').classList.toggle('hidden', mode !== 'image');
-  document.getElementById('form-minifilm').classList.toggle('hidden', mode !== 'minifilm');
   document.getElementById('panel-list').classList.toggle('hidden', mode !== 'list');
   document.getElementById('panel-gallery').classList.toggle('hidden', mode !== 'gallery');
   // Bug refresh : le panneau était rendu visible par ce toggle sans aucune tâche
@@ -1107,12 +948,12 @@ function switchMode(mode) {
   } else {
     progressPanel.classList.add('hidden');
   }
-  // Uncollapse form if no task running when switching to video/image/minifilm
-  if (!isTaskRunning && (mode === 'video' || mode === 'image' || mode === 'minifilm')) {
+  // Uncollapse form if no task running when switching to video/image
+  if (!isTaskRunning && (mode === 'video' || mode === 'image')) {
     document.querySelectorAll('.sora-form-collapse').forEach(el => el.classList.remove('collapsed'));
   }
   // Tab styles
-  ['video', 'image', 'list', 'minifilm'].forEach(m => {
+  ['video', 'image', 'list'].forEach(m => {
     const tab = document.getElementById('tab-' + m);
     if (!tab) return;
     if (m === mode) {
@@ -1125,7 +966,6 @@ function switchMode(mode) {
   if (mode !== 'list' && taskListTimer) { clearInterval(taskListTimer); taskListTimer = null; }
   if (mode === 'list' && !taskListTimer) taskListTimer = setInterval(loadTaskList, 5000);
   if (mode === 'gallery') openGalleryFeed(); else closeGalleryFeed();
-  if (mode === 'minifilm') loadMiniFilmQuota();
 }
 
 function onSimpleModeChange() {
@@ -1288,122 +1128,6 @@ async function submitSimpleTo(form, btn, endpoint) {
     btn.disabled = false;
   }
 }
-
-// ═══════════════════════════════════════════════════
-// v10.2: Mini-film — une idée → un film complet (pipeline creative)
-// ═══════════════════════════════════════════════════
-let miniFilmDuration = 'court';
-const MINI_FILM_STYLE = 'Cinématique, réaliste, ultra détaillé — éclairage naturel, couleurs profondes, ambiance de film';
-
-function setMiniFilmDuration(mode) {
-  miniFilmDuration = mode;
-  const court = document.getElementById('mf-dur-court');
-  const moyen = document.getElementById('mf-dur-moyen');
-  const activeBg = 'linear-gradient(135deg,rgba(255,82,82,0.16),rgba(255,82,82,0.05))';
-  const activeBorder = 'rgba(255,82,82,0.45)';
-  const inactiveBg = 'rgba(255,255,255,0.04)';
-  const inactiveBorder = 'var(--line)';
-  if (mode === 'court') {
-    court.style.background = activeBg; court.style.borderColor = activeBorder;
-    moyen.style.background = inactiveBg; moyen.style.borderColor = inactiveBorder;
-  } else {
-    moyen.style.background = activeBg; moyen.style.borderColor = activeBorder;
-    court.style.background = inactiveBg; court.style.borderColor = inactiveBorder;
-  }
-}
-
-async function loadMiniFilmQuota() {
-  const badge = document.getElementById('mf-quota-badge');
-  const label = document.getElementById('mf-quota-label');
-  const btn = document.getElementById('btn-minifilm');
-  if (!badge || !label || !btn) return;
-  try {
-    const r = await fetchWithAuth(API_BASE + '/api/community/mini-films/quota');
-    const d = await r.json();
-    if (!d.ok) throw new Error('Échec quota');
-    if (d.unlimited) {
-      badge.textContent = 'Illimité';
-      label.textContent = '✨ Créations gratuites, sans limite';
-      btn.disabled = false; btn.style.opacity = '1';
-    } else {
-      badge.textContent = d.remaining + ' restant' + (d.remaining > 1 ? 's' : '');
-      label.textContent = '✨ ' + d.remaining + ' / ' + d.limit + ' créations gratuites aujourd’hui';
-      btn.disabled = d.remaining <= 0;
-      btn.style.opacity = d.remaining <= 0 ? '0.5' : '1';
-    }
-  } catch(e) {
-    // Serveur injoignable : on laisse l'expérience ouverte (défaut affiché par le HTML)
-  }
-}
-
-async function submitMiniFilm() {
-  const ideaEl = document.getElementById('mf_idea');
-  const idea = ideaEl.value.trim();
-  if (!idea) {
-    alert('Décris d’abord ton idée en une phrase !');
-    ideaEl.focus();
-    return;
-  }
-  const btn = document.getElementById('btn-minifilm');
-  btn.disabled = true;
-  btn.textContent = '🎬 Création du film en cours…';
-  const form = new FormData();
-  form.append('idea', idea);
-  form.append('duration_source', 'manual');
-  form.append('uniform_duration', 'true');
-  form.append('style', MINI_FILM_STYLE);
-  form.append('video_width', '768');
-  form.append('video_height', '1152');
-  form.append('audio_enabled', 'true');
-  form.append('audio_voice', 'fr-FR-DeniseNeural');
-  form.append('audio_rate', '+0%');
-  form.append('audio_lang', 'fr');
-  form.append('subtitle_enabled', 'true');
-  form.append('subtitle_style_mode', 'fixed');
-  form.append('subtitle_font', 'STHeitiMedium.ttc');
-  form.append('subtitle_color', 'white');
-  form.append('subtitle_fontsize', '48');
-  form.append('subtitle_position', 'bottom');
-  form.append('subtitle_stroke_color', 'black');
-  form.append('subtitle_stroke_width', '2');
-  form.append('subtitle_bg_color', 'black@0.5');
-  if (miniFilmDuration === 'moyen') {
-    form.append('scene_count', '6');
-    form.append('scene_durations_json', JSON.stringify([6, 6, 6, 6, 6, 6]));
-  } else {
-    form.append('scene_count', '3');
-    form.append('scene_durations_json', JSON.stringify([5, 5, 5]));
-  }
-  try {
-    const r = await fetchWithAuth(API_BASE + '/api/tasks/creative', { method: 'POST', body: form });
-    const d = await r.json();
-    if (!d.ok) throw new Error(d.detail || 'Échec de la création');
-    currentTaskType = 'minifilm';
-    miniFilmTaskIds.add(d.task_id);
-    setRunning(d.task_id);
-    currentDirName = d.dir_name;
-    await showProgress(d.task_id, d.dir_name);
-    await startPolling(d.task_id);
-    showToast('🎬 Mini-film en cours : scénario, storyboard, scènes, voix, montage…', 6000);
-    loadMiniFilmQuota();
-  } catch(e) {
-    showToast('❌ ' + e.message, 6000);
-    btn.disabled = false;
-    btn.textContent = '🎬 ✦ Générer mon mini-film';
-  }
-}
-
-// Compteur de caractères de l'idée (rétroaction légère)
-document.addEventListener('DOMContentLoaded', function() {
-  const ideaEl = document.getElementById('mf_idea');
-  if (ideaEl) {
-    ideaEl.addEventListener('input', function() {
-      const count = document.getElementById('mf_char-count');
-      if (count) count.textContent = this.value.length + ' caractères';
-    });
-    loadMiniFilmQuota();
-  }
-});
 
 // ═══════════════════════════════════════════════════
 // v8.20: sélecteur de moteur externe retiré — formulaire simple = Agnes uniquement
@@ -1778,10 +1502,8 @@ async function pollTaskProgress(taskId) {
     const state = await r.json();
     _pollFailures = 0;
     // v10.2: auto-détection du type de tâche → liste d'étapes adaptée.
-    // Le serveur renvoie "creative" pour les mini-films : on retraduit vers
-    // "minifilm" si la tâche a été créée par le flux Mini-film (étapes grand public).
     if (state && state.task_type) {
-      currentTaskType = (state.task_type === 'creative' && miniFilmTaskIds.has(taskId)) ? 'minifilm' : state.task_type;
+      currentTaskType = state.task_type;
     }
     const pct = Math.round((state.current_progress || 0) * 100);
     document.getElementById('progress-bar').style.width = pct + '%';
@@ -2963,8 +2685,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // ═══════════════════════════════════════════════════
 (async function init() {
   try {
-    // v10.3: le mini-film est l'écran d'accueil (prend toute la place)
-    switchMode('minifilm');
     const r = await fetchWithAuth(API_BASE + '/api/config');
     const d = await r.json();
     if (d.api_key) setApiKeyConfiguredUI(d.source, d.can_clear);

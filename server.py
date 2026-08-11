@@ -892,6 +892,21 @@ async def root():
     return {"message": "Agnes Video Generator API"}
 
 
+@app.get("/index.html")
+async def root_index_html():
+    """Compat : les URL `/index.html` (bookmark, cache-buster `?v=...`) donnaient
+    404 « Not Found » → page vide (ni vidéos For You, ni likes). On sert le même
+    fichier que `/` (redirection 307 pour préserver le query string).
+    """
+    return RedirectResponse("/", status_code=307)
+
+
+@app.head("/index.html")
+async def root_index_html_head():
+    """HEAD /index.html — par cohérence avec la route GET."""
+    return Response(status_code=200)
+
+
 @app.head("/")
 async def root_head():
     """HEAD / — requis par les uptime monitors (UptimeRobot utilise HEAD).

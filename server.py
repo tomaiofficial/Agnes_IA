@@ -719,17 +719,20 @@ async def lifespan(app: FastAPI):
     # Moteur de créateurs IA autonomes (scheduler horaire)
     try:
         import os as _os
-        from core.agents import AgentScheduler, set_scheduler
-        from core.config import get_api_key as _agents_api_key
-        agents_scheduler = AgentScheduler(
-            api_key_provider=_agents_api_key,
-            queue=_video_queue,
-            monitor=_video_monitor,
-            tz=_os.environ.get("AGENTS_TZ"),
-        )
-        set_scheduler(agents_scheduler)
-        await agents_scheduler.start()
-        logger.info("[Startup] Agents scheduler started (8 personas français)")
+        if _os.environ.get("AGENTS_AUTO_START", "true").lower() in ("0", "false", "no"):
+            logger.info("[Startup] Agents scheduler désactivé via AGENTS_AUTO_START=false")
+        else:
+            from core.agents import AgentScheduler, set_scheduler
+            from core.config import get_api_key as _agents_api_key
+            agents_scheduler = AgentScheduler(
+                api_key_provider=_agents_api_key,
+                queue=_video_queue,
+                monitor=_video_monitor,
+                tz=_os.environ.get("AGENTS_TZ"),
+            )
+            set_scheduler(agents_scheduler)
+            await agents_scheduler.start()
+            logger.info("[Startup] Agents scheduler started (8 personas français)")
     except Exception as e:
         logger.warning(f"[Startup] Agents scheduler init failed ({e}); continuing")
 

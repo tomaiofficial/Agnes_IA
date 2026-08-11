@@ -49,7 +49,7 @@ class AgnesVideoAPI:
         api_key: str,
         model: str = "agnes-video-v2.0",
         default_duration: int = 5,
-        max_retries: int = 6,
+        max_retries: int = 12,
         retry_base_delay: float = 15.0,
         on_retry: Optional[Callable] = None,
         poll_interval: float = 3.0,

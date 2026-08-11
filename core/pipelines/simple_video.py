@@ -50,7 +50,7 @@ class SimpleVideoPipeline(BasePipeline):
         """Informe l'utilisateur pendant les nouvelles tentatives d'envoi à l'API vidéo."""
         await self._emit(
             "video_gen", "running",
-            f"API vidéo occupée ({reason}) — nouvel essai {attempt}/6 dans {delay:.0f}s...",
+            f"API vidéo occupée ({reason}) — nouvel essai {attempt}/12 dans {delay:.0f}s...",
             0.2,
         )
 

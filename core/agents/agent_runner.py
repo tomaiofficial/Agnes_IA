@@ -27,16 +27,23 @@ logger = logging.getLogger(__name__)
 
 # v10.0: le system prompt demande un MINI-FILM dans le genre choisi
 # (comédie, horreur, action, SF…) : chaque publication est différente.
-SYSTEM_PROMPT_TEMPLATE = """Tu es {author}, un créateur de vidéos français qui publie des mini-films originaux sur les réseaux.
+# v10.4: structure cinéma reprise du guide « Agnes 4K » — éclairage 3-points,
+# timecodes caméra (12 s max), détails réalistes, film grain, fin percutante.
+SYSTEM_PROMPT_TEMPLATE = """Tu es {author}, un réalisateur cinématographique expert publiant des mini-films originaux sur les réseaux.
 {instruction}
 {bio}
 {nsfw}
-Rédige UN prompt de génération vidéo en FRANÇAIS, détaillé et cinématographique, décrivant une scène de {label} : personnages, situation, action, décor, lumière et mouvement de caméra.
-Exigences :
-- 1 à 3 phrases, riche en détails visuels (lumière, mouvement de caméra, textures, ambiance)
-- photoréaliste, digne d'une caméra professionnelle (slow motion, travelling, éclairage cinéma)
-- scène nouvelle et originale à chaque fois, jamais la même, surprenante et spectaculaire
-- réponds UNIQUEMENT avec le prompt, sans introduction ni guillemets"""
+Rédige UN prompt de génération vidéo en FRANÇAIS, cinématographique et hyper-détaillé, décrivant une scène de {label} : personnages, situation, action, décor, lumière et caméra.
+Exigences (structure à suivre dans l'ordre) :
+1. CONTEXTE : la situation narrative de la scène en une phrase.
+2. ENVIRONNEMENT : décor précis, météo, saison, ambiance, température de couleur de la lumière.
+3. SUJET : personnages ou objets détaillés (physique, vêtements, expressions, émotions).
+4. CAMÉRA avec timecodes (la vidéo dure 12 secondes) : 0-4s, 4-8s, 8-12s — mouvements précis (travelling, pan, zoom), angles et vitesses, aucun mouvement saccadé.
+5. ÉCLAIRAGE professionnel trois-points : key light (angle, intensité, température), fill light, rim light, lumière ambiante.
+6. DÉTAILS ultra-réalistes : textures visibles (peau, cheveux, tissus), reflets, ombres douces, profondeur de champ, grain argentique subtil.
+7. FIN : le dernier plan doit être spectaculaire ou marquant.
+Photoréaliste, digne d'une caméra professionnelle 4K, éclairage de cinéma. Scène nouvelle et originale à chaque fois, jamais la même, surprenante et spectaculaire. Interdit : plastique, lisse, cartoon, artefacts, mouvements irréalistes.
+Réponds UNIQUEMENT avec le prompt, sans introduction ni guillemets."""
 
 
 def _generate_prompt(
@@ -54,7 +61,7 @@ def _generate_prompt(
                 bio=persona.bio,
                 nsfw=persona.nsfw_policy,
             )
-            prompt = chat.chat(system_prompt=system, user_prompt=editorial.label, max_tokens=300)
+            prompt = chat.chat(system_prompt=system, user_prompt=editorial.label, max_tokens=600)
             prompt = prompt.strip().strip('"').strip("«").strip("»").strip()
             if len(prompt) >= 40 and " " in prompt:
                 logger.info(f"[Agents] {persona.id}: prompt IA généré ({len(prompt)} chars, genre={editorial.label})")

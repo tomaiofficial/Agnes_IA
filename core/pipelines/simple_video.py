@@ -15,6 +15,7 @@ from core.api.agnes_video import AgnesVideoAPI
 from core.audio.tts import EdgeTTSEngine, SilentTTSEngine
 from core.pipelines import BasePipeline, PipelineShutdown
 from core.video.postprocess import ensure_video_duration
+from core.video.prompt_optimizer import PromptOptimizer
 from models.task import SimpleVideoTask, StepStatus
 
 logger = logging.getLogger(__name__)
@@ -183,7 +184,35 @@ class SimpleVideoPipeline(BasePipeline):
         # 分隔符跟随用户 prompt 语言
         _has_chinese = bool(re.search(r'[\u4e00-\u9fff]', self._state.prompt))
         _sep = "--- 请严格按照以下描述生成图像/视频 ---" if _has_chinese else "--- Generate image/video strictly based on the following description ---"
-        full_prompt = f"{self._state.system_prompt.strip()}\n\n{_sep}\n{self._state.prompt}" if self._state.system_prompt.strip() else self._state.prompt
+
+        # v8.14: Qualité cinéma pour TOUS les utilisateurs — garde-fous du
+        # blueprint « Cinéma Professionnel » (zéro déformation / zéro flicker /
+        # zéro morphing / aucun artifact / peau naturelle / éclairage cohérent)
+        # automatiquement ajoutés au prompt utilisateur du flux simple.
+        # SAUF si l'utilisateur fournit son propre system_prompt (mode pro =
+        # prompt brut préservé, décision D5 « pas d'enhancement AI »).
+        # Fail-safe : en cas d'erreur, le prompt original part inchangé.
+        prompt_to_send = self._state.prompt
+        if not self._state.system_prompt.strip():
+            try:
+                optimizer = PromptOptimizer(
+                    fix_spelling=False,   # pas de correction auto (risque de contresens)
+                    enhance=False,        # pas de réécriture (D5 : préserver l'intention)
+                    add_cinematic=True,   # garde-fous cinéma du blueprint
+                    max_length=4500,      # ne jamais tronquer le prompt utilisateur
+                )
+                result = await optimizer.optimize(self._state.prompt)
+                if result.optimized.strip():
+                    prompt_to_send = result.optimized
+                    if result.added_keywords:
+                        logger.info(
+                            f"[Simple] Prompt cinéma enrichi (+{len(result.added_keywords)} garde-fous) "
+                            f"pour la tâche {self._state.task_id}"
+                        )
+            except Exception as e:
+                logger.warning(f"[Simple] PromptOptimizer échoué, prompt original conservé: {e}")
+
+        full_prompt = f"{self._state.system_prompt.strip()}\n\n{_sep}\n{prompt_to_send}" if self._state.system_prompt.strip() else prompt_to_send
         # v7.1: Qualité API — ajouter des paramètres supplémentaires pour boost
         extra_kwargs = {}
         if self._state.quality_boost:

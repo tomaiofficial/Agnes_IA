@@ -2418,6 +2418,58 @@ async def _run_advanced_pipeline(
         _queued_tasks.pop(task_id, None)
 
 
+# ── v10.2: Mini-films — quota de création quotidien par visiteur ────────────
+# Chaque mini-film lance le pipeline creative (scénario + storyboard + vidéos
+# par scène + voix + montage), ce qui consomme l'API Agnes. Pour rester
+# gratuit et ouvert à tous sans saturer l'API, chaque visiteur (X-User-Id)
+# a droit à MINI_FILM_DAILY_LIMIT créations par jour (défaut 3).
+MINI_FILM_DAILY_LIMIT = int(os.environ.get("MINI_FILM_DAILY_LIMIT", "3"))
+
+
+def _mini_film_count_today(user_id: str) -> int:
+    """Nombre de mini-films (tâches creative) créés aujourd'hui par `user_id`.
+
+    Comptage par rolling day (début de journée UTC, epoch) sur les
+    métadonnées persistées (survivent aux redéploiements Render).
+    """
+    if not user_id:
+        return 0
+    try:
+        rows = get_task_store().list_meta()
+    except Exception as e:
+        logger.warning(f"[MiniFilm] Lecture des métadonnées impossible: {e}")
+        return 0
+    day_start = int(time.time() // 86400) * 86400
+    count = 0
+    for r in rows:
+        if r.get("user_id") != user_id:
+            continue
+        if (r.get("task_type") or "") != TaskType.CREATIVE.value:
+            continue
+        ts = r.get("created_at")
+        try:
+            ts = float(ts or 0)
+        except (TypeError, ValueError):
+            ts = 0.0
+        if ts >= day_start:
+            count += 1
+    return count
+
+
+@app.get("/api/community/mini-films/quota")
+async def mini_film_quota(user_id: str = Header(default="", alias="X-User-Id")):
+    """Quota restant de mini-films du visiteur (X-User-Id)."""
+    used = _mini_film_count_today(user_id)
+    unlimited = not user_id
+    return {
+        "ok": True,
+        "used": used,
+        "limit": 0 if unlimited else MINI_FILM_DAILY_LIMIT,
+        "remaining": -1 if unlimited else max(0, MINI_FILM_DAILY_LIMIT - used),
+        "unlimited": unlimited,
+    }
+
+
 @app.post("/api/tasks/creative")
 async def create_creative_task(
     idea: str = Form(...),
@@ -2457,6 +2509,18 @@ async def create_creative_task(
     api_key = get_api_key()
     if not api_key:
         raise HTTPException(status_code=400, detail="请先配置 API Key")
+
+    # v10.2: quota mini-films — 3 créations/jour par visiteur (sauf user_id vide)
+    if user_id:
+        used = _mini_film_count_today(user_id)
+        if used >= MINI_FILM_DAILY_LIMIT:
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    f"Limite atteinte : {MINI_FILM_DAILY_LIMIT} mini-films par jour. "
+                    "Reviens demain pour créer le prochain !"
+                ),
+            )
 
     # v4.0: 音色与目标语言兼容性校验
     if audio_enabled:

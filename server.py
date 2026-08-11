@@ -136,12 +136,20 @@ class WeightedSemaphore:
         self._cond = asyncio.Condition(self._lock)
 
     async def acquire(self, weight: int):
-        if weight > self.max_weight:
-            raise ValueError(f"task weight {weight} > max {self.max_weight}")
+        # v10.2.1: un poids supérieur à max_weight (ex: creative=3 avec max=1,
+        # plan Render 512 Mo → 1 seule pipeline) ne doit PAS lever ValueError :
+        # la tâche attend un slot 100% libre puis occupe tout le budget, ce qui
+        # garantit aussi « 1 seule pipeline à la fois » (rien ne cohabite avec elle).
         async with self._lock:
-            while self.current + weight > self.max_weight:
+            while True:
+                if weight <= self.max_weight:
+                    fits = self.current + weight <= self.max_weight
+                else:
+                    fits = self.current == 0
+                if fits:
+                    self.current += weight
+                    return
                 await self._cond.wait()
-            self.current += weight
 
     async def release(self, weight: int):
         async with self._lock:

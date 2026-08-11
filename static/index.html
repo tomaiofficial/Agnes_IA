@@ -1684,6 +1684,7 @@ async function pollTaskProgress(taskId) {
   try {
     const r = await fetchWithAuth(API_BASE + '/api/tasks/' + taskId);
     const state = await r.json();
+    _pollFailures = 0;
     // v10.2: auto-détection du type de tâche → liste d'étapes adaptée.
     // Le serveur renvoie "creative" pour les mini-films : on retraduit vers
     // "minifilm" si la tâche a été créée par le flux Mini-film (étapes grand public).
@@ -1770,6 +1771,19 @@ async function pollTaskProgress(taskId) {
     }
   } catch(e) {
     console.warn('[Poll] Erreur pendant le polling de la tâche :', e);
+    // v10.2.1: serveur injoignable → message visible au lieu d'un 0% figé sans explication
+    _pollFailures = (_pollFailures || 0) + 1;
+    if (_pollFailures >= 2) {
+      const pm = document.getElementById('progress-message');
+      if (pm) {
+        pm.innerHTML = `<div class="sora-status-text p-3 rounded-xl" style="background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.2);">
+          <p style="color:#fbbf24; font-size:13px; font-weight:500;">⚠️ Serveur injoignable — la génération se poursuit côté serveur.</p>
+          <p style="color:rgba(156,163,175,0.5); font-size:12px; margin-top:2px;">Reconnexion automatique…</p>
+        </div>`;
+      }
+      const lbl = document.getElementById('progress-state-label');
+      if (lbl) lbl.textContent = 'Connexion perdue';
+    }
   }
 }
 

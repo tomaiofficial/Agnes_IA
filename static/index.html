@@ -274,6 +274,7 @@
   </a>
 
   <nav class="header-nav">
+    <a onclick="switchMode('minifilm');return false;" data-nav="minifilm" style="background:linear-gradient(135deg,rgba(255,82,82,0.18),rgba(167,139,250,0.18));border:1px solid rgba(255,82,82,0.35);border-radius:999px;padding:8px 14px;">🎬 Mini-film</a>
     <a onclick="switchMode('video');return false;" data-nav="video">Génération</a>
     <a onclick="switchMode('gallery');return false;" data-nav="gallery">For You</a>
     <a onclick="switchMode('image');return false;" data-nav="image" class="nav-hide-sm">Image</a>
@@ -363,6 +364,9 @@
       </button>
       <button onclick="switchMode('image')" id="tab-image" class="mode-tab bg-gray-800/50 border-gray-700/50 text-gray-400">
         <span class="ico">🖼️</span>Image
+      </button>
+      <button onclick="switchMode('minifilm')" id="tab-minifilm" class="mode-tab bg-gray-800/50 border-gray-700/50 text-gray-400">
+        <span class="ico">🎞️</span>Mini-film
       </button>
     </div>
 
@@ -561,6 +565,52 @@
         <button id="btn-simple" onclick="submitSimple()" class="gen-btn mt-4" style="margin-top:20px;">
           ✦ Générer la vidéo
         </button>
+      </div>
+    </div>
+
+    <!-- ═══════ Mini-film (v10.2) — une idée → un film complet ═══════ -->
+    <div id="form-minifilm" class="hidden sora-form-collapse">
+      <div class="k-card p-4 sm:p-6 mb-4 overflow-hidden" style="position:relative;">
+        <div class="sora-ambient" style="opacity:0.5;"></div>
+        <div style="position:relative;z-index:1;">
+          <!-- Hero -->
+          <div style="text-align:center;margin-bottom:18px;">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-bold tracking-widest uppercase mb-2" style="background:linear-gradient(135deg,rgba(255,82,82,0.18),rgba(167,139,250,0.18));border:1px solid rgba(255,82,82,0.4);color:#ffb0b0;">✨ Mini-film IA</div>
+            <h3 class="text-lg sm:text-xl font-bold text-gray-100" style="letter-spacing:-0.3px;">Une phrase → un film complet</h3>
+            <p class="text-gray-400 text-[13px] mt-1.5 max-w-md mx-auto">L'IA écrit le scénario, dessine le storyboard, génère chaque scène avec voix et sous-titres — un vrai court-métrage, prêt à publier.</p>
+          </div>
+          <!-- Idée -->
+          <label class="k-label">Ton idée en une phrase <span style="color:#f87171;">*</span></label>
+          <textarea id="mf_idea" rows="3" placeholder="Ex : un agent secret doit retrouver un chaton disparu dans Paris la nuit…" class="k-field resize-y" style="min-height:90px;"></textarea>
+          <div class="flex items-center justify-between mt-2 flex-wrap gap-2">
+            <div class="flex gap-2 flex-wrap">
+              <span class="k-chip">✍️ Scénario auto</span>
+              <span class="k-chip">🖼️ Storyboard en images</span>
+              <span class="k-chip">🔊 Voix + sous-titres</span>
+            </div>
+            <span id="mf_char-count" class="k-note"></span>
+          </div>
+          <!-- Durée -->
+          <div style="margin-top:16px;">
+            <label class="k-label">Durée du film</label>
+            <div class="grid grid-cols-2 gap-3">
+              <button type="button" id="mf-dur-court" onclick="setMiniFilmDuration('court')" class="mf-dur-btn rounded-xl p-3 text-left border transition" style="background:linear-gradient(135deg,rgba(255,82,82,0.16),rgba(255,82,82,0.05));border-color:rgba(255,82,82,0.45);">
+                <div class="text-sm font-bold text-gray-100">⚡ Court</div>
+                <div class="text-[11px] text-gray-400 mt-0.5">~15 s · 3 scènes · rapide</div>
+              </button>
+              <button type="button" id="mf-dur-moyen" onclick="setMiniFilmDuration('moyen')" class="mf-dur-btn rounded-xl p-3 text-left border transition" style="background:rgba(255,255,255,0.04);border-color:var(--line);">
+                <div class="text-sm font-bold text-gray-100">🎬 Moyen</div>
+                <div class="text-[11px] text-gray-400 mt-0.5">~36 s · 6 scènes · plus riche</div>
+              </button>
+            </div>
+          </div>
+          <!-- Quota -->
+          <div class="mt-4 rounded-xl px-4 py-3 flex items-center justify-between gap-3" style="background:rgba(255,255,255,0.04);border:1px solid var(--line);">
+            <span class="text-xs text-gray-400">✨ <b id="mf-quota-label" style="color:#fbbf24;">3 créations gratuites par jour</b></span>
+            <span id="mf-quota-badge" class="text-[11px] font-bold px-2.5 py-1 rounded-full" style="background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);">3 restants</span>
+          </div>
+          <button id="btn-minifilm" onclick="submitMiniFilm()" class="gen-btn mt-4 w-full" style="margin-top:18px;background:linear-gradient(135deg,#ff5252,#a78bfa);">🎬 ✦ Générer mon mini-film</button>
+        </div>
       </div>
     </div>
 
@@ -871,6 +921,10 @@ let pollTimer = null;
 let isTaskRunning = false;
 let taskListTimer = null;
 let currentMode = 'video';
+// v10.2: type de la tâche actuellement suivie — choisit la liste d'étapes affichée
+let currentTaskType = 'simple';
+// v10.2: tâches créées via le flux Mini-film (type serveur "creative" → étapes "minifilm")
+const miniFilmTaskIds = new Set();
 // v8.19: moteur de génération — 'agnes' (serveur, illimité) ou 'puter' (SDK client)
 let currentEngine = 'agnes';
 // v9.2: modèles Agnes sélectionnés côté serveur (d.models depuis /api/config)
@@ -904,6 +958,21 @@ const STEPS = {
     { key: 'subtitle', label: 'Sous-titres' },
     { key: 'concatenate', label: 'Concaténation' },
   ],
+  // v10.2: étapes grand public du mini-film (labels pour visiteurs)
+  minifilm: [
+    { key: 'init', label: 'Création du scénario' },
+    { key: 'scene_config', label: 'Découpage en scènes' },
+    { key: 'story', label: 'Écriture de l’histoire' },
+    { key: 'script', label: 'Écriture du script' },
+    { key: 'character_ref', label: 'Création des personnages' },
+    { key: 'image_analysis', label: 'Analyse des images' },
+    { key: 'end_frame_prompts', label: 'Préparation du storyboard' },
+    { key: 'end_frame_gen', label: 'Dessin du storyboard' },
+    { key: 'video_gen', label: 'Génération des scènes' },
+    { key: 'audio', label: 'Voix & son' },
+    { key: 'subtitle', label: 'Sous-titres' },
+    { key: 'concatenate', label: 'Montage final' },
+  ],
   manuscript: [
     { key: 'split_text', label: 'Division texte' },
     { key: 'scene_prompts', label: 'Prompts scènes' },
@@ -934,6 +1003,7 @@ function switchMode(mode) {
   currentMode = mode;
   document.getElementById('form-video').classList.toggle('hidden', mode !== 'video');
   document.getElementById('form-image').classList.toggle('hidden', mode !== 'image');
+  document.getElementById('form-minifilm').classList.toggle('hidden', mode !== 'minifilm');
   document.getElementById('panel-list').classList.toggle('hidden', mode !== 'list');
   document.getElementById('panel-gallery').classList.toggle('hidden', mode !== 'gallery');
   // Bug refresh : le panneau était rendu visible par ce toggle sans aucune tâche
@@ -945,12 +1015,12 @@ function switchMode(mode) {
   } else {
     progressPanel.classList.add('hidden');
   }
-  // Uncollapse form if no task running when switching to video/image
-  if (!isTaskRunning && (mode === 'video' || mode === 'image')) {
+  // Uncollapse form if no task running when switching to video/image/minifilm
+  if (!isTaskRunning && (mode === 'video' || mode === 'image' || mode === 'minifilm')) {
     document.querySelectorAll('.sora-form-collapse').forEach(el => el.classList.remove('collapsed'));
   }
   // Tab styles
-  ['video', 'image', 'list'].forEach(m => {
+  ['video', 'image', 'list', 'minifilm'].forEach(m => {
     const tab = document.getElementById('tab-' + m);
     if (!tab) return;
     if (m === mode) {
@@ -963,6 +1033,7 @@ function switchMode(mode) {
   if (mode !== 'list' && taskListTimer) { clearInterval(taskListTimer); taskListTimer = null; }
   if (mode === 'list' && !taskListTimer) taskListTimer = setInterval(loadTaskList, 5000);
   if (mode === 'gallery') openGalleryFeed(); else closeGalleryFeed();
+  if (mode === 'minifilm') loadMiniFilmQuota();
 }
 
 function onSimpleModeChange() {
@@ -1125,6 +1196,122 @@ async function submitSimpleTo(form, btn, endpoint) {
     btn.disabled = false;
   }
 }
+
+// ═══════════════════════════════════════════════════
+// v10.2: Mini-film — une idée → un film complet (pipeline creative)
+// ═══════════════════════════════════════════════════
+let miniFilmDuration = 'court';
+const MINI_FILM_STYLE = 'Cinématique, réaliste, ultra détaillé — éclairage naturel, couleurs profondes, ambiance de film';
+
+function setMiniFilmDuration(mode) {
+  miniFilmDuration = mode;
+  const court = document.getElementById('mf-dur-court');
+  const moyen = document.getElementById('mf-dur-moyen');
+  const activeBg = 'linear-gradient(135deg,rgba(255,82,82,0.16),rgba(255,82,82,0.05))';
+  const activeBorder = 'rgba(255,82,82,0.45)';
+  const inactiveBg = 'rgba(255,255,255,0.04)';
+  const inactiveBorder = 'var(--line)';
+  if (mode === 'court') {
+    court.style.background = activeBg; court.style.borderColor = activeBorder;
+    moyen.style.background = inactiveBg; moyen.style.borderColor = inactiveBorder;
+  } else {
+    moyen.style.background = activeBg; moyen.style.borderColor = activeBorder;
+    court.style.background = inactiveBg; court.style.borderColor = inactiveBorder;
+  }
+}
+
+async function loadMiniFilmQuota() {
+  const badge = document.getElementById('mf-quota-badge');
+  const label = document.getElementById('mf-quota-label');
+  const btn = document.getElementById('btn-minifilm');
+  if (!badge || !label || !btn) return;
+  try {
+    const r = await fetchWithAuth(API_BASE + '/api/community/mini-films/quota');
+    const d = await r.json();
+    if (!d.ok) throw new Error('Échec quota');
+    if (d.unlimited) {
+      badge.textContent = 'Illimité';
+      label.textContent = '✨ Créations gratuites, sans limite';
+      btn.disabled = false; btn.style.opacity = '1';
+    } else {
+      badge.textContent = d.remaining + ' restant' + (d.remaining > 1 ? 's' : '');
+      label.textContent = '✨ ' + d.remaining + ' / ' + d.limit + ' créations gratuites aujourd’hui';
+      btn.disabled = d.remaining <= 0;
+      btn.style.opacity = d.remaining <= 0 ? '0.5' : '1';
+    }
+  } catch(e) {
+    // Serveur injoignable : on laisse l'expérience ouverte (défaut affiché par le HTML)
+  }
+}
+
+async function submitMiniFilm() {
+  const ideaEl = document.getElementById('mf_idea');
+  const idea = ideaEl.value.trim();
+  if (!idea) {
+    alert('Décris d’abord ton idée en une phrase !');
+    ideaEl.focus();
+    return;
+  }
+  const btn = document.getElementById('btn-minifilm');
+  btn.disabled = true;
+  btn.textContent = '🎬 Création du film en cours…';
+  const form = new FormData();
+  form.append('idea', idea);
+  form.append('duration_source', 'manual');
+  form.append('uniform_duration', 'true');
+  form.append('style', MINI_FILM_STYLE);
+  form.append('video_width', '768');
+  form.append('video_height', '1152');
+  form.append('audio_enabled', 'true');
+  form.append('audio_voice', 'fr-FR-DeniseNeural');
+  form.append('audio_rate', '+0%');
+  form.append('audio_lang', 'fr');
+  form.append('subtitle_enabled', 'true');
+  form.append('subtitle_style_mode', 'fixed');
+  form.append('subtitle_font', 'STHeitiMedium.ttc');
+  form.append('subtitle_color', 'white');
+  form.append('subtitle_fontsize', '48');
+  form.append('subtitle_position', 'bottom');
+  form.append('subtitle_stroke_color', 'black');
+  form.append('subtitle_stroke_width', '2');
+  form.append('subtitle_bg_color', 'black@0.5');
+  if (miniFilmDuration === 'moyen') {
+    form.append('scene_count', '6');
+    form.append('scene_durations_json', JSON.stringify([6, 6, 6, 6, 6, 6]));
+  } else {
+    form.append('scene_count', '3');
+    form.append('scene_durations_json', JSON.stringify([5, 5, 5]));
+  }
+  try {
+    const r = await fetchWithAuth(API_BASE + '/api/tasks/creative', { method: 'POST', body: form });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.detail || 'Échec de la création');
+    currentTaskType = 'minifilm';
+    miniFilmTaskIds.add(d.task_id);
+    setRunning(d.task_id);
+    currentDirName = d.dir_name;
+    await showProgress(d.task_id, d.dir_name);
+    await startPolling(d.task_id);
+    showToast('🎬 Mini-film en cours : scénario, storyboard, scènes, voix, montage…', 6000);
+    loadMiniFilmQuota();
+  } catch(e) {
+    showToast('❌ ' + e.message, 6000);
+    btn.disabled = false;
+    btn.textContent = '🎬 ✦ Générer mon mini-film';
+  }
+}
+
+// Compteur de caractères de l'idée (rétroaction légère)
+document.addEventListener('DOMContentLoaded', function() {
+  const ideaEl = document.getElementById('mf_idea');
+  if (ideaEl) {
+    ideaEl.addEventListener('input', function() {
+      const count = document.getElementById('mf_char-count');
+      if (count) count.textContent = this.value.length + ' caractères';
+    });
+    loadMiniFilmQuota();
+  }
+});
 
 // ═══════════════════════════════════════════════════
 // v8.20: sélecteur de moteur externe retiré — formulaire simple = Agnes uniquement
@@ -1377,7 +1564,7 @@ async function showProgress(taskId, dirName) {
     state = await r.json();
   } catch(e) {}
 
-  const steps = STEPS.simple; // simple for now
+  const steps = STEPS[currentTaskType] || STEPS.simple;
   document.getElementById('steps-container').innerHTML = steps.map((s, i) => {
     const isDone = state ? isStepDoneInState(state, s.key) : false;
     return `<div class="sora-step flex items-center gap-3 text-sm" data-step="${s.key}" style="animation-delay:${i * 0.1}s;">
@@ -1443,7 +1630,7 @@ function isStepDoneInState(state, stepKey) {
 }
 
 function markCompletedStepsFromState(state) {
-  const steps = STEPS.simple;
+  const steps = STEPS[currentTaskType] || STEPS.simple;
   const stepMap = {
     submit: 'step_submit', video_gen: 'step_video_generation',
     split_text: 'step_split', scene_prompts: 'step_scene_prompts',
@@ -1497,6 +1684,12 @@ async function pollTaskProgress(taskId) {
   try {
     const r = await fetchWithAuth(API_BASE + '/api/tasks/' + taskId);
     const state = await r.json();
+    // v10.2: auto-détection du type de tâche → liste d'étapes adaptée.
+    // Le serveur renvoie "creative" pour les mini-films : on retraduit vers
+    // "minifilm" si la tâche a été créée par le flux Mini-film (étapes grand public).
+    if (state && state.task_type) {
+      currentTaskType = (state.task_type === 'creative' && miniFilmTaskIds.has(taskId)) ? 'minifilm' : state.task_type;
+    }
     const pct = Math.round((state.current_progress || 0) * 100);
     document.getElementById('progress-bar').style.width = pct + '%';
     document.getElementById('progress-pct').textContent = pct + '%';
@@ -1537,7 +1730,7 @@ async function pollTaskProgress(taskId) {
       document.getElementById('progress-remaining').textContent = '— en cours...';
     }
     if (step) {
-      const stepLabel = STEPS.simple.find(s => s.key === step);
+      const stepLabel = (STEPS[currentTaskType] || STEPS.simple).find(s => s.key === step);
       if (stepLabel) {
         document.getElementById('progress-step-name').textContent = stepLabel.label;
       }

@@ -139,10 +139,10 @@ async def generate_and_publish(
         monitor=monitor,
     )
 
-    # v9.3: qualité réduite imposée aux bots (1280x720, 10 s max) : les
+    # v9.3: qualité réduite imposée aux bots (1280x720, 12 s max) : les
     # générations 1080p/15 s font OOM le plan Free 512 Mo (cascade de
     # "Ran out of memory" qui tue aussi les tâches des utilisateurs en file).
-    bot_width, bot_height, bot_duration = 1280, 720, min(persona.duration, 10)
+    bot_width, bot_height, bot_duration = 1280, 720, min(persona.duration, 12)
     logger.info(f"[Agents] {persona.author} génère ({editorial.label}, {bot_width}x{bot_height}/{bot_duration}s): {prompt[:100]}…")
     result = await pipeline.generate(
         prompt=prompt,

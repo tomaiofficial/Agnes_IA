@@ -58,8 +58,11 @@ class _FallbackCommunityStore(CommunityStore):
             return getattr(self._supabase, method_name)(*args, **kwargs)
         except Exception as e:
             if _is_quota_error(e):
-                logger.warning(f"[Storage] Quota Supabase atteint ({e}) → basculement local définitif.")
-                self._use_supabase = False
+                # v10.1: on ne bascule PAS définitivement sur le local. Repli
+                # local pour CET appel uniquement ; on réessaie Supabase au
+                # prochain appel afin que la galerie récupère automatiquement
+                # dès que le quota/le projet est rétabli (sans redémarrage).
+                logger.warning(f"[Storage] Quota Supabase atteint ({e}) → repli local (temporaire) pour '{method_name}'.")
                 return getattr(self._local, method_name)(*args, **kwargs)
             raise
 
@@ -117,8 +120,9 @@ class _FallbackTaskStore(TaskStore):
             return getattr(self._supabase, method_name)(*args, **kwargs)
         except Exception as e:
             if _is_quota_error(e):
-                logger.warning(f"[Storage] Quota Supabase atteint ({e}) → basculement local définitif.")
-                self._use_supabase = False
+                # v10.1: repli local temporaire (voir CommunityStore) — on
+                # réessaie Supabase ensuite pour récupération automatique.
+                logger.warning(f"[Storage] Quota Supabase atteint ({e}) → repli local (temporaire) pour '{method_name}'.")
                 return getattr(self._local, method_name)(*args, **kwargs)
             raise
 

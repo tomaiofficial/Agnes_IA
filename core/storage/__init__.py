@@ -43,7 +43,7 @@ def _is_quota_error(e: Exception) -> bool:
 
 
 class _FallbackCommunityStore(CommunityStore):
-    """Wrapper qui tente Supabase puis bascule en local sur erreur de quota."""
+    """Wrapper qui tente Supabase puis bascule en local sur erreur de quota (402/403)."""
 
     def __init__(self):
         self._supabase = supabase_backend.SupabaseCommunityStore() if is_persistent_storage() else None
@@ -63,31 +63,46 @@ class _FallbackCommunityStore(CommunityStore):
                 return getattr(self._local, method_name)(*args, **kwargs)
             raise
 
-    # Délégation dynamique de toutes les méthodes de CommunityStore
+    # Méthodes abstraites (obligatoires pour instancier CommunityStore)
     def publish(self, *a, **kw): return self._call("publish", *a, **kw)
     def list_videos(self, *a, **kw): return self._call("list_videos", *a, **kw)
     def get_meta(self, *a, **kw): return self._call("get_meta", *a, **kw)
     def toggle_like(self, *a, **kw): return self._call("toggle_like", *a, **kw)
-    def is_liked(self, *a, **kw): return self._call("is_liked", *a, **kw)
     def get_comments(self, *a, **kw): return self._call("get_comments", *a, **kw)
     def add_comment(self, *a, **kw): return self._call("add_comment", *a, **kw)
     def get_video(self, *a, **kw): return self._call("get_video", *a, **kw)
     def find_published(self, *a, **kw): return self._call("find_published", *a, **kw)
-    def delete_video(self, *a, **kw): return self._call("delete_video", *a, **kw)
+    def delete(self, *a, **kw): return self._call("delete", *a, **kw)
+
+    # Méthodes concrètes (redéfinies pour déléguer au vrai backend au lieu du
+    # comportement par défaut de base.py qui renverrait un no-op/False/vide)
+    def is_liked(self, *a, **kw): return self._call("is_liked", *a, **kw)
+    def save_task_video_backup(self, *a, **kw): return self._call("save_task_video_backup", *a, **kw)
+    def get_profile(self, *a, **kw): return self._call("get_profile", *a, **kw)
+    def save_profile(self, *a, **kw): return self._call("save_profile", *a, **kw)
     def get_user_videos(self, *a, **kw): return self._call("get_user_videos", *a, **kw)
-    def get_user_profile(self, *a, **kw): return self._call("get_user_profile", *a, **kw)
-    def update_user_profile(self, *a, **kw): return self._call("update_user_profile", *a, **kw)
-    def upload_avatar(self, *a, **kw): return self._call("upload_avatar", *a, **kw)
+    def get_avatar_path(self, *a, **kw): return self._call("get_avatar_path", *a, **kw)
     def follow_user(self, *a, **kw): return self._call("follow_user", *a, **kw)
     def unfollow_user(self, *a, **kw): return self._call("unfollow_user", *a, **kw)
     def is_following(self, *a, **kw): return self._call("is_following", *a, **kw)
     def get_follower_count(self, *a, **kw): return self._call("get_follower_count", *a, **kw)
     def get_following_count(self, *a, **kw): return self._call("get_following_count", *a, **kw)
-    def get_user_stats(self, *a, **kw): return self._call("get_user_stats", *a, **kw)
+
+    def backfill_thumbnails(self, limit: int = 60, delay: float = 1.5) -> dict:
+        """Optimisation Supabase uniquement (local : no-op)."""
+        if not self._use_supabase:
+            return {"done": 0, "failed": 0, "skipped": 0}
+        try:
+            return self._supabase.backfill_thumbnails(limit=limit, delay=delay)
+        except Exception as e:
+            if _is_quota_error(e):
+                logger.warning(f"[Storage] Quota Supabase atteint ({e}) → backfill ignoré.")
+                return {"done": 0, "failed": 0, "skipped": 0}
+            raise
 
 
 class _FallbackTaskStore(TaskStore):
-    """Wrapper qui tente Supabase puis bascule en local sur erreur de quota."""
+    """Wrapper qui tente Supabase puis bascule en local sur erreur de quota (402/403)."""
 
     def __init__(self):
         self._supabase = supabase_backend.SupabaseTaskStore() if is_persistent_storage() else None
@@ -107,15 +122,12 @@ class _FallbackTaskStore(TaskStore):
                 return getattr(self._local, method_name)(*args, **kwargs)
             raise
 
-    def save(self, *a, **kw): return self._call("save", *a, **kw)
-    def load(self, *a, **kw): return self._call("load", *a, **kw)
-    def delete(self, *a, **kw): return self._call("delete", *a, **kw)
-    def list_tasks(self, *a, **kw): return self._call("list_tasks", *a, **kw)
+    # Méthodes abstraites (obligatoires pour instancier TaskStore)
+    def upsert_meta(self, *a, **kw): return self._call("upsert_meta", *a, **kw)
+    def get_meta(self, *a, **kw): return self._call("get_meta", *a, **kw)
+    def list_meta(self, *a, **kw): return self._call("list_meta", *a, **kw)
+    def delete_meta(self, *a, **kw): return self._call("delete_meta", *a, **kw)
     def mark_interrupted(self, *a, **kw): return self._call("mark_interrupted", *a, **kw)
-    def save_task_video_backup(self, *a, **kw): return self._call("save_task_video_backup", *a, **kw)
-    def get_task_video_backup(self, *a, **kw): return self._call("get_task_video_backup", *a, **kw)
-    def update_task_params(self, *a, **kw): return self._call("update_task_params", *a, **kw)
-    def increment_resume_attempts(self, *a, **kw): return self._call("increment_resume_attempts", *a, **kw)
 
 
 def init_persistent_storage() -> None:

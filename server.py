@@ -901,7 +901,7 @@ async def root_index_html():
     return RedirectResponse("/", status_code=307)
 
 
-@app.get("/studio", "/studio.html")
+@app.get(["/studio", "/studio.html"])
 async def studio_page():
     """Page dédiée « Agnes Studio » : génération IA illimitée via Puter.js
     (txt2vid / txt2img), côté client, sans clé API ni quota."""

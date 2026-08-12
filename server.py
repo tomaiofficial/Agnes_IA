@@ -940,6 +940,34 @@ async def health_head():
     return Response(status_code=200)
 
 
+@app.get("/api/debug/storage")
+async def debug_storage():
+    """Diagnostic temporaire (v10.1) : révèle le mode de stockage actif et les
+    compteurs local vs Supabase pour comprendre pourquoi la galerie est vide."""
+    import core.storage as storage_mod
+    from core.storage import supabase_backend, local_backend
+
+    mode = storage_mod.storage_mode()
+    supabase_cfg = supabase_backend.is_configured()
+    cs = get_community_store()
+    info = {
+        "storage_mode": mode,
+        "supabase_configured": supabase_cfg,
+        "community_store_type": type(cs).__name__,
+        "community_uses_supabase": getattr(cs, "_use_supabase", None),
+    }
+    try:
+        info["local_videos_total"] = local_backend.LocalCommunityStore().list_videos().get("total", 0)
+    except Exception as e:
+        info["local_videos_total"] = f"err: {e!r}"
+    if supabase_cfg:
+        try:
+            info["supabase_videos_total"] = supabase_backend.SupabaseCommunityStore().list_videos().get("total", 0)
+        except Exception as e:
+            info["supabase_videos_total"] = f"err: {e!r}"
+    return info
+
+
 # ═══════════════════════════════════════════════════
 # API Key 配置
 # ═══════════════════════════════════════════════════

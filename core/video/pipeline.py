@@ -91,7 +91,10 @@ class PipelineConfig:
     # paramètre audio au moment de la génération et, si la vidéo reçue a une
     # piste native, on la CONSERVE telle quelle (elle vaut mieux que toute
     # synthèse). Sinon fallback ambiance_sound pour éviter le silence.
-    native_audio: bool = False
+    # v10.1: activé par défaut — l'utilisateur veut un son « plus réel » :
+    # on privilégie la piste audio native du modèle (réaliste, synchronisée)
+    # plutôt que la voix TTS de synthèse.
+    native_audio: bool = True
 
     # File d'attente
     priority: TaskPriority = TaskPriority.FREE
@@ -511,7 +514,7 @@ class AIVideoPipeline:
                 "-map", "0:v", "-map", "1:a",
                 "-c:v", "copy",
                 "-c:a", "aac",
-                "-b:a", "192k",
+                "-b:a", "256k",
                 output_path,
             ]
 

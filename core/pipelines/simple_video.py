@@ -376,7 +376,7 @@ class SimpleVideoPipeline(BasePipeline):
                 "-map", v_tag, "-map", "[a]",
                 "-c:v", "libx264", "-preset", "slow", "-crf", "18",
                 "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
+                "-c:a", "aac", "-b:a", "256k", "-ar", "48000",
                 "-shortest",
                 "-avoid_negative_ts", "make_zero",
                 "-fflags", "+genpts",

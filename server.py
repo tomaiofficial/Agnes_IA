@@ -2048,8 +2048,8 @@ async def create_simple_task(
     audio_enabled: bool = Form(False),
     audio_voice: str = Form("fr-FR-VivienneMultilingualNeural"),
     audio_rate: str = Form("+0%"),
-    # v7.0: 画质增强
-    quality_boost: bool = Form(False),
+    # v7.0: 画质增强 — activé par défaut (v10.1) : upscale 1080p + sharpen/deband
+    quality_boost: bool = Form(True),
 ):
     """创建简单视频任务（类型 1）。
     v7.0：新增音频（TTS 旁白）和画质增强支持。
@@ -2165,8 +2165,8 @@ async def create_advanced_task(
     prompt: str = Form(...),
     user_id: str = Header(default="", alias="X-User-Id"),
     duration: int = Form(5),
-    video_width: int = Form(1152),
-    video_height: int = Form(768),
+    video_width: int = Form(1920),
+    video_height: int = Form(1080),
     seed: Optional[int] = Form(None),
     negative_prompt: Optional[str] = Form(None),
     reference_image: UploadFile = File(None),
@@ -2175,7 +2175,7 @@ async def create_advanced_task(
     style: str = Form("ultra_realistic"),     # ultra_realistic | cinema | anime | photorealistic | hyper_realistic
     denoise: bool = Form(True),
     face_enhance: bool = Form(True),
-    motion_enhance: bool = Form(False),
+    motion_enhance: bool = Form(True),
     hdr: bool = Form(True),
     color_correct: bool = Form(True),
     compress: bool = Form(True),

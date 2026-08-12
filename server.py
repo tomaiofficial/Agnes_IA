@@ -3239,7 +3239,7 @@ def _community_error(e: Exception, fallback_detail: str) -> HTTPException:
     if isinstance(e, KeyError):
         return HTTPException(status_code=404, detail="Video not found")
     logger.exception(f"[Community] {fallback_detail}: {e}")
-    return HTTPException(status_code=500, detail=fallback_detail)
+    return HTTPException(status_code=500, detail=f"{fallback_detail}: {e}")
 
 
 @app.post("/api/tasks/{task_id}/publish")

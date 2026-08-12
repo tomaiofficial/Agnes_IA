@@ -57,14 +57,13 @@ class _FallbackCommunityStore(CommunityStore):
         try:
             return getattr(self._supabase, method_name)(*args, **kwargs)
         except Exception as e:
-            if _is_quota_error(e):
-                # v10.1: on ne bascule PAS définitivement sur le local. Repli
-                # local pour CET appel uniquement ; on réessaie Supabase au
-                # prochain appel afin que la galerie récupère automatiquement
-                # dès que le quota/le projet est rétabli (sans redémarrage).
-                logger.warning(f"[Storage] Quota Supabase atteint ({e}) → repli local (temporaire) pour '{method_name}'.")
-                return getattr(self._local, method_name)(*args, **kwargs)
-            raise
+            # v10.1: repli local (temporaire) sur TOUTE erreur Supabase
+            # (quota 402/403, projet suspendu, réseau, RLS, etc.). La galerie
+            # reste fonctionnelle tant que Supabase est indisponible, et
+            # récupère automatiquement dès que la couche persistante est
+            # rétablie (sans redémarrage).
+            logger.warning(f"[Storage] Supabase '{method_name}' a échoué ({e}) → repli local (temporaire).")
+            return getattr(self._local, method_name)(*args, **kwargs)
 
     # Méthodes abstraites (obligatoires pour instancier CommunityStore)
     def publish(self, *a, **kw): return self._call("publish", *a, **kw)
@@ -119,12 +118,11 @@ class _FallbackTaskStore(TaskStore):
         try:
             return getattr(self._supabase, method_name)(*args, **kwargs)
         except Exception as e:
-            if _is_quota_error(e):
-                # v10.1: repli local temporaire (voir CommunityStore) — on
-                # réessaie Supabase ensuite pour récupération automatique.
-                logger.warning(f"[Storage] Quota Supabase atteint ({e}) → repli local (temporaire) pour '{method_name}'.")
-                return getattr(self._local, method_name)(*args, **kwargs)
-            raise
+            # v10.1: repli local temporaire sur TOUTE erreur Supabase (voir
+            # CommunityStore) — réessaie Supabase ensuite pour récupération
+            # automatique dès que la couche persistante est rétablie.
+            logger.warning(f"[Storage] Supabase '{method_name}' a échoué ({e}) → repli local (temporaire).")
+            return getattr(self._local, method_name)(*args, **kwargs)
 
     # Méthodes abstraites (obligatoires pour instancier TaskStore)
     def upsert_meta(self, *a, **kw): return self._call("upsert_meta", *a, **kw)

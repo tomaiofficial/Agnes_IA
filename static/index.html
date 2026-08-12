@@ -276,6 +276,7 @@
   <nav class="header-nav">
     <a onclick="switchMode('video');return false;" data-nav="video">Génération</a>
     <a onclick="switchMode('gallery');return false;" data-nav="gallery">For You</a>
+    <a href="/studio" data-nav="studio">Studio</a>
     <a onclick="switchMode('image');return false;" data-nav="image" class="nav-hide-sm">Image</a>
     <a onclick="switchMode('list');return false;" data-nav="list" class="nav-hide-sm">Tâches</a>
     <a href="#" onclick="togglePseudoPopover();return false;" id="pseudo-btn" style="padding:8px 12px;background:rgba(255,255,255,0.06);border:1px solid var(--line);">
@@ -796,6 +797,11 @@
       }
     } catch (err) {}
     try { loadHomeGrid(); } catch (err) {}
+    // Deep-link depuis Studio (ex. /?mode=gallery) : ouvre l'onglet voulu.
+    try {
+      const m = new URLSearchParams(location.search).get('mode');
+      if (m && ['video', 'gallery', 'image', 'list', 'studio'].includes(m)) switchMode(m);
+    } catch (err) {}
   });
 </script>
 

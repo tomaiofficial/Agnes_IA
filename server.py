@@ -901,6 +901,16 @@ async def root_index_html():
     return RedirectResponse("/", status_code=307)
 
 
+@app.get("/studio", "/studio.html")
+async def studio_page():
+    """Page dédiée « Agnes Studio » : génération IA illimitée via Puter.js
+    (txt2vid / txt2img), côté client, sans clé API ni quota."""
+    studio_path = os.path.join(os.path.dirname(__file__), "static", "studio.html")
+    if os.path.exists(studio_path):
+        return FileResponse(studio_path)
+    return RedirectResponse("/", status_code=307)
+
+
 @app.head("/index.html")
 async def root_index_html_head():
     """HEAD /index.html — par cohérence avec la route GET."""

@@ -904,8 +904,11 @@ async def root_index_html():
 @app.get("/studio")
 @app.get("/studio.html")
 async def studio_page():
-    """Studio temporairement désactivé."""
-    raise HTTPException(status_code=404, detail="Studio temporairement désactivé")
+    """Sert l’espace Studio Puter et ses outils de création de personnages."""
+    studio_path = os.path.join(os.path.dirname(__file__), "static", "studio.html")
+    if os.path.exists(studio_path):
+        return FileResponse(studio_path)
+    raise HTTPException(status_code=404, detail="Studio indisponible")
 
 
 @app.head("/index.html")

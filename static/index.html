@@ -471,6 +471,17 @@
           <p class="k-note mt-1.5">Moteur officiel Agnes, sélectionné automatiquement. La génération reste côté serveur pour éviter les erreurs de navigateur et les problèmes de solde Puter.</p>
         </div>
 
+        <div class="mb-4 rounded-xl border border-violet-400/20 bg-violet-400/[.05] p-3">
+          <div class="flex items-center justify-between gap-2 mb-2"><label class="k-label" style="margin-bottom:0;">✦ Style de génération</label><span class="k-chip" style="color:#c4b5fd;border-color:rgba(167,139,250,.25);">Gratuit</span></div>
+          <select id="s_generation_style" class="k-field" onchange="onGenerationStyleChange()">
+            <option value="veo-style" selected>Veo-style cinématique — Agnes Video</option>
+            <option value="natural">Réaliste naturel</option>
+            <option value="social">Clip social dynamique</option>
+          </select>
+          <p class="k-note mt-1.5">Le mode Veo-style améliore automatiquement caméra, lumière, mouvement, profondeur et continuité. Il s’agit d’un style de prompt gratuit, pas de l’API Google Veo 3.</p>
+          <button type="button" class="btn-k btn-ghost-k text-xs mt-2" onclick="applyVeoStylePrompt()">✦ Améliorer mon prompt comme Veo-style</button>
+        </div>
+
         <!-- Image de référence (i2v) -->
         <div id="s_ref_section" class="hidden mb-4">
           <label class="k-label">Image de référence</label>
@@ -1129,6 +1140,26 @@ function parseResolution(val) {
   return { width: w, height: h };
 }
 
+function buildVeoStylePrompt(raw){
+  const idea = (raw || '').trim();
+  if (!idea) return '';
+  const style = document.getElementById('s_generation_style')?.value || 'veo-style';
+  if (style === 'natural') return `${idea}. Réalisme naturel, lumière cohérente, mouvement physique crédible, caméra stable, textures détaillées, continuité du sujet, sans déformation ni flicker.`;
+  if (style === 'social') return `${idea}. Clip social très accrocheur, composition verticale lisible, mouvement de caméra fluide, rythme dynamique, sujet central net, couleurs premium, sans texte ni logo.`;
+  return `${idea}. Style cinématographique ultra-réaliste inspiré des productions haut de gamme : caméra 35mm, travelling fluide et mouvement physique naturel, lumière volumétrique cohérente, profondeur de champ réaliste, textures détaillées, reflets et ombres crédibles, composition cinématographique, continuité stricte du visage, des vêtements et des proportions, audio d’ambiance préparé séparément, sans texte, sans logo, sans déformation, sans morphing, sans flicker, sans jitter.`;
+}
+function applyVeoStylePrompt(){
+  const field = document.getElementById('s_prompt');
+  if (!field || !field.value.trim()) return alert('Écrivez d’abord une idée de scène.');
+  field.value = buildVeoStylePrompt(field.value);
+  field.dispatchEvent(new Event('input', {bubbles:true}));
+  if (typeof showToast === 'function') showToast('✦ Prompt Veo-style appliqué', 3500);
+}
+function onGenerationStyleChange(){
+  const field=document.getElementById('s_prompt');
+  if (field && field.value.trim() && document.getElementById('s_generation_style')?.value === 'veo-style') applyVeoStylePrompt();
+}
+
 async function submitSimple() {
   const prompt = document.getElementById('s_prompt').value.trim();
   if (!prompt) return alert('Veuillez décrire la vidéo');
@@ -1137,10 +1168,12 @@ async function submitSimple() {
 
 async function submitSimpleAgnes(prompt) {
   const btn = document.getElementById('btn-simple');
+  if (document.getElementById('s_generation_style')?.value === 'veo-style') prompt = buildVeoStylePrompt(prompt);
   btn.disabled = true;
 
   const form = new FormData();
   form.append('prompt', prompt);
+  form.append('generation_style', document.getElementById('s_generation_style')?.value || 'veo-style');
   form.append('mode', document.getElementById('s_mode').value);
   form.append('duration', document.getElementById('s_duration').value);
   const res = parseResolution(document.getElementById('s_resolution').value);

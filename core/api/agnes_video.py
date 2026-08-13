@@ -15,6 +15,7 @@ from core.api.error_collector import collect_error, collect_error_from_exception
 from core.api.rate_limiter import get_rate_limiter
 from core.config import get_agnes_base_url, get_agnes_api_root
 from utils.video import download_video
+from core.api.rewind_video import RewindVideoAPI
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,15 @@ class AgnesVideoAPI:
         self.on_retry = on_retry
         self.poll_interval = poll_interval
         self.shutdown_event = None
+        self._rewind_api = None
+        if model.startswith(("rewind:", "rewind/")):
+            if os.environ.get("REWIND_API_KEY", "").strip():
+                self._rewind_api = RewindVideoAPI(model=model, poll_interval=poll_interval)
+            else:
+                # Fallback explicite : le sélecteur reste utilisable même avant
+                # l'ajout de la clé Render, sans envoyer un faux modèle à Agnes.
+                logger.warning("[RewindVideo] REWIND_API_KEY absente : fallback vers Agnes Video")
+                model = "agnes-video-v2.0"
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
@@ -612,6 +622,20 @@ class AgnesVideoAPI:
         progress_callback=None,
         **kwargs,
     ) -> VideoOutput:
+        if self._rewind_api is not None:
+            resolved_refs = []
+            for ref in reference_image_paths or []:
+                resolved_refs.append(await self._resolve_image_ref(ref))
+            job_id = await self._rewind_api.submit_video(
+                prompt=prompt,
+                reference_image_paths=resolved_refs,
+                duration=duration,
+                width=width,
+                height=height,
+                negative_prompt=negative_prompt,
+                **kwargs,
+            )
+            return await self._rewind_api.wait_for_video(job_id, progress_callback)
         video_id = await self.submit_video(
             prompt=prompt,
             reference_image_paths=reference_image_paths,
@@ -635,6 +659,21 @@ class AgnesVideoAPI:
         negative_prompt: Optional[str] = None,
         **kwargs,
     ) -> str:
+        if self._rewind_api is not None:
+            resolved_refs = []
+            for ref in reference_image_paths or []:
+                resolved_refs.append(await self._resolve_image_ref(ref))
+            job_id = await self._rewind_api.submit_video(
+                prompt=prompt,
+                reference_image_paths=resolved_refs,
+                duration=duration,
+                width=width,
+                height=height,
+                negative_prompt=negative_prompt,
+                **kwargs,
+            )
+            return f"rewind:{job_id}"
+
         num_frames, frame_rate = self._get_frame_config(duration, width, height)
 
         payload: dict = {
@@ -688,6 +727,12 @@ class AgnesVideoAPI:
     async def wait_for_video(self, video_id: str, progress_callback=None,
                              max_poll_duration: int = 1800,
                              interval: Optional[float] = None) -> VideoOutput:
+        if self._rewind_api is not None and video_id.startswith("rewind:"):
+            self._rewind_api.max_poll_duration = max_poll_duration
+            if interval is not None:
+                self._rewind_api.poll_interval = interval
+            return await self._rewind_api.wait_for_video(video_id[len("rewind:"):], progress_callback)
+
         # Intervalle de polling : défaut = poll_interval du constructeur
         # (3 s pour les utilisateurs, 15 s pour les bots → préserve le rate limiter global)
         poll_interval = interval if interval is not None else self.poll_interval

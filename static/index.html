@@ -437,6 +437,7 @@
           </div>
           <select id="s_video_model" onchange="onVideoModelChange()" class="k-field">
             <option value="agnes-video-v2.0">agnes-video-v2.0 (par défaut, gratuit)</option>
+            <option value="rewind:google/veo-3.1">Rewind — Veo 3.1 (quota gratuit quotidien, audio natif)</option>
           </select>
           <p class="k-note mt-1.5">Moteur officiel Agnes, sélectionné automatiquement. La génération reste côté serveur pour éviter les erreurs de navigateur et les problèmes de solde Puter.</p>
         </div>
@@ -1183,18 +1184,18 @@ async function loadVideoModels(selectedModel, forceRefresh = false) {
     const r = await fetchWithAuth(url);
     const d = await r.json();
     if (!d.ok) throw new Error(d.detail || 'Erreur liste modèles');
-    const videos = (d.models && d.models.video) || [];
+    const videos = [...new Set([...(d.models && d.models.video) || [], 'rewind:google/veo-3.1'])];
     sel.innerHTML = '';
     videos.forEach(m => {
       const opt = document.createElement('option');
       opt.value = m;
-      opt.textContent = m + (m === 'agnes-video-v2.0' ? ' (par défaut)' : '');
+      opt.textContent = m + (m === 'agnes-video-v2.0' ? ' (par défaut)' : (m === 'rewind:google/veo-3.1' ? ' (Rewind — quota gratuit)' : ''));
       sel.appendChild(opt);
     });
     if (selectedModel && videos.includes(selectedModel)) sel.value = selectedModel;
     else if (videos.length) sel.value = videos[0];
   } catch(e) {
-    sel.innerHTML = '<option value="agnes-video-v2.0">agnes-video-v2.0 (par défaut)</option>';
+    sel.innerHTML = '<option value="agnes-video-v2.0">agnes-video-v2.0 (par défaut)</option><option value="rewind:google/veo-3.1">Rewind — Veo 3.1 (quota gratuit quotidien, audio natif)</option>';
     if (selectedModel) sel.value = selectedModel;
     console.warn('load /api/models failed:', e);
   }

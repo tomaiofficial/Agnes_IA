@@ -280,8 +280,14 @@
 
   /* ── Responsive ── */
   @media (max-width: 820px) {
-    nav.header-nav a { font-size:13px; padding:7px 10px; }
-    nav.header-nav .nav-hide-sm { display:none; }
+    nav.header-nav { min-width:0; flex:1; justify-content:flex-end; overflow-x:auto; scrollbar-width:none; }
+    nav.header-nav::-webkit-scrollbar { display:none; }
+    nav.header-nav a { font-size:12px; padding:7px 9px; white-space:nowrap; }
+    nav.header-nav .nav-hide-sm { display:flex; }
+    header.app-header .header-right { flex:0 0 auto; }
+    header.app-header .header-right .btn-k { padding:8px 10px; font-size:12px !important; }
+    #page-title { padding:20px 14px 18px; border:1px solid rgba(91,140,255,.20); border-radius:22px; background:linear-gradient(135deg,rgba(20,32,70,.62),rgba(33,18,63,.48)); box-shadow:0 16px 45px rgba(0,0,0,.24); }
+    #page-title h1 { font-size:clamp(25px,8vw,34px) !important; }
   }
   @media (max-width: 560px) {
     html, body { max-width: 100%; overflow-x: hidden; }
@@ -414,6 +420,14 @@
       </div>
     </div>
 
+    <!-- Annonce génération d’image en accès anticipé -->
+    <div id="image-early-access" class="mb-4 rounded-2xl p-4 sm:p-5" style="display:none;background:linear-gradient(135deg,rgba(34,211,238,.10),rgba(124,58,237,.12));border:1px solid rgba(103,232,249,.28);box-shadow:0 12px 35px rgba(34,211,238,.08);">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex gap-3 min-w-0"><div class="text-2xl">🖼️</div><div><strong class="text-sm sm:text-base text-cyan-100">La génération d’image est disponible</strong><p class="mt-1 text-xs sm:text-sm text-gray-400 leading-relaxed">La fonction est accessible dès maintenant. Elle est encore en amélioration et sera bientôt ultra-opérationnelle, mais vous pouvez déjà générer vos images avec Agnes.</p><button type="button" onclick="openImageMode();dismissImageEarlyAccess();" class="btn-k btn-primary-k mt-3">Ouvrir Image →</button></div></div>
+        <button type="button" onclick="dismissImageEarlyAccess()" class="shrink-0 text-gray-500 hover:text-white" aria-label="Fermer l’annonce Image">✕</button>
+      </div>
+    </div>
+
     <!-- Bandeau WIP -->
     <div id="wip-banner" class="mb-4 rounded-xl p-3 sm:p-4 text-[11px] sm:text-xs" style="display:none;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.25);color:#fcd34d;">
       <div class="flex items-start justify-between gap-3">
@@ -427,6 +441,15 @@
     <script>
       if (!localStorage.getItem('wip_banner_dismissed')) {
         document.getElementById('wip-banner').style.display = '';
+      }
+      if (!localStorage.getItem('agnes_image_early_access_seen')) {
+        const imageNotice = document.getElementById('image-early-access');
+        if (imageNotice) imageNotice.style.display = '';
+      }
+      function dismissImageEarlyAccess() {
+        localStorage.setItem('agnes_image_early_access_seen', '1');
+        const imageNotice = document.getElementById('image-early-access');
+        if (imageNotice) imageNotice.style.display = 'none';
       }
       function dismissWipBanner() {
         localStorage.setItem('wip_banner_dismissed', '1');

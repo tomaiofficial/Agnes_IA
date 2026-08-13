@@ -59,15 +59,6 @@ from core.pipelines import (
 )
 from core.pipelines.poetry_video import POETRY_SUBTITLE_STYLE
 from core.api.agnes_image import AgnesImageAPI
-from core.api.pollo_video import PolloAPIError, PolloVideoAPI
-from core.pollo_credits import (
-    estimate as estimate_pollo_credits,
-    reserve as reserve_pollo_credits,
-    settle as settle_pollo_credits,
-    snapshot as snapshot_pollo_credits,
-    link_task as link_pollo_task,
-    find_by_task as find_pollo_task,
-)
 from core.api.agnes_models import fetch_available_models
 from core.api.error_collector import set_workspace_root
 from core.artifacts import list_artifacts, resolve_artifact, get_cascade_plan, apply_cascade_plan
@@ -1028,107 +1019,6 @@ async def clear_config():
             detail="API Key 来自环境变量，无法从界面清除",
         )
     delete_api_key()
-    return {"ok": True}
-
-
-# ═══════════════════════════════════════════════════
-# Pollo AI officiel — crédits et génération sécurisée
-# ═══════════════════════════════════════════════════
-
-
-@app.get("/api/pollo/status")
-async def pollo_status(user_id: str = Header(default="", alias="X-User-Id")):
-    configured = bool(os.environ.get("POLLO_API_KEY", "").strip())
-    return {
-        "ok": True,
-        "configured": configured,
-        "provider": "Pollo AI",
-        "models": ["veo3-1", "veo3-1-fast"],
-        "credits": snapshot_pollo_credits(user_id),
-    }
-
-
-@app.get("/api/pollo/credits")
-async def pollo_credits(user_id: str = Header(default="", alias="X-User-Id")):
-    return {"ok": True, **snapshot_pollo_credits(user_id)}
-
-
-@app.post("/api/pollo/estimate")
-async def pollo_estimate(request: Request):
-    body = await request.json()
-    return {"ok": True, **estimate_pollo_credits(
-        str(body.get("model", "veo3-1")),
-        str(body.get("resolution", "720p")),
-        int(body.get("duration", 8)),
-        bool(body.get("audio", True)),
-    )}
-
-
-@app.post("/api/pollo/generate")
-async def pollo_generate(request: Request, user_id: str = Header(default="", alias="X-User-Id")):
-    body = await request.json()
-    model = str(body.get("model", "veo3-1"))
-    resolution = str(body.get("resolution", "720p"))
-    duration = int(body.get("duration", 8))
-    audio = bool(body.get("audio", True))
-    prompt = str(body.get("prompt", "")).strip()
-    if not prompt:
-        raise HTTPException(status_code=422, detail="Le prompt est obligatoire")
-    if len(prompt) > 2000:
-        raise HTTPException(status_code=422, detail="Le prompt est limité à 2000 caractères")
-    estimate = estimate_pollo_credits(model, resolution, duration, audio)
-    reservation_id = uuid.uuid4().hex
-    reservation = reserve_pollo_credits(user_id, reservation_id, estimate["credits"])
-    if not reservation.get("ok"):
-        raise HTTPException(status_code=402, detail={"message": "Solde Agnes insuffisant", **reservation})
-    try:
-        base_input = {
-            "prompt": prompt,
-            "aspectRatio": str(body.get("aspectRatio", "16:9")),
-            "resolution": resolution,
-            "generateAudio": audio,
-        }
-        if model.startswith("veo3"):
-            base_input["length"] = duration if duration in (4, 6, 8) else 8
-        public_base = str(request.base_url).rstrip("/")
-        result = PolloVideoAPI().create_video_task(
-            model,
-            base_input,
-            webhook_url=f"{public_base}/api/pollo/webhook",
-        )
-        task_id = result.get("taskId") or result.get("task_id")
-        link_pollo_task(user_id or "anonymous", reservation_id, task_id)
-        return {"ok": True, "task_id": task_id, "status": result.get("status", "waiting"), "estimate": estimate, "credits": snapshot_pollo_credits(user_id)}
-    except PolloAPIError as exc:
-        settle_pollo_credits(user_id, reservation_id, False)
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-
-
-@app.post("/api/pollo/webhook")
-async def pollo_webhook(request: Request):
-    raw_body = await request.body()
-    valid = PolloVideoAPI.verify_webhook_signature(
-        raw_body,
-        request.headers.get("X-Webhook-Id", ""),
-        request.headers.get("X-Webhook-Timestamp", ""),
-        request.headers.get("X-Webhook-Signature", ""),
-    )
-    if not valid:
-        raise HTTPException(status_code=401, detail="Signature Pollo invalide")
-    try:
-        payload = json.loads(raw_body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise HTTPException(status_code=400, detail="Webhook JSON invalide") from exc
-    task_id = str(payload.get("taskId") or payload.get("task_id") or "")
-    if not task_id:
-        return {"ok": True}
-    mapping = find_pollo_task(task_id)
-    if mapping:
-        status = str(payload.get("status", "")).lower()
-        if status in ("succeed", "success", "completed"):
-            settle_pollo_credits(mapping["user_id"], mapping["reservation_id"], True)
-        elif status in ("failed", "failure", "error"):
-            settle_pollo_credits(mapping["user_id"], mapping["reservation_id"], False)
     return {"ok": True}
 
 

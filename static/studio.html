@@ -276,10 +276,19 @@ async function genVideo(){
   } catch(e){
     const m = String(e && e.message ? e.message : e);
     const low = /low balance|not enough funding|insufficient|upgrade|credits?|billing|sign in|signin/i.test(m);
-    setStatus($('v_status'), low
-      ? '⚠️ Solde Puter insuffisant — connectez-vous / ajoutez des crédits sur puter.com, puis réessayez.'
-      : 'Erreur Puter : ' + m, 'err');
+    const network = /networkerror|failed to fetch|load failed|network|fetch/i.test(m);
     $('v_progress').style.display = 'none';
+    if (network || low) {
+      setStatus($('v_status'), network
+        ? '⚠️ Puter est temporairement inaccessible. Bascule vers Agnes…'
+        : '⚠️ Solde Puter insuffisant. Bascule vers Agnes…', 'err');
+      // Agnes ne dépend pas de Puter : conserver le prompt et relancer depuis l’interface principale.
+      setTimeout(() => {
+        window.location.href = '/?mode=video&fallback=agnes&prompt=' + encodeURIComponent(prompt);
+      }, 700);
+    } else {
+      setStatus($('v_status'), 'Erreur Puter : ' + m, 'err');
+    }
   } finally { btn.disabled = false; refreshAuth(); }
 }
 

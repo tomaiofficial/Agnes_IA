@@ -1180,17 +1180,7 @@ async function loadVideoModels(selectedModel, forceRefresh = false) {
       opt.textContent = m + (m === 'agnes-video-v2.0' ? ' (par défaut)' : '');
       sel.appendChild(opt);
     });
-    // v9.3: propose Agnes-Video-2.5 même s'il n'est pas encore exposé par le
-    // catalogue (préview) : l'utilisateur peut le tester dès qu'il sort pour
-    // son compte ; s'il échoue, le message d'erreur invite à repasser sur v2.0.
-    if (!videos.includes('agnes-video-v2.5')) {
-      const opt = document.createElement('option');
-      opt.value = 'agnes-video-v2.5';
-      opt.textContent = 'agnes-video-v2.5 (préview — test)';
-      sel.appendChild(opt);
-    }
     if (selectedModel && videos.includes(selectedModel)) sel.value = selectedModel;
-    else if (selectedModel === 'agnes-video-v2.5') sel.value = 'agnes-video-v2.5';
     else if (videos.length) sel.value = videos[0];
   } catch(e) {
     sel.innerHTML = '<option value="agnes-video-v2.0">agnes-video-v2.0 (par défaut)</option>';
@@ -1203,9 +1193,6 @@ async function onVideoModelChange() {
   const sel = document.getElementById('s_video_model');
   const model = sel.value;
   if (!model) return;
-  if (model === 'agnes-video-v2.5') {
-    showToast('⚠️ Agnes-Video-2.5 est en préview : si la génération échoue, repassez sur v2.0', 5000);
-  }
   try {
     const form = new FormData();
     form.append('text', (currentSelectedModels && currentSelectedModels.text) || 'agnes-2.0-flash');

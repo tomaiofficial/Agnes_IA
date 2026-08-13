@@ -64,6 +64,22 @@
   nav.header-nav a:hover { color: var(--txt); background: rgba(255,255,255,0.05); }
   nav.header-nav a.active-nav { color: #fff; background: rgba(255,255,255,0.09); }
   .header-right { display: flex; align-items: center; gap: 10px; }
+  .desktop-status { display:inline-flex; align-items:center; gap:7px; padding:9px 12px; border:1px solid rgba(34,197,94,.18); background:rgba(34,197,94,.07); border-radius:12px; color:#bbf7d0; font-size:11px; white-space:nowrap; }
+  .desktop-status::before { content:''; width:7px; height:7px; border-radius:50%; background:#22c55e; box-shadow:0 0 12px rgba(34,197,94,.8); }
+  @media (min-width: 821px) {
+    header.app-header { width:248px; right:auto; height:100dvh; padding:24px 16px 18px; flex-direction:column; align-items:stretch; justify-content:flex-start; gap:0; }
+    header.app-header .logo { padding:0 10px; margin-bottom:34px; }
+    nav.header-nav { flex-direction:column; align-items:stretch; gap:6px; }
+    nav.header-nav a { display:flex; align-items:center; gap:10px; padding:12px 13px; border-radius:12px; }
+    nav.header-nav a[data-nav="video"]::before { content:'✦'; color:#93c5fd; }
+    nav.header-nav a[data-nav="gallery"]::before { content:'◈'; color:#c4b5fd; }
+    nav.header-nav a[data-nav="image"]::before { content:'▣'; color:#67e8f9; }
+    nav.header-nav a[data-nav="list"]::before { content:'☷'; color:#a5b4fc; }
+    nav.header-nav a#pseudo-btn { margin-top:8px; }
+    .header-right { margin-top:auto; flex-direction:column; align-items:stretch; }
+    .header-right .btn-k { width:100%; }
+    main { margin-left:248px; }
+  }
 
   .avatar-mini {
     width: 32px; height: 32px; border-radius: 50%;
@@ -269,6 +285,7 @@
   }
   @media (max-width: 560px) {
     html, body { max-width: 100%; overflow-x: hidden; }
+    .desktop-status { display:none; }
     header.app-header {
       height: 56px; padding: 0 10px; gap: 6px; overflow: hidden;
     }
@@ -327,7 +344,8 @@
   </nav>
 
   <div class="header-right">
-    <button class="btn-k btn-primary-k" onclick="scrollToGenerate()">✦ Generate</button>
+    <div class="desktop-status">Serveurs Agnes · actif</div>
+    <button class="btn-k btn-primary-k" onclick="scrollToGenerate()">✦ Générer</button>
   </div>
 </header>
 
@@ -350,7 +368,7 @@
     <div class="welcome-features grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
       <div class="rounded-2xl border border-white/10 bg-white/[.03] p-4"><div class="text-xl">✦</div><h3 class="mt-2 font-semibold text-gray-200">Prompt cinématique</h3><p class="mt-1 text-xs leading-relaxed text-gray-500">Transformez une idée courte en scène détaillée avec caméra, lumière et mouvement.</p></div>
       <div class="rounded-2xl border border-white/10 bg-white/[.03] p-4"><div class="text-xl">▦</div><h3 class="mt-2 font-semibold text-gray-200">Storyboard</h3><p class="mt-1 text-xs leading-relaxed text-gray-500">Organisez plusieurs plans, leurs durées et leurs transitions.</p></div>
-      <div class="rounded-2xl border border-white/10 bg-white/[.03] p-4"><div class="text-xl">◉</div><h3 class="mt-2 font-semibold text-gray-200">Image vers vidéo</h3><p class="mt-1 text-xs leading-relaxed text-gray-500">Animez une image de référence en conservant son univers visuel.</p></div>
+      <div class="rounded-2xl border border-cyan-400/20 bg-cyan-400/[.04] p-4"><div class="text-xl">🖼️</div><h3 class="mt-2 font-semibold text-gray-200">Génération d’image disponible</h3><p class="mt-1 text-xs leading-relaxed text-cyan-100/60">La fonction est disponible dès maintenant en accès anticipé. Elle est encore en amélioration et deviendra bientôt ultra-opérationnelle, mais vous pouvez déjà générer avec Agnes.</p></div>
       <div class="rounded-2xl border border-white/10 bg-white/[.03] p-4"><div class="text-xl">♫</div><h3 class="mt-2 font-semibold text-gray-200">Audio et sous-titres</h3><p class="mt-1 text-xs leading-relaxed text-gray-500">Préparez la narration, la voix off et le rythme social de vos vidéos.</p></div>
     </div>
     <div class="welcome-footer mt-6 flex flex-col sm:flex-row items-center justify-between gap-3"><p class="text-[11px] text-gray-500">Cette présentation s’affiche une seule fois sur cet appareil.</p><button onclick="closeWelcome()" class="btn-k btn-primary-k w-full sm:w-auto px-6">Commencer avec Agnes →</button></div>

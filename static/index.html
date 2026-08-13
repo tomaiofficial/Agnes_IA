@@ -129,6 +129,7 @@
   #s_prompt { min-height:145px !important; background:rgba(9,10,14,0.72); border-color:rgba(255,255,255,0.11); font-size:15px !important; line-height:1.65; }
   #s_prompt:focus { border-color:rgba(129,140,248,0.72); box-shadow:0 0 0 4px rgba(91,140,255,0.12), 0 0 34px rgba(91,140,255,0.10); }
   #form-image { scroll-margin-top: 74px; }
+  #form-image.image-mode-visible { display:block !important; visibility:visible !important; opacity:1 !important; max-height:9999px !important; overflow:visible !important; }
   #btn-simple { min-height:52px; letter-spacing:.01em; }
   .k-field {
     width: 100%; background: var(--bg2); color: var(--txt);
@@ -1263,7 +1264,10 @@ function openImageMode() {
   const form = document.getElementById('form-image');
   if (!form) return;
   form.classList.remove('hidden', 'collapsed');
+  form.classList.add('image-mode-visible');
   form.style.display = 'block';
+  form.style.visibility = 'visible';
+  form.style.opacity = '1';
   const progress = document.getElementById('progress-panel');
   if (progress && !isTaskRunning) progress.classList.add('hidden');
   currentMode = 'image';
@@ -1275,8 +1279,11 @@ function openImageMode() {
   try { syncHeaderNav('image'); } catch (e) {}
   // Le header est fixe : positionner le formulaire juste sous celui-ci,
   // afin que le titre « Générer une image » soit immédiatement visible.
-  const top = form.getBoundingClientRect().top + window.scrollY - 74;
-  window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  requestAnimationFrame(() => {
+    const top = form.getBoundingClientRect().top + window.scrollY - 74;
+    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   setTimeout(() => {
     const prompt = document.getElementById('i_prompt');
     if (prompt) prompt.focus({ preventScroll: true });

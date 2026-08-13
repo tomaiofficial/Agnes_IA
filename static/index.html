@@ -1247,12 +1247,21 @@ async function updatePolloEstimate() {
     const d = await r.json();
     if (!d.ok) throw new Error(d.detail || 'Estimation impossible');
     document.getElementById('pollo-credit-estimate').textContent = `${d.credits} crédits · ${resolution}`;
-    document.getElementById('pollo-credit-status').textContent = 'Le coût est réservé avant l’envoi et remboursé automatiquement si Pollo échoue.';
+    document.getElementById('pollo-credit-status').textContent = `Le coût est réservé avant l’envoi. Si Pollo est sans solde, ${getAgnesFreeTrials()} essai(s) Agnes gratuit(s) sont disponibles.`;
     refreshPolloCredits();
   } catch (e) {
     document.getElementById('pollo-credit-estimate').textContent = 'Indisponible';
     document.getElementById('pollo-credit-status').textContent = e.message;
   }
+}
+
+function getAgnesFreeTrials() {
+  return Math.max(0, 3 - parseInt(localStorage.getItem('agnes_free_video_trials_used') || '0', 10));
+}
+function consumeAgnesFreeTrial() {
+  const used = parseInt(localStorage.getItem('agnes_free_video_trials_used') || '0', 10);
+  localStorage.setItem('agnes_free_video_trials_used', String(Math.min(3, used + 1)));
+  return Math.max(0, 2 - used);
 }
 
 async function submitSimplePollo(prompt, model) {
@@ -1280,7 +1289,23 @@ async function submitSimplePollo(prompt, model) {
     document.getElementById('steps-container').innerHTML = '<div class="sora-step flex items-center gap-3 text-sm"><span class="sora-step-dot" style="background:#22d3ee;box-shadow:0 0 8px rgba(34,211,238,.5);"></span><span class="step-label" style="color:#a5f3fc;">Pollo AI · Veo · task ' + d.task_id.slice(0, 12) + '…</span></div>';
     refreshPolloCredits();
   } catch (e) {
-    showToast('Pollo : ' + e.message, 7000);
+    const errorText = String(e && e.message ? e.message : e);
+    const balanceBlocked = /403|balance is insufficient|insufficient|top up|solde.*insuffisant|crédit/i.test(errorText);
+    if (balanceBlocked && getAgnesFreeTrials() > 0) {
+      const remaining = consumeAgnesFreeTrial();
+      showToast(`Pollo est temporairement bloqué faute de solde. Essai gratuit Agnes utilisé — ${remaining} essai(s) restant(s).`, 8000);
+      const status = document.getElementById('pollo-credit-status');
+      if (status) status.textContent = `Pollo nécessite un rechargement. Agnes te laisse encore ${remaining} essai(s) gratuit(s).`;
+      btn.disabled = false;
+      return submitSimpleAgnes(prompt);
+    }
+    if (balanceBlocked) {
+      showToast('Pollo nécessite un rechargement. Les 3 essais gratuits Agnes ont été utilisés.', 8000);
+      const status = document.getElementById('pollo-credit-status');
+      if (status) status.textContent = 'Solde Pollo insuffisant. Recharge Pollo pour continuer avec Veo 3.1.';
+    } else {
+      showToast('Pollo : ' + errorText, 7000);
+    }
     btn.disabled = false;
     refreshPolloCredits();
   }

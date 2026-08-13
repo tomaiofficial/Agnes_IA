@@ -1111,6 +1111,10 @@ const STEPS = {
 // Mode switching
 // ═══════════════════════════════════════════════════
 function switchMode(mode) {
+  // La présentation de lancement ne doit jamais bloquer la navigation.
+  // Si l’utilisateur clique For You, Image ou Génération, elle se ferme proprement.
+  const welcome = document.getElementById('welcome-overlay');
+  if (welcome && !welcome.classList.contains('hidden')) closeWelcome();
   currentMode = mode;
   document.getElementById('form-video').classList.toggle('hidden', mode !== 'video');
   document.getElementById('form-image').classList.toggle('hidden', mode !== 'image');

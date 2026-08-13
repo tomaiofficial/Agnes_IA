@@ -302,7 +302,7 @@
 
   <nav class="header-nav">
     <a onclick="switchMode('video');return false;" data-nav="video">Génération</a>
-    <a onclick="switchMode('gallery');return false;" data-nav="gallery">For You</a>
+    <a href="#vibes" onclick="closeWelcome(); openGalleryFeed(); syncHeaderNav('gallery'); return false;" data-nav="gallery" aria-label="Ouvrir Vibes">For You</a>
     <a onclick="switchMode('image');return false;" data-nav="image" class="nav-hide-sm">Image</a>
     <a onclick="switchMode('list');return false;" data-nav="list" class="nav-hide-sm">Tâches</a>
     <a href="#" onclick="togglePseudoPopover();return false;" id="pseudo-btn" style="padding:8px 12px;background:rgba(255,255,255,0.06);border:1px solid var(--line);">
@@ -2215,6 +2215,9 @@ document.addEventListener('pointerdown', () => {
 }, { passive: true });
 
 function openGalleryFeed() {
+  // For You est l’accès direct au feed communautaire Vibes.
+  const welcome = document.getElementById('welcome-overlay');
+  if (welcome && !welcome.classList.contains('hidden')) closeWelcome();
   feedUserInteracted = true; // l'ouverture se fait par un clic sur « Vibes » → son autorisé
   const panel = document.getElementById('panel-gallery');
   panel.classList.remove('hidden');

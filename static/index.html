@@ -478,13 +478,20 @@
         <!-- Modèle vidéo -->
         <div class="mb-4">
           <div class="flex items-center justify-between gap-2 mb-1">
-            <label class="k-label" style="margin-bottom:0;">🎬 Modèle vidéo Agnes</label>
+            <label class="k-label" style="margin-bottom:0;">🎬 Moteur vidéo</label>
             <button id="btn-refresh-video-models" onclick="refreshVideoModels()" class="shrink-0 text-[10px] sm:text-[11px] px-2.5 py-1.5 rounded-lg border border-white/10 text-gray-400 hover:text-gray-200 hover:border-white/20 transition">Actualiser</button>
           </div>
           <select id="s_video_model" onchange="onVideoModelChange()" class="k-field">
             <option value="agnes-video-v2.0">Agnes Video v2.0 — moteur officiel</option>
+            <option value="pollo:veo3-1">Pollo AI · Veo 3.1 — qualité cinéma + audio</option>
+            <option value="pollo:veo3-1-fast">Pollo AI · Veo 3.1 Fast — rendu rapide</option>
           </select>
-          <p class="k-note mt-1.5">Moteur officiel Agnes, sélectionné automatiquement. La génération reste côté serveur pour éviter les erreurs de navigateur et les problèmes de solde Puter.</p>
+          <p class="k-note mt-1.5">Agnes v2.0 reste disponible gratuitement. Pollo AI utilise les crédits de ton compte Agnes et les crédits API du compte Pollo.</p>
+          <div id="pollo-credit-card" class="hidden mt-3 rounded-xl border border-cyan-400/20 bg-cyan-400/[.05] p-3">
+            <div class="flex items-center justify-between gap-3"><span class="text-xs text-gray-300">Solde Agnes</span><strong id="pollo-credit-balance" class="text-sm text-cyan-300">— crédits</strong></div>
+            <div class="flex items-center justify-between gap-3 mt-1"><span class="text-xs text-gray-500">Coût estimé</span><span id="pollo-credit-estimate" class="text-xs text-gray-300">—</span></div>
+            <p id="pollo-credit-status" class="text-[10px] text-gray-500 mt-2">Estimation locale avant envoi à Pollo.</p>
+          </div>
         </div>
 
         <div class="mb-4 rounded-xl border border-violet-400/20 bg-violet-400/[.05] p-3">
@@ -1179,7 +1186,75 @@ function onGenerationStyleChange(){
 async function submitSimple() {
   const prompt = document.getElementById('s_prompt').value.trim();
   if (!prompt) return alert('Veuillez décrire la vidéo');
+  const selected = document.getElementById('s_video_model')?.value || 'agnes-video-v2.0';
+  if (selected.startsWith('pollo:')) return submitSimplePollo(prompt, selected.slice(6));
   return submitSimpleAgnes(prompt);
+}
+
+async function refreshPolloCredits() {
+  const card = document.getElementById('pollo-credit-card');
+  if (!card) return;
+  try {
+    const r = await fetchWithAuth(API_BASE + '/api/pollo/credits');
+    const d = await r.json();
+    if (d.ok) document.getElementById('pollo-credit-balance').textContent = `${d.balance} crédits`;
+  } catch (e) { console.warn('[Pollo] crédits indisponibles', e); }
+}
+
+async function updatePolloEstimate() {
+  const modelValue = document.getElementById('s_video_model')?.value || '';
+  const card = document.getElementById('pollo-credit-card');
+  if (!card) return;
+  const isPollo = modelValue.startsWith('pollo:');
+  card.classList.toggle('hidden', !isPollo);
+  if (!isPollo) return;
+  const model = modelValue.slice(6);
+  const resolutionValue = document.getElementById('s_resolution')?.value || '1152x768';
+  const resolution = resolutionValue.includes('1920') || resolutionValue.includes('1080') ? '1080p' : '720p';
+  const duration = parseInt(document.getElementById('s_duration')?.value || '8', 10);
+  const audio = document.getElementById('s_audio_enabled')?.checked !== false;
+  try {
+    const r = await fetchWithAuth(API_BASE + '/api/pollo/estimate', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({model, resolution, duration: [4,6,8].includes(duration) ? duration : 8, audio}) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.detail || 'Estimation impossible');
+    document.getElementById('pollo-credit-estimate').textContent = `${d.credits} crédits · ${resolution}`;
+    document.getElementById('pollo-credit-status').textContent = 'Le coût est réservé avant l’envoi et remboursé automatiquement si Pollo échoue.';
+    refreshPolloCredits();
+  } catch (e) {
+    document.getElementById('pollo-credit-estimate').textContent = 'Indisponible';
+    document.getElementById('pollo-credit-status').textContent = e.message;
+  }
+}
+
+async function submitSimplePollo(prompt, model) {
+  const btn = document.getElementById('btn-simple');
+  btn.disabled = true;
+  const resolutionValue = document.getElementById('s_resolution')?.value || '1152x768';
+  const resolution = resolutionValue.includes('1920') || resolutionValue.includes('1080') ? '1080p' : '720p';
+  const durationRaw = parseInt(document.getElementById('s_duration')?.value || '8', 10);
+  const duration = [4,6,8].includes(durationRaw) ? durationRaw : 8;
+  const audio = document.getElementById('s_audio_enabled')?.checked !== false;
+  const aspectRatio = resolutionValue.startsWith('1920') || resolutionValue.startsWith('1152') ? '16:9' : '9:16';
+  try {
+    const r = await fetchWithAuth(API_BASE + '/api/pollo/generate', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({prompt, model, resolution, duration, audio, aspectRatio}) });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error((d.detail && (d.detail.message || d.detail)) || 'Génération Pollo impossible');
+    showToast(`🎬 Pollo ${model} lancé · ${d.estimate.credits} crédits réservés`, 5000);
+    const panel = document.getElementById('progress-panel');
+    panel?.classList.remove('hidden');
+    document.getElementById('progress-state-label').textContent = 'Pollo AI — génération cinéma';
+    document.getElementById('progress-step-name').textContent = 'Rendu Pollo en cours…';
+    document.getElementById('progress-state-dot').className = 'w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse';
+    document.getElementById('progress-bar').style.width = '20%';
+    document.getElementById('progress-pct').textContent = 'En cours';
+    document.getElementById('progress-remaining').textContent = 'Notification sécurisée en attente…';
+    document.getElementById('steps-container').innerHTML = '<div class="sora-step flex items-center gap-3 text-sm"><span class="sora-step-dot" style="background:#22d3ee;box-shadow:0 0 8px rgba(34,211,238,.5);"></span><span class="step-label" style="color:#a5f3fc;">Pollo AI · Veo · task ' + d.task_id.slice(0, 12) + '…</span></div>';
+    refreshPolloCredits();
+  } catch (e) {
+    showToast('Pollo : ' + e.message, 7000);
+    btn.disabled = false;
+    refreshPolloCredits();
+  }
 }
 
 async function submitSimpleAgnes(prompt) {
@@ -1280,10 +1355,13 @@ async function loadVideoModels(selectedModel, forceRefresh = false) {
       opt.textContent = m === 'agnes-video-v2.0' ? 'Agnes Video v2.0 — moteur officiel' : m;
       sel.appendChild(opt);
     });
+    [['pollo:veo3-1', 'Pollo AI · Veo 3.1 — qualité cinéma + audio'], ['pollo:veo3-1-fast', 'Pollo AI · Veo 3.1 Fast — rendu rapide']].forEach(([value, label]) => {
+      const opt = document.createElement('option'); opt.value = value; opt.textContent = label; sel.appendChild(opt);
+    });
     if (selectedModel && videos.includes(selectedModel)) sel.value = selectedModel;
     else if (videos.length) sel.value = videos[0];
   } catch(e) {
-    sel.innerHTML = '<option value="agnes-video-v2.0">Agnes Video v2.0 — moteur officiel</option>';
+    sel.innerHTML = '<option value="agnes-video-v2.0">Agnes Video v2.0 — moteur officiel</option><option value="pollo:veo3-1">Pollo AI · Veo 3.1 — qualité cinéma + audio</option><option value="pollo:veo3-1-fast">Pollo AI · Veo 3.1 Fast — rendu rapide</option>';
     if (selectedModel) sel.value = selectedModel;
     console.warn('load /api/models failed:', e);
   }
@@ -1293,6 +1371,7 @@ async function onVideoModelChange() {
   const sel = document.getElementById('s_video_model');
   const model = sel.value;
   if (!model) return;
+  if (model.startsWith('pollo:')) { updatePolloEstimate(); return; }
   try {
     const form = new FormData();
     form.append('text', (currentSelectedModels && currentSelectedModels.text) || 'agnes-2.0-flash');
@@ -2780,7 +2859,10 @@ function toggleAudioOptions() {
 }
 document.addEventListener('DOMContentLoaded', () => {
   toggleAudioOptions();
-  document.getElementById('s_audio_enabled').addEventListener('change', toggleAudioOptions);
+  document.getElementById('s_audio_enabled').addEventListener('change', () => { toggleAudioOptions(); updatePolloEstimate(); });
+  ['s_duration', 's_resolution'].forEach(id => document.getElementById(id)?.addEventListener('change', updatePolloEstimate));
+  refreshPolloCredits();
+  updatePolloEstimate();
 
   // Qualité HD par défaut : synchronise la résolution et la note de durée réelle
   function syncResolutionToBoost() {

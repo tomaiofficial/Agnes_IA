@@ -52,6 +52,14 @@
   .character-preview{display:none;margin-top:18px;padding:14px;border:1px solid rgba(168,85,247,.25);border-radius:16px;background:rgba(168,85,247,.06)}
   .character-preview img{width:100%;max-height:520px;object-fit:contain;border-radius:12px;background:#050509}
   .character-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:rgba(34,197,94,.12);color:#86efac;font-size:11px;font-weight:700}
+  .studio-grid{display:grid;grid-template-columns:minmax(220px,.85fr) minmax(320px,1.4fr);gap:16px}
+  .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:14px}
+  .character-card{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:14px;background:var(--panel2);cursor:pointer;transition:.18s}
+  .character-card:hover,.character-card.selected{border-color:rgba(168,85,247,.75);box-shadow:0 0 0 2px rgba(168,85,247,.18)}
+  .character-card img{width:100%;height:150px;object-fit:cover;display:block;background:#050509}
+  .character-card .ccopy{padding:9px}.character-card strong{display:block;font-size:13px}.character-card small{display:block;color:var(--txt2);font-size:11px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .scene-list{display:flex;flex-direction:column;gap:10px;margin-top:14px}.scene-card{border:1px solid var(--line);border-radius:14px;background:var(--panel2);padding:12px}.scene-head{display:flex;justify-content:space-between;gap:8px;align-items:center}.scene-head strong{font-size:13px}.scene-card textarea{margin-top:9px}.scene-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}.scene-chip{border:1px solid rgba(168,85,247,.35);border-radius:999px;padding:5px 9px;color:#ddd6fe;background:rgba(168,85,247,.1);font-size:11px;cursor:pointer}.scene-chip.off{opacity:.45;border-color:var(--line);background:transparent}.empty-state{padding:20px;text-align:center;color:var(--txt2);border:1px dashed var(--line);border-radius:14px;font-size:12px;line-height:1.5}
+  @media(max-width:720px){.studio-grid{grid-template-columns:1fr}}
   .signin{display:flex;align-items:center;gap:12px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:14px;font-size:13px;color:var(--txt2)}
   .dot{width:9px;height:9px;border-radius:50%;background:#f87171;display:inline-block;margin-right:6px}
   .dot.on{background:var(--green)}
@@ -164,6 +172,25 @@
         <img id="character-image" alt="Personnage réaliste généré" />
         <div class="actions"><button class="btn btn-primary" onclick="useCharacterInVideo()">🎬 Utiliser pour une vidéo</button><a class="btn" id="character-download" download="agnes_personnage.png">⬇️ Télécharger</a></div>
         <p id="character-prompt-preview" class="hint"></p>
+      </div>
+    </div>
+
+    <div class="studio-grid">
+      <div class="card">
+        <span class="character-chip">◉ Personnages du projet</span>
+        <h2 style="font-size:18px;font-weight:750;margin:12px 0 0;">Galerie visible</h2>
+        <p class="hint">Chaque personnage généré est conservé dans ce projet. Cliquez sur une carte pour l’ajouter ou le retirer du plan actif.</p>
+        <div id="character-gallery" class="gallery-grid"></div>
+      </div>
+      <div class="card">
+        <span class="character-chip">▦ Storyboard</span>
+        <h2 style="font-size:18px;font-weight:750;margin:12px 0 0;">Construisez vos scènes</h2>
+        <p class="hint">Ajoutez des plans, décrivez l’action et sélectionnez les personnages visibles dans chaque scène.</p>
+        <div class="row"><div><input id="scene_title" type="text" placeholder="Nom du plan : arrivée dans la forêt" /></div><div style="max-width:110px"><select id="scene_duration"><option value="4">4 s</option><option value="5" selected>5 s</option><option value="8">8 s</option><option value="10">10 s</option></select></div></div>
+        <button class="btn btn-primary" style="margin-top:10px" onclick="addScene()">＋ Ajouter un plan</button>
+        <div id="scene-list" class="scene-list"></div>
+        <button class="btn btn-primary gen-btn" onclick="generateProjectVideo()">🎬 Générer la scène composée</button>
+        <div class="status" id="project-status"></div>
       </div>
     </div>
   </section>
@@ -302,6 +329,7 @@ async function genCharacter(){
     $('character-download').href = src;
     $('character-prompt-preview').textContent = prompt;
     $('character-preview').style.display = 'block';
+    saveGeneratedCharacter(src);
     $('c_progress').firstElementChild.style.width = '100%';
     setStatus($('c_status'), '✅ Personnage réaliste généré. Vous pouvez le réutiliser dans une vidéo.', 'ok');
   }catch(e){
@@ -309,14 +337,55 @@ async function genCharacter(){
     $('c_progress').style.display = 'none';
   }finally{ btn.disabled=false; refreshAuth(); }
 }
+let projectCharacters = [];
+let projectScenes = [];
+let activeSceneId = null;
+function loadProject(){
+  try { projectCharacters = JSON.parse(localStorage.getItem('agnes_project_characters') || '[]'); } catch(e){ projectCharacters=[]; }
+  try { projectScenes = JSON.parse(localStorage.getItem('agnes_project_scenes') || '[]'); } catch(e){ projectScenes=[]; }
+  activeSceneId = projectScenes[0]?.id || null;
+  renderProject();
+}
+function persistProject(){
+  try { localStorage.setItem('agnes_project_characters', JSON.stringify(projectCharacters)); localStorage.setItem('agnes_project_scenes', JSON.stringify(projectScenes)); } catch(e){}
+}
+function escapeHtml(value){ return String(value || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch])); }
+function saveGeneratedCharacter(src){
+  const character = { id:'character_' + Date.now(), name:$('c_name').value.trim() || 'Personnage ' + (projectCharacters.length + 1), profile:$('c_age').value.trim(), appearance:$('c_appearance').value.trim(), clothing:$('c_clothing').value.trim(), image:src, prompt:lastCharacterPrompt };
+  projectCharacters.unshift(character); persistProject(); renderProject();
+}
+function renderProject(){
+  const gallery = $('character-gallery');
+  if (!gallery) return;
+  gallery.innerHTML = projectCharacters.length ? projectCharacters.map(c => `<div class="character-card ${activeSceneId && projectScenes.find(s=>s.id===activeSceneId)?.characterIds.includes(c.id) ? 'selected':''}" onclick="toggleCharacterInScene('${c.id}')"><img src="${escapeHtml(c.image)}" alt="${escapeHtml(c.name)}"><div class="ccopy"><strong>${escapeHtml(c.name)}</strong><small>${escapeHtml(c.profile || 'Personnage réaliste')}</small></div></div>`).join('') : '<div class="empty-state">Aucun personnage dans le projet.<br>Générez votre premier personnage ci-dessus pour le voir ici.</div>';
+  const list = $('scene-list');
+  if (!list) return;
+  list.innerHTML = projectScenes.length ? projectScenes.map((s, i) => `<div class="scene-card" onclick="setActiveScene('${s.id}')" style="border-color:${s.id===activeSceneId?'rgba(168,85,247,.75)':'var(--line)'}"><div class="scene-head"><strong>Plan ${i+1} · ${escapeHtml(s.title)}</strong><span class="character-chip">${s.duration}s</span></div><textarea rows="2" onchange="updateScenePrompt('${s.id}',this.value)" onclick="event.stopPropagation()">${escapeHtml(s.prompt)}</textarea><div class="scene-chips">${projectCharacters.length ? projectCharacters.map(c => `<span class="scene-chip ${s.characterIds.includes(c.id)?'':'off'}" onclick="event.stopPropagation();toggleCharacterInScene('${c.id}','${s.id}')">${s.characterIds.includes(c.id)?'✓ ':''}${escapeHtml(c.name)}</span>`).join('') : '<small class="hint">Créez un personnage pour l’ajouter à ce plan.</small>'}</div></div>`).join('') : '<div class="empty-state">Votre storyboard est vide.<br>Ajoutez un plan pour commencer à composer votre scène.</div>';
+}
+function addScene(){
+  const title = $('scene_title').value.trim() || `Plan ${projectScenes.length + 1}`;
+  const scene = {id:'scene_' + Date.now(), title, duration:parseInt($('scene_duration').value,10) || 5, prompt:'Décrivez l’action, le mouvement de caméra et l’ambiance de ce plan...', characterIds:[]};
+  projectScenes.push(scene); activeSceneId=scene.id; $('scene_title').value=''; persistProject(); renderProject(); setStatus($('project-status'), 'Plan ajouté. Sélectionnez les personnages visibles.', 'ok');
+}
+function setActiveScene(id){ activeSceneId=id; renderProject(); }
+function updateScenePrompt(id, value){ const scene=projectScenes.find(s=>s.id===id); if(scene){scene.prompt=value; persistProject();} }
+function toggleCharacterInScene(characterId, sceneId){
+  const scene = projectScenes.find(s=>s.id === (sceneId || activeSceneId));
+  if(!scene){ setStatus($('project-status'), 'Ajoutez d’abord un plan au storyboard.', 'err'); return; }
+  scene.characterIds = scene.characterIds.includes(characterId) ? scene.characterIds.filter(id=>id!==characterId) : [...scene.characterIds, characterId];
+  activeSceneId=scene.id; persistProject(); renderProject();
+}
+function composeProjectPrompt(){
+  return projectScenes.map((s,i)=>{ const names=s.characterIds.map(id=>projectCharacters.find(c=>c.id===id)).filter(Boolean).map(c=>`${c.name}: ${c.appearance || 'apparence réaliste'}, ${c.clothing || 'vêtements cohérents'}`).join('; '); return `Plan ${i+1} (${s.duration}s) — ${s.prompt}. Personnages visibles: ${names || 'aucun personnage imposé'}. Continuité stricte du visage, des vêtements et des proportions, caméra fluide, rendu cinématographique réaliste.`; }).join(' | ');
+}
+function generateProjectVideo(){
+  if(!projectScenes.length){ setStatus($('project-status'), 'Ajoutez au moins un plan avant de générer.', 'err'); return; }
+  const prompt=composeProjectPrompt(); $('v_prompt').value=prompt; switchTab('video'); setStatus($('v_status'), 'Storyboard chargé. Génération de la scène composée en cours...', 'ok'); genVideo();
+}
 function useCharacterInVideo(){
   if (!lastCharacterPrompt) return;
-  const videoPrompt = `${lastCharacterPrompt} Scène vidéo : le personnage marche naturellement dans un décor cinématographique, mouvement fluide, cohérence parfaite du visage et des vêtements du début à la fin.`;
-  $('v_prompt').value = videoPrompt;
-  switchTab('video');
-  setStatus($('v_status'), 'Personnage ajouté au prompt vidéo. Choisissez la durée puis générez.', 'ok');
-  $('v_prompt').focus();
-  window.scrollTo({top:0, behavior:'smooth'});
+  $('v_prompt').value = `${lastCharacterPrompt} Scène vidéo : le personnage marche naturellement dans un décor cinématographique, mouvement fluide, cohérence parfaite du visage et des vêtements du début à la fin.`;
+  switchTab('video'); setStatus($('v_status'), 'Personnage ajouté au prompt vidéo. Choisissez la durée puis générez.', 'ok'); $('v_prompt').focus(); window.scrollTo({top:0, behavior:'smooth'});
 }
 
 /* ── Vidéo ── */
@@ -425,7 +494,7 @@ async function genImage(){
   } finally { btn.disabled = false; refreshAuth(); }
 }
 
-window.addEventListener('load', refreshAuth);
+window.addEventListener('load', () => { refreshAuth(); loadProject(); });
 </script>
 </body>
 </html>

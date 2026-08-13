@@ -273,6 +273,22 @@
   @media (max-width: 480px) {
     .vibes-modal-close { top:12px; right:12px; width:40px; height:40px; min-width:40px; min-height:40px; font-size:20px; }
   }
+  /* Onboarding responsive : le contenu ne doit jamais dépasser l’écran mobile. */
+  #welcome-overlay { overflow-y:auto; overscroll-behavior:contain; }
+  #welcome-overlay .welcome-card { max-height:calc(100dvh - 32px); overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+  #welcome-overlay .welcome-close { min-width:44px; min-height:44px; display:flex; align-items:center; justify-content:center; font-size:18px; }
+  @media (max-width:640px) {
+    #welcome-overlay { align-items:flex-start; padding:12px; padding-top:max(12px, env(safe-area-inset-top)); padding-bottom:max(12px, env(safe-area-inset-bottom)); }
+    #welcome-overlay .welcome-card { max-height:calc(100dvh - 24px); border-radius:20px; padding:18px; }
+    #welcome-overlay .welcome-card h2 { margin-top:8px; font-size:22px; line-height:1.15; padding-right:4px; }
+    #welcome-overlay .welcome-card .welcome-intro { font-size:12px; line-height:1.5; }
+    #welcome-overlay .welcome-features { margin-top:14px; gap:8px; }
+    #welcome-overlay .welcome-features > div { padding:11px; border-radius:14px; }
+    #welcome-overlay .welcome-features h3 { font-size:13px; }
+    #welcome-overlay .welcome-features p { font-size:10px; line-height:1.35; }
+    #welcome-overlay .welcome-footer { margin-top:14px; align-items:stretch; }
+    #welcome-overlay .welcome-footer p { font-size:10px; }
+  }
 </style>
 </head>
 <body class="text-gray-100 min-h-screen font-sans">
@@ -310,18 +326,18 @@
 
 <!-- Présentation premier lancement -->
 <div id="welcome-overlay" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4" style="background:rgba(3,4,10,.86);backdrop-filter:blur(18px);">
-  <div class="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#11131c] p-6 sm:p-8 shadow-2xl" style="box-shadow:0 30px 100px rgba(0,0,0,.65);">
-    <div class="flex items-start justify-between gap-4">
-      <div><span class="hero-kicker">Agnes Video</span><h2 class="mt-4 text-2xl sm:text-3xl font-bold text-white">Votre espace de création vidéo.</h2><p class="mt-2 text-sm leading-relaxed text-gray-400">De l’idée au clip final, Agnes vous accompagne avec une interface claire, cinématique et pensée pour créer rapidement.</p></div>
-      <button onclick="closeWelcome()" class="shrink-0 rounded-xl border border-white/10 px-3 py-2 text-gray-400 hover:text-white" aria-label="Fermer">✕</button>
+  <div class="welcome-card w-full max-w-2xl rounded-3xl border border-white/10 bg-[#11131c] p-6 sm:p-8 shadow-2xl" style="box-shadow:0 30px 100px rgba(0,0,0,.65);">
+    <div class="flex items-start justify-between gap-3">
+      <div><span class="hero-kicker">Agnes Video</span><h2 class="mt-4 text-2xl sm:text-3xl font-bold text-white">Votre espace de création vidéo.</h2><p class="welcome-intro mt-2 text-sm leading-relaxed text-gray-400">De l’idée au clip final, Agnes vous accompagne avec une interface claire, cinématique et pensée pour créer rapidement.</p></div>
+      <button onclick="closeWelcome()" class="welcome-close shrink-0 rounded-xl border border-white/10 px-3 py-2 text-gray-400 hover:text-white" aria-label="Fermer la présentation">✕</button>
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
+    <div class="welcome-features grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
       <div class="rounded-2xl border border-white/10 bg-white/[.03] p-4"><div class="text-xl">✦</div><h3 class="mt-2 font-semibold text-gray-200">Prompt cinématique</h3><p class="mt-1 text-xs leading-relaxed text-gray-500">Transformez une idée courte en scène détaillée avec caméra, lumière et mouvement.</p></div>
       <div class="rounded-2xl border border-white/10 bg-white/[.03] p-4"><div class="text-xl">▦</div><h3 class="mt-2 font-semibold text-gray-200">Storyboard</h3><p class="mt-1 text-xs leading-relaxed text-gray-500">Organisez plusieurs plans, leurs durées et leurs transitions.</p></div>
       <div class="rounded-2xl border border-white/10 bg-white/[.03] p-4"><div class="text-xl">◉</div><h3 class="mt-2 font-semibold text-gray-200">Image vers vidéo</h3><p class="mt-1 text-xs leading-relaxed text-gray-500">Animez une image de référence en conservant son univers visuel.</p></div>
       <div class="rounded-2xl border border-white/10 bg-white/[.03] p-4"><div class="text-xl">♫</div><h3 class="mt-2 font-semibold text-gray-200">Audio et sous-titres</h3><p class="mt-1 text-xs leading-relaxed text-gray-500">Préparez la narration, la voix off et le rythme social de vos vidéos.</p></div>
     </div>
-    <div class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3"><p class="text-[11px] text-gray-500">Cette présentation s’affiche une seule fois sur cet appareil.</p><button onclick="closeWelcome()" class="btn-k btn-primary-k w-full sm:w-auto px-6">Commencer avec Agnes →</button></div>
+    <div class="welcome-footer mt-6 flex flex-col sm:flex-row items-center justify-between gap-3"><p class="text-[11px] text-gray-500">Cette présentation s’affiche une seule fois sur cet appareil.</p><button onclick="closeWelcome()" class="btn-k btn-primary-k w-full sm:w-auto px-6">Commencer avec Agnes →</button></div>
   </div>
 </div>
 

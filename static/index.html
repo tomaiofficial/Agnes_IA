@@ -289,7 +289,6 @@
     <a onclick="switchMode('gallery');return false;" data-nav="gallery">For You</a>
     <a onclick="switchMode('image');return false;" data-nav="image" class="nav-hide-sm">Image</a>
     <a onclick="switchMode('list');return false;" data-nav="list" class="nav-hide-sm">Tâches</a>
-    <a onclick="openStudioPanel();return false;" data-nav="studio" class="nav-hide-sm">Studio</a>
     <a href="#" onclick="togglePseudoPopover();return false;" id="pseudo-btn" style="padding:8px 12px;background:rgba(255,255,255,0.06);border:1px solid var(--line);">
       <span id="pseudo-display" style="font-size:13px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">👤</span>
     </a>
@@ -313,7 +312,7 @@
 <div id="welcome-overlay" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4" style="background:rgba(3,4,10,.86);backdrop-filter:blur(18px);">
   <div class="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#11131c] p-6 sm:p-8 shadow-2xl" style="box-shadow:0 30px 100px rgba(0,0,0,.65);">
     <div class="flex items-start justify-between gap-4">
-      <div><span class="hero-kicker">Agnes Studio</span><h2 class="mt-4 text-2xl sm:text-3xl font-bold text-white">Votre espace de création vidéo.</h2><p class="mt-2 text-sm leading-relaxed text-gray-400">De l’idée au clip final, Agnes vous accompagne avec une interface claire, cinématique et pensée pour créer rapidement.</p></div>
+      <div><span class="hero-kicker">Agnes Video</span><h2 class="mt-4 text-2xl sm:text-3xl font-bold text-white">Votre espace de création vidéo.</h2><p class="mt-2 text-sm leading-relaxed text-gray-400">De l’idée au clip final, Agnes vous accompagne avec une interface claire, cinématique et pensée pour créer rapidement.</p></div>
       <button onclick="closeWelcome()" class="shrink-0 rounded-xl border border-white/10 px-3 py-2 text-gray-400 hover:text-white" aria-label="Fermer">✕</button>
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
@@ -384,35 +383,6 @@
         const el = document.getElementById('welcome-overlay');
         if (el) el.classList.add('hidden');
         localStorage.setItem('agnes_welcome_seen', '1');
-      }
-      function openStudioPanel() {
-        switchMode('video');
-        const el = document.getElementById('studio-tools');
-        if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => document.getElementById('studio_idea')?.focus(), 400); }
-      }
-      function studioValue(id, fallback) { return document.getElementById(id)?.value || fallback; }
-      function studioIdea() { return studioValue('studio_idea', '').trim() || document.getElementById('s_prompt')?.value.trim() || 'Une scène cinématique réaliste'; }
-      function showStudioOutput(html) { const el = document.getElementById('studio-output'); if (!el) return; el.innerHTML = html; el.classList.remove('hidden'); }
-      function buildCinematicPrompt() {
-        const idea = studioIdea(), style = studioValue('studio_style', 'Cinéma réaliste'), camera = studioValue('studio_camera', 'Travelling lent'), mood = studioValue('studio_mood', 'Lumière dorée et chaleureuse');
-        const prompt = `${idea}. Style ${style}, ${camera}, mouvement naturel et parfaitement fluide. ${mood}, éclairage volumétrique doux, profondeur de champ réaliste, textures détaillées, composition cinématographique, sujet cohérent du début à la fin, 35mm, rendu haut de gamme, ultra-réaliste, sans texte, sans logo, sans déformation, sans flicker.`;
-        const target = document.getElementById('s_prompt'); if (target) { target.value = prompt; target.dispatchEvent(new Event('input')); }
-        showStudioOutput('<strong>Prompt cinématique prêt.</strong><br><span class="text-gray-400">Il a été placé dans le champ de génération. Vous pouvez encore le personnaliser.</span>');
-      }
-      function buildStoryboard() {
-        const idea = studioIdea(), style = studioValue('studio_style', 'Cinéma réaliste'), camera = studioValue('studio_camera', 'Travelling lent');
-        const shots = [
-          ['Plan 1 · Introduction', `Plan d’ensemble : ${idea}. Installer le décor et la lumière.`, '3 s', 'Fondu depuis le noir'],
-          ['Plan 2 · Action', `Plan rapproché : le sujet principal évolue naturellement dans la scène. ${camera}.`, '4 s', 'Mouvement continu'],
-          ['Plan 3 · Conclusion', `Plan final cinématographique, ${style}, respiration visuelle et sortie douce.`, '3 s', 'Fondu lent']
-        ];
-        showStudioOutput('<strong>Storyboard en 3 plans</strong><div class="mt-2 space-y-2">' + shots.map(s => `<div class="rounded-lg border border-white/10 p-2"><b>${s[0]}</b> · ${s[2]}<br><span class="text-gray-400">${s[1]}</span><br><span class="text-indigo-300/80">Transition : ${s[3]}</span></div>`).join('') + '</div>');
-      }
-      function lockCharacter() {
-        const idea = studioIdea();
-        const lock = `Personnage et identité visuelle verrouillés : conserver exactement le visage, la silhouette, les vêtements, les couleurs, les accessoires et les proportions entre tous les plans. Aucune métamorphose, aucun changement d'âge, aucune variation de costume.`;
-        const target = document.getElementById('s_prompt'); if (target) { target.value = `${idea}. ${lock}`; target.dispatchEvent(new Event('input')); }
-        showStudioOutput('<strong>Continuité du personnage activée.</strong><br><span class="text-gray-400">Les contraintes de cohérence ont été ajoutées au prompt.</span>');
       }
       if (!localStorage.getItem('agnes_welcome_seen')) setTimeout(() => openWelcome(false), 450);
 
@@ -507,19 +477,6 @@
           <input id="s_ref_image" type="file" accept="image/*" class="text-sm text-gray-400 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-200 hover:file:bg-gray-600 file:min-h-[44px]">
         </div>
 
-        <!-- Studio IA : prompt, storyboard et cohérence -->
-        <section id="studio-tools" class="rounded-2xl border border-indigo-400/15 bg-indigo-400/[.04] p-4 mb-4">
-          <div class="flex items-center justify-between gap-3 mb-3"><div><p class="text-[11px] uppercase tracking-[.16em] text-indigo-300/80">Agnes Studio</p><h3 class="text-sm font-semibold text-gray-200 mt-1">Préparez votre scène comme un réalisateur</h3></div><span class="rounded-full border border-indigo-300/20 bg-indigo-300/10 px-2 py-1 text-[10px] text-indigo-200">IA créative</span></div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div class="sm:col-span-3"><label class="k-label">Votre idée courte</label><textarea id="studio_idea" rows="2" class="k-field" placeholder="Ex : un renard traverse une forêt enneigée au lever du soleil"></textarea></div>
-            <div><label class="k-label">Style</label><select id="studio_style" class="k-field"><option>Cinéma réaliste</option><option>Documentaire naturel</option><option>Publicité premium</option><option>Clip musical</option><option>Animation stylisée</option></select></div>
-            <div><label class="k-label">Caméra</label><select id="studio_camera" class="k-field"><option>Travelling lent</option><option>Plan fixe</option><option>Gimbal fluide</option><option>Vue aérienne</option><option>Gros plan cinématique</option></select></div>
-            <div><label class="k-label">Ambiance</label><select id="studio_mood" class="k-field"><option>Lumière dorée et chaleureuse</option><option>Brume mystérieuse</option><option>Énergie urbaine</option><option>Émotion douce</option><option>Tension dramatique</option></select></div>
-          </div>
-          <div class="flex flex-wrap gap-2 mt-3"><button type="button" onclick="buildCinematicPrompt()" class="btn-k btn-primary-k text-xs">✦ Améliorer le prompt</button><button type="button" onclick="buildStoryboard()" class="btn-k btn-ghost-k text-xs">▦ Créer un storyboard</button><button type="button" onclick="lockCharacter()" class="btn-k btn-ghost-k text-xs">◉ Verrouiller le personnage</button></div>
-          <div id="studio-output" class="hidden mt-3 rounded-xl border border-white/10 bg-black/20 p-3 text-xs leading-relaxed text-gray-300"></div>
-          <textarea id="studio_character_lock" class="hidden" aria-hidden="true"></textarea>
-        </section>
 
         <!-- Paramètres avancés -->
         <details class="border-t" style="border-color:var(--line);padding-top:12px;margin-top:12px;">
@@ -894,7 +851,7 @@
     try {
       const params = new URLSearchParams(location.search);
       const m = params.get('mode');
-      if (m && ['video', 'gallery', 'image', 'list', 'studio'].includes(m)) switchMode(m);
+       if (m && ['video', 'gallery', 'image', 'list'].includes(m)) switchMode(m);
       const fallbackPrompt = params.get('prompt');
       if (fallbackPrompt && (params.get('fallback') === 'agnes' || m === 'video')) {
         const promptField = document.getElementById('s_prompt');

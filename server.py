@@ -904,11 +904,8 @@ async def root_index_html():
 @app.get("/studio")
 @app.get("/studio.html")
 async def studio_page():
-    """Sert l’espace Studio Puter et ses outils de création de personnages."""
-    studio_path = os.path.join(os.path.dirname(__file__), "static", "studio.html")
-    if os.path.exists(studio_path):
-        return FileResponse(studio_path)
-    raise HTTPException(status_code=404, detail="Studio indisponible")
+    """Ancienne route retirée : la génération se fait depuis la page principale."""
+    raise HTTPException(status_code=404, detail="Studio retiré. Utilisez la page Génération.")
 
 
 @app.head("/index.html")

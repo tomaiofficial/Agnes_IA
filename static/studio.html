@@ -49,6 +49,9 @@
   .result{margin-top:18px;display:none}
   .result video,.result img{width:100%;border-radius:14px;background:#000;max-height:70vh}
   .result .actions{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+  .character-preview{display:none;margin-top:18px;padding:14px;border:1px solid rgba(168,85,247,.25);border-radius:16px;background:rgba(168,85,247,.06)}
+  .character-preview img{width:100%;max-height:520px;object-fit:contain;border-radius:12px;background:#050509}
+  .character-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:rgba(34,197,94,.12);color:#86efac;font-size:11px;font-weight:700}
   .signin{display:flex;align-items:center;gap:12px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:14px;font-size:13px;color:var(--txt2)}
   .dot{width:9px;height:9px;border-radius:50%;background:#f87171;display:inline-block;margin-right:6px}
   .dot.on{background:var(--green)}
@@ -82,6 +85,7 @@
   <div class="tabs">
     <div class="tab active" data-tab="video" onclick="switchTab('video')">🎬 Vidéo</div>
     <div class="tab" data-tab="image" onclick="switchTab('image')">🖼️ Image</div>
+    <div class="tab" data-tab="character" onclick="switchTab('character')">◉ Personnage</div>
   </div>
 
   <!-- ═══════ Vidéo ═══════ -->
@@ -134,6 +138,33 @@
         <a class="btn" id="v_view" href="/?mode=gallery" style="display:none">Voir dans For You →</a>
       </div>
       <div class="status" id="v_pubstatus"></div>
+    </div>
+  </section>
+
+  <!-- ═══════ Personnage réaliste ═══════ -->
+  <section id="panel-character" hidden>
+    <div class="card">
+      <span class="character-chip">● Création réaliste</span>
+      <h2 style="font-size:20px;font-weight:750;margin-top:12px;">Créez votre personnage principal</h2>
+      <p class="hint">Définissez son identité visuelle, générez une référence réaliste et réutilisez-la dans vos prompts vidéo pour garder une apparence cohérente.</p>
+      <div class="row">
+        <div><label for="c_name">Nom du personnage</label><input id="c_name" type="text" placeholder="Ex : Lina" /></div>
+        <div><label for="c_age">Âge / profil</label><input id="c_age" type="text" placeholder="Ex : jeune adulte, 28 ans" /></div>
+      </div>
+      <label for="c_appearance">Apparence</label><textarea id="c_appearance" rows="3" placeholder="Visage, cheveux, peau, yeux, morphologie, expression..."></textarea>
+      <div class="row">
+        <div><label for="c_clothing">Vêtements</label><input id="c_clothing" type="text" placeholder="Veste beige, t-shirt blanc, jean brut" /></div>
+        <div><label for="c_style">Style visuel</label><select id="c_style"><option>Photographie réaliste</option><option>Cinéma premium</option><option>Documentaire naturel</option><option>Mode éditoriale</option><option>Fantaisie réaliste</option></select></div>
+      </div>
+      <label for="c_scene">Référence de scène</label><input id="c_scene" type="text" placeholder="Portrait en lumière naturelle, fond neutre, objectif 85mm" />
+      <button class="btn btn-primary gen-btn" id="c_gen" onclick="genCharacter()">◉ Générer le personnage réaliste</button>
+      <div class="progress" id="c_progress"><div></div></div>
+      <div class="status" id="c_status"></div>
+      <div id="character-preview" class="character-preview">
+        <img id="character-image" alt="Personnage réaliste généré" />
+        <div class="actions"><button class="btn btn-primary" onclick="useCharacterInVideo()">🎬 Utiliser pour une vidéo</button><a class="btn" id="character-download" download="agnes_personnage.png">⬇️ Télécharger</a></div>
+        <p id="character-prompt-preview" class="hint"></p>
+      </div>
     </div>
   </section>
 
@@ -192,6 +223,7 @@ function switchTab(tab){
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   $('panel-video').hidden = tab !== 'video';
   $('panel-image').hidden = tab !== 'image';
+  $('panel-character').hidden = tab !== 'character';
 }
 
 /* ── Auth Puter ── */
@@ -238,6 +270,53 @@ async function resultBlob(media){
   const src = media && (media.src || media.url);
   if (src){ const r = await fetch(src); if(!r.ok) throw new Error('Lecture du résultat impossible'); return r.blob(); }
   throw new Error('Résultat illisible');
+}
+
+/* ── Personnage réaliste ── */
+let lastCharacterPrompt = '', lastCharacterImage = '';
+function characterPrompt(){
+  const name = $('c_name').value.trim() || 'personnage principal';
+  const age = $('c_age').value.trim() || 'jeune adulte';
+  const appearance = $('c_appearance').value.trim() || 'visage naturel, regard expressif, proportions réalistes';
+  const clothing = $('c_clothing').value.trim() || 'vêtements sobres et élégants';
+  const style = $('c_style').value;
+  const scene = $('c_scene').value.trim() || 'portrait en lumière naturelle, fond neutre, objectif 85mm';
+  return `Portrait de ${name}, ${age}. ${appearance}. ${clothing}. ${scene}. Style ${style}, peau et textures réalistes, lumière naturelle, détails du visage nets, proportions humaines exactes, expression naturelle, photographie cinématographique haut de gamme, sans texte, sans logo, sans déformation, sans visage asymétrique.`;
+}
+async function genCharacter(){
+  const btn = $('c_gen'); btn.disabled = true;
+  if (!window.puter || !puter.ai){ setStatus($('c_status'), 'Puter.js non chargé.', 'err'); btn.disabled=false; return; }
+  const prompt = characterPrompt(); lastCharacterPrompt = prompt;
+  $('c_progress').style.display = 'block'; $('c_progress').firstElementChild.style.width = '35%';
+  setStatus($('c_status'), 'Préparation du personnage réaliste...', '');
+  try{
+    if (!puter.auth.isSignedIn()) await puter.auth.signIn();
+    refreshAuth();
+    setStatus($('c_status'), 'Génération du personnage en cours...', '');
+    $('c_progress').firstElementChild.style.width = '65%';
+    const img = await puter.ai.txt2img(prompt, { model: 'openai/gpt-image-2' });
+    const src = (img && (img.src || img.url)) || (img && img.currentSrc);
+    if (!src) throw new Error('Image du personnage non retournée');
+    lastCharacterImage = src;
+    $('character-image').src = src;
+    $('character-download').href = src;
+    $('character-prompt-preview').textContent = prompt;
+    $('character-preview').style.display = 'block';
+    $('c_progress').firstElementChild.style.width = '100%';
+    setStatus($('c_status'), '✅ Personnage réaliste généré. Vous pouvez le réutiliser dans une vidéo.', 'ok');
+  }catch(e){
+    setStatus($('c_status'), 'Erreur de génération : ' + (e.message || e), 'err');
+    $('c_progress').style.display = 'none';
+  }finally{ btn.disabled=false; refreshAuth(); }
+}
+function useCharacterInVideo(){
+  if (!lastCharacterPrompt) return;
+  const videoPrompt = `${lastCharacterPrompt} Scène vidéo : le personnage marche naturellement dans un décor cinématographique, mouvement fluide, cohérence parfaite du visage et des vêtements du début à la fin.`;
+  $('v_prompt').value = videoPrompt;
+  switchTab('video');
+  setStatus($('v_status'), 'Personnage ajouté au prompt vidéo. Choisissez la durée puis générez.', 'ok');
+  $('v_prompt').focus();
+  window.scrollTo({top:0, behavior:'smooth'});
 }
 
 /* ── Vidéo ── */

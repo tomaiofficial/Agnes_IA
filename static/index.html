@@ -97,11 +97,22 @@
 
   /* ── Cartes ── */
   .k-card {
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.45);
+    background: linear-gradient(145deg, rgba(24,24,28,0.96), rgba(15,15,19,0.96));
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 20px;
+    box-shadow: 0 18px 60px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.035);
   }
+  .hero-kicker { display:inline-flex; align-items:center; gap:7px; padding:6px 11px; border-radius:999px; color:#c7d2fe; background:rgba(91,140,255,0.10); border:1px solid rgba(129,140,248,0.24); font-size:10px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; box-shadow:0 0 28px rgba(91,140,255,0.10); }
+  .hero-kicker::before { content:''; width:6px; height:6px; border-radius:50%; background:#60a5fa; box-shadow:0 0 12px #60a5fa; }
+  .hero-subline { color:#8f96a8; font-size:13px; margin-top:8px; line-height:1.6; }
+  .hero-trust { display:flex; justify-content:center; gap:8px; flex-wrap:wrap; margin-top:13px; }
+  .hero-trust span { color:#7d8495; font-size:11px; padding:5px 9px; border:1px solid rgba(255,255,255,0.07); background:rgba(255,255,255,0.025); border-radius:999px; }
+  #gen-card { position:relative; overflow:hidden; }
+  #gen-card::before { content:''; position:absolute; left:10%; right:10%; top:-90px; height:160px; background:radial-gradient(ellipse, rgba(91,140,255,0.13), transparent 68%); pointer-events:none; }
+  #gen-card > * { position:relative; z-index:1; }
+  #s_prompt { min-height:145px !important; background:rgba(9,10,14,0.72); border-color:rgba(255,255,255,0.11); font-size:15px !important; line-height:1.65; }
+  #s_prompt:focus { border-color:rgba(129,140,248,0.72); box-shadow:0 0 0 4px rgba(91,140,255,0.12), 0 0 34px rgba(91,140,255,0.10); }
+  #btn-simple { min-height:52px; letter-spacing:.01em; }
   .k-field {
     width: 100%; background: var(--bg2); color: var(--txt);
     border: 1px solid var(--line); border-radius: 11px;
@@ -300,10 +311,12 @@
 
   <div class="app-wrap" style="max-width:980px;margin:0 auto;">
 
-    <!-- Titre -->
-    <div id="page-title" style="text-align:center;margin-bottom:22px;">
-      <h1 style="font-size:30px;font-weight:800;letter-spacing:-0.5px;background:linear-gradient(90deg,#fff, #c7d2fe);-webkit-background-clip:text;background-clip:text;color:transparent;">Générer une vidéo IA</h1>
-      <p style="color:var(--txt2);font-size:14px;margin-top:6px;">Décrivez une scène — l'IA crée une vidéo ultra réaliste avec musique de fond.</p>
+    <!-- Titre premium -->
+    <div id="page-title" style="text-align:center;margin-bottom:25px;">
+      <span class="hero-kicker">Agnes Video · création IA</span>
+      <h1 style="font-size:clamp(28px,4vw,38px);font-weight:850;letter-spacing:-0.8px;margin-top:13px;background:linear-gradient(100deg,#fff 18%,#c7d2fe 54%,#a78bfa 92%);-webkit-background-clip:text;background-clip:text;color:transparent;">Donnez vie à vos idées.</h1>
+      <p class="hero-subline">Décrivez une scène, choisissez votre style et laissez Agnes créer une vidéo cinématographique.</p>
+      <div class="hero-trust"><span>✦ Moteur Agnes</span><span>⚡ File gratuite</span><span>🎬 HD disponible</span></div>
     </div>
 
     <!-- API Key -->
@@ -425,7 +438,7 @@
           <select id="s_video_model" onchange="onVideoModelChange()" class="k-field">
             <option value="agnes-video-v2.0">agnes-video-v2.0 (par défaut, gratuit)</option>
           </select>
-          <p class="k-note mt-1.5">Liste chargée depuis l'API Agnes (GET /v1/models). <b class="text-gray-400">Agnes-Video-2.5</b> (préview : ~2× plus rapide) est proposé ici : s'il échoue, repassez sur v2.0.</p>
+          <p class="k-note mt-1.5">Moteur officiel Agnes, sélectionné automatiquement. La génération reste côté serveur pour éviter les erreurs de navigateur et les problèmes de solde Puter.</p>
         </div>
 
         <!-- Image de référence (i2v) -->

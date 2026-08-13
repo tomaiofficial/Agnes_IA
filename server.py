@@ -1552,6 +1552,58 @@ async def serve_video(task_id: str, user_id: str = Header(default="", alias="X-U
     raise HTTPException(status_code=404, detail="Video not found")
 
 
+@app.post("/api/video/{task_id}/tools")
+async def apply_video_tool(
+    task_id: str,
+    operation: str = Form(...),
+    aspect: str = Form("16:9"),
+    seconds: int = Form(5),
+    user_id: str = Header(default="", alias="X-User-Id"),
+):
+    """Postproduction légère et sûre sur une vidéo terminée.
+
+    Opérations disponibles : ``upscale`` (1080p), ``social`` (9:16/1:1/16:9)
+    et ``extend`` (prolongation par maintien de la dernière image). Les fichiers
+    sont créés dans le dossier de la tâche et deviennent le nouveau résultat.
+    """
+    _require_task_access(task_id, user_id)
+    dir_name = _find_dir_name(task_id)
+    source = _get_final_video_file(task_id, dir_name)
+    if not source or not os.path.exists(source):
+        raise HTTPException(status_code=404, detail="Vidéo terminée introuvable")
+    if operation not in {"upscale", "social", "extend"}:
+        raise HTTPException(status_code=422, detail="Opération inconnue")
+    if aspect not in {"9:16", "16:9", "1:1"}:
+        raise HTTPException(status_code=422, detail="Format social invalide")
+    seconds = max(1, min(int(seconds or 5), 10))
+    task_dir = safe_join(get_working_dir(), dir_name)
+    suffix = f"{operation}_{uuid.uuid4().hex[:8]}.mp4"
+    output = safe_join(task_dir, suffix)
+    if operation == "upscale":
+        vf = "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black,unsharp=5:5:0.5:5:5:0"
+        cmd = ["ffmpeg", "-y", "-i", source, "-vf", vf, "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-c:a", "aac", "-b:a", "192k", output]
+    elif operation == "social":
+        dims = {"9:16": (1080, 1920), "16:9": (1920, 1080), "1:1": (1080, 1080)}[aspect]
+        w, h = dims
+        vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"
+        cmd = ["ffmpeg", "-y", "-i", source, "-vf", vf, "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-c:a", "aac", "-b:a", "160k", output]
+    else:
+        cmd = ["ffmpeg", "-y", "-i", source, "-vf", f"tpad=stop_mode=clone:stop_duration={seconds}", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-c:a", "aac", "-b:a", "160k", output]
+    try:
+        proc = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, timeout=300)
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Postproduction trop longue")
+    if proc.returncode != 0 or not os.path.exists(output):
+        logger.error("[VideoTools] ffmpeg failed: %s", (proc.stderr or "")[-1200:])
+        raise HTTPException(status_code=500, detail="La postproduction vidéo a échoué")
+    try:
+        tm = TaskManager(task_id, dir_name=dir_name)
+        tm.update_state(final_video_file=output)
+    except Exception as exc:
+        logger.warning("[VideoTools] impossible de mettre à jour l’état: %s", exc)
+    return {"ok": True, "task_id": task_id, "operation": operation, "file": suffix}
+
+
 def _get_final_video_file(task_id: str, dir_name: str) -> str:
     """Chemin local du vrai fichier final d'une tâche (state.final_video_file).
 

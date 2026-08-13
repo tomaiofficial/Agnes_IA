@@ -81,6 +81,7 @@ from core.video import (
     PipelineConfig,
     SecurityValidator,
 )
+from core.storyboard_studio import build_storyboard
 from models.task import (
     AnchorVideoTask,
     AudioConfig,
@@ -3667,6 +3668,82 @@ async def serve_profile_avatar(user_id: str):
     if target.startswith("http://") or target.startswith("https://"):
         return RedirectResponse(target, status_code=307)
     return FileResponse(target)
+
+
+# ═══════════════════════════════════════════════════
+# Studio de scènes Pavo-style (natif Agnes)
+# ═══════════════════════════════════════════════════
+
+_STORYBOARD_CACHE: Dict[str, dict] = {}
+
+
+@app.post("/api/storyboards")
+async def create_storyboard(request: Request, user_id: str = Header(default="", alias="X-User-Id")):
+    """Crée une bible visuelle et un storyboard multi-scènes sans lancer de génération payante."""
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Body JSON requis")
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Payload JSON invalide")
+    storyboard = build_storyboard(payload)
+    storyboard["user_id"] = user_id or "anonymous"
+    _STORYBOARD_CACHE[storyboard["id"]] = storyboard
+    return {"ok": True, "storyboard": storyboard}
+
+
+@app.get("/api/storyboards/{storyboard_id}")
+async def get_storyboard(storyboard_id: str, user_id: str = Header(default="", alias="X-User-Id")):
+    storyboard = _STORYBOARD_CACHE.get(storyboard_id)
+    if not storyboard:
+        raise HTTPException(status_code=404, detail="Storyboard introuvable")
+    if storyboard.get("user_id") not in (user_id or "anonymous", "anonymous"):
+        raise HTTPException(status_code=403, detail="Accès refusé")
+    return {"ok": True, "storyboard": storyboard}
+
+
+@app.post("/api/storyboards/{storyboard_id}/scenes/{scene_index}/generate")
+async def generate_storyboard_scene(
+    storyboard_id: str,
+    scene_index: int,
+    request: Request,
+    user_id: str = Header(default="", alias="X-User-Id"),
+):
+    """Transforme un plan storyboardé en tâche Agnes Video v2.0."""
+    storyboard = _STORYBOARD_CACHE.get(storyboard_id)
+    if not storyboard:
+        raise HTTPException(status_code=404, detail="Storyboard introuvable")
+    if storyboard.get("user_id") not in (user_id or "anonymous", "anonymous"):
+        raise HTTPException(status_code=403, detail="Accès refusé")
+    scenes = storyboard.get("scenes", [])
+    if scene_index < 1 or scene_index > len(scenes):
+        raise HTTPException(status_code=404, detail="Scène introuvable")
+    scene = scenes[scene_index - 1]
+    form = await request.form()
+    duration = int(form.get("duration") or scene.get("duration") or 7)
+    width = int(form.get("video_width") or 1920)
+    height = int(form.get("video_height") or 1080)
+    api_key = get_api_key()
+    if not api_key:
+        raise HTTPException(status_code=400, detail="Veuillez configurer la clé API Agnes")
+    task_id = uuid.uuid4().hex[:12]
+    dir_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{task_id}"
+    state = SimpleVideoTask(
+        task_id=task_id, user_id=user_id, creative_name=f"story_{storyboard_id}_scene_{scene_index}",
+        prompt=scene["prompt"], mode=VideoMode.T2V, duration=duration,
+        video_width=width, video_height=height, seed=None,
+        negative_prompt=storyboard["visual_bible"].get("negative", DEFAULT_NEGATIVE_PROMPT),
+        system_prompt="Preserve the visual bible and continuity with all scenes in this mini-film.",
+        audio_enabled=False, audio_voice="fr-FR-VivienneMultilingualNeural", audio_rate="+0%", quality_boost=True,
+    )
+    pipeline = _create_pipeline_for_type(TaskType.SIMPLE, api_key, task_id, dir_name)
+    active_pipelines[task_id] = pipeline
+    tm = TaskManager(task_id, dir_name=dir_name)
+    tm.create(state)
+    scene["status"] = "queued"
+    scene["task_id"] = task_id
+    _launch_background_task(_run_pipeline_with_concurrency(pipeline, state, tm))
+    return {"ok": True, "task_id": task_id, "scene": scene, "storyboard_id": storyboard_id}
 
 
 # ═══════════════════════════════════════════════════

@@ -1178,8 +1178,8 @@ function openImageMode() {
   currentMode = 'image';
   document.querySelectorAll('#mode-tabs .mode-tab').forEach(tab => {
     const active = tab.id === 'tab-image';
-    tab.className = tab.className.replace(/bg-gray-800\\/50 border-gray-700\\/50 text-gray-400/g, active ? 'bg-blue-600\\/20 border-blue-500\\/30 text-blue-300' : 'bg-gray-800\\/50 border-gray-700\\/50 text-gray-400');
-    if (!active) tab.className = tab.className.replace(/bg-blue-600\\/20 border-blue-500\\/30 text-blue-300/g, 'bg-gray-800\\/50 border-gray-700\\/50 text-gray-400');
+    tab.className = tab.className.replace(/bg-gray-800\/50 border-gray-700\/50 text-gray-400/g, active ? 'bg-blue-600\\/20 border-blue-500\\/30 text-blue-300' : 'bg-gray-800\\/50 border-gray-700\\/50 text-gray-400');
+    if (!active) tab.className = tab.className.replace(/bg-blue-600\/20 border-blue-500\/30 text-blue-300/g, 'bg-gray-800\\/50 border-gray-700\\/50 text-gray-400');
   });
   try { syncHeaderNav('image'); } catch (e) {}
   form.scrollIntoView({ behavior: 'smooth', block: 'start' });

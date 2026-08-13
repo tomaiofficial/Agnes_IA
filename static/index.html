@@ -596,12 +596,12 @@
         <div class="mb-4 rounded-xl border border-violet-400/20 bg-violet-400/[.05] p-3">
           <div class="flex items-center justify-between gap-2 mb-2"><label class="k-label" style="margin-bottom:0;">✦ Style de génération</label><span class="k-chip" style="color:#c4b5fd;border-color:rgba(167,139,250,.25);">Gratuit</span></div>
           <select id="s_generation_style" class="k-field" onchange="onGenerationStyleChange()">
-            <option value="veo-style" selected>Veo-style cinématique — Agnes Video</option>
+            <option value="veo-style" selected>Agnes Cinéma — moteur officiel</option>
             <option value="natural">Réaliste naturel</option>
             <option value="social">Clip social dynamique</option>
           </select>
-          <p class="k-note mt-1.5">Le mode Veo-style améliore automatiquement caméra, lumière, mouvement, profondeur et continuité. Il s’agit d’un style de prompt gratuit, pas de l’API Google Veo 3.</p>
-          <button type="button" class="btn-k btn-ghost-k text-xs mt-2" onclick="applyVeoStylePrompt()">✦ Améliorer mon prompt comme Veo-style</button>
+          <p class="k-note mt-1.5">Le mode Agnes Cinéma améliore automatiquement la caméra, la lumière, le mouvement, la profondeur et la continuité. Il s’agit du style créatif officiel d’Agnes.</p>
+          <button type="button" class="btn-k btn-ghost-k text-xs mt-2" onclick="applyVeoStylePrompt()">✦ Améliorer mon prompt avec Agnes Cinéma</button>
         </div>
 
         <!-- Image de référence (i2v) -->
@@ -909,7 +909,7 @@
 <!-- Footer -->
 <footer style="text-align:center;padding-bottom:26px;">
   <div style="border-top:1px solid var(--line);padding-top:22px;margin-top:8px;">
-    <p style="font-size:11px;color:#4a4a4a;">Agnes Video Generator © 2026 — interface inspirée de Kling AI</p>
+    <p style="font-size:11px;color:#4a4a4a;">Agnes Video Generator © 2026 — workspace créatif Agnes</p>
   </div>
 </footer>
 
@@ -1338,7 +1338,7 @@ function applyVeoStylePrompt(){
   if (!field || !field.value.trim()) return alert('Écrivez d’abord une idée de scène.');
   field.value = buildVeoStylePrompt(field.value);
   field.dispatchEvent(new Event('input', {bubbles:true}));
-  if (typeof showToast === 'function') showToast('✦ Prompt Veo-style appliqué', 3500);
+  if (typeof showToast === 'function') showToast('✦ Prompt Agnes Cinéma appliqué', 3500);
 }
 function onGenerationStyleChange(){
   const field=document.getElementById('s_prompt');

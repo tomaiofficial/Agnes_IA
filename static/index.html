@@ -303,7 +303,7 @@
   <nav class="header-nav">
     <a onclick="switchMode('video');return false;" data-nav="video">Génération</a>
     <a href="#vibes" onclick="closeWelcome(); openGalleryFeed(); syncHeaderNav('gallery'); return false;" data-nav="gallery" aria-label="Ouvrir Vibes">For You</a>
-    <a onclick="switchMode('image');return false;" data-nav="image" class="nav-hide-sm">Image</a>
+    <a href="#image" onclick="openImageMode(); return false;" data-nav="image" class="nav-hide-sm" aria-label="Ouvrir le générateur d’images">Image</a>
     <a onclick="switchMode('list');return false;" data-nav="list" class="nav-hide-sm">Tâches</a>
     <a href="#" onclick="togglePseudoPopover();return false;" id="pseudo-btn" style="padding:8px 12px;background:rgba(255,255,255,0.06);border:1px solid var(--line);">
       <span id="pseudo-display" style="font-size:13px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">👤</span>
@@ -448,7 +448,7 @@
       <button onclick="switchMode('video')" id="tab-video" class="mode-tab bg-blue-600/20 border-blue-500/30 text-blue-300">
         <span class="ico">🎬</span>Vidéo
       </button>
-      <button onclick="switchMode('image')" id="tab-image" class="mode-tab bg-gray-800/50 border-gray-700/50 text-gray-400">
+      <button onclick="openImageMode()" id="tab-image" class="mode-tab bg-gray-800/50 border-gray-700/50 text-gray-400">
         <span class="ico">🖼️</span>Image
       </button>
     </div>
@@ -1149,6 +1149,26 @@ function switchMode(mode) {
   if (mode === 'gallery') openGalleryFeed(); else closeGalleryFeed();
 }
 
+function openImageMode() {
+  // Chemin direct pour le bouton Image : aucune dépendance au wrapper de navigation.
+  closeWelcome();
+  const ids = ['form-video', 'panel-list', 'panel-gallery'];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) { el.classList.add('hidden'); el.style.display = ''; } });
+  const form = document.getElementById('form-image');
+  if (!form) return;
+  form.classList.remove('hidden', 'collapsed');
+  form.style.display = 'block';
+  const progress = document.getElementById('progress-panel');
+  if (progress && !isTaskRunning) progress.classList.add('hidden');
+  currentMode = 'image';
+  document.querySelectorAll('#mode-tabs .mode-tab').forEach(tab => {
+    const active = tab.id === 'tab-image';
+    tab.className = tab.className.replace(/bg-gray-800\\/50 border-gray-700\\/50 text-gray-400/g, active ? 'bg-blue-600\\/20 border-blue-500\\/30 text-blue-300' : 'bg-gray-800\\/50 border-gray-700\\/50 text-gray-400');
+    if (!active) tab.className = tab.className.replace(/bg-blue-600\\/20 border-blue-500\\/30 text-blue-300/g, 'bg-gray-800\\/50 border-gray-700\\/50 text-gray-400');
+  });
+  try { syncHeaderNav('image'); } catch (e) {}
+  form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 function onSimpleModeChange() {
   const mode = document.getElementById('s_mode').value;
   document.getElementById('s_ref_section').classList.toggle('hidden', mode === 't2v');

@@ -15,7 +15,6 @@ from core.api.error_collector import collect_error, collect_error_from_exception
 from core.api.rate_limiter import get_rate_limiter
 from core.config import get_agnes_base_url, get_agnes_api_root
 from utils.video import download_video
-from core.api.rewind_video import RewindVideoAPI
 
 logger = logging.getLogger(__name__)
 
@@ -56,22 +55,15 @@ class AgnesVideoAPI:
         poll_interval: float = 3.0,
     ):
         self.api_key = api_key
-        self.model = model
+        self.model = "agnes-video-v2.0"
         self.default_duration = default_duration
         self.max_retries = max_retries
         self.retry_base_delay = retry_base_delay
         self.on_retry = on_retry
         self.poll_interval = poll_interval
         self.shutdown_event = None
-        self._rewind_api = None
-        if model.startswith(("rewind:", "rewind/")):
-            if os.environ.get("REWIND_API_KEY", "").strip():
-                self._rewind_api = RewindVideoAPI(model=model, poll_interval=poll_interval)
-            else:
-                # Fallback explicite : le sélecteur reste utilisable même avant
-                # l'ajout de la clé Render, sans envoyer un faux modèle à Agnes.
-                logger.warning("[RewindVideo] REWIND_API_KEY absente : fallback vers Agnes Video")
-                model = "agnes-video-v2.0"
+        # Agnes Video v2.0 est l’unique moteur officiel supporté.
+        # Les modèles externes ne sont volontairement pas transmis à l’API.
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
@@ -234,6 +226,7 @@ class AgnesVideoAPI:
         last_status = ""
         poll_count = 0
         consecutive_failures = 0
+        rate_limit_streak = 0
         start_time = asyncio.get_event_loop().time()
         curl_cmd = (
             f'curl -s -H "Authorization: Bearer $AGNES_API_KEY" '
@@ -285,6 +278,7 @@ class AgnesVideoAPI:
                 result = resp.json()
                 poll_count += 1
                 consecutive_failures = 0  # reset on success
+                rate_limit_streak = 0
 
                 # Detect API-level error responses (e.g. content_policy_violation)
                 # These return HTTP 200 with {"error": {...}} and no "status" field
@@ -343,10 +337,26 @@ class AgnesVideoAPI:
                         retry_after = int(ra) if ra and str(ra).isdigit() else 0
                     except Exception:
                         retry_after = 0
-                    pause = retry_after if retry_after > 0 else 8
+                    rate_limit_streak += 1
+                    pause = retry_after if retry_after > 0 else min(8 * (2 ** (rate_limit_streak - 1)), 60)
+                    if rate_limit_streak >= 6:
+                        error_msg = (
+                            f"[AgnesVideo] Le fournisseur limite le suivi de la vidéo après "
+                            f"{rate_limit_streak} réponses HTTP 429. Réessayez dans quelques minutes."
+                        )
+                        logger.error(error_msg)
+                        collect_error(
+                            "video", "poll_task",
+                            prompt=curl_cmd,
+                            error_type="RateLimit429Exhausted",
+                            error_message=error_msg,
+                            status_code=429,
+                            extra={"video_id": video_id[:16], "rate_limit_streak": rate_limit_streak},
+                        )
+                        raise RuntimeError(error_msg)
                     logger.warning(
                         f"[AgnesVideo] 429 rate limit au polling de {video_id[:16]}, "
-                        f"pause {pause}s (la vidéo reste en cours)..."
+                        f"pause progressive {pause}s (tentative {rate_limit_streak}/5)..."
                     )
                     collect_error(
                         "video", "poll_task",
@@ -622,20 +632,6 @@ class AgnesVideoAPI:
         progress_callback=None,
         **kwargs,
     ) -> VideoOutput:
-        if self._rewind_api is not None:
-            resolved_refs = []
-            for ref in reference_image_paths or []:
-                resolved_refs.append(await self._resolve_image_ref(ref))
-            job_id = await self._rewind_api.submit_video(
-                prompt=prompt,
-                reference_image_paths=resolved_refs,
-                duration=duration,
-                width=width,
-                height=height,
-                negative_prompt=negative_prompt,
-                **kwargs,
-            )
-            return await self._rewind_api.wait_for_video(job_id, progress_callback)
         video_id = await self.submit_video(
             prompt=prompt,
             reference_image_paths=reference_image_paths,
@@ -659,21 +655,6 @@ class AgnesVideoAPI:
         negative_prompt: Optional[str] = None,
         **kwargs,
     ) -> str:
-        if self._rewind_api is not None:
-            resolved_refs = []
-            for ref in reference_image_paths or []:
-                resolved_refs.append(await self._resolve_image_ref(ref))
-            job_id = await self._rewind_api.submit_video(
-                prompt=prompt,
-                reference_image_paths=resolved_refs,
-                duration=duration,
-                width=width,
-                height=height,
-                negative_prompt=negative_prompt,
-                **kwargs,
-            )
-            return f"rewind:{job_id}"
-
         num_frames, frame_rate = self._get_frame_config(duration, width, height)
 
         payload: dict = {
@@ -727,15 +708,9 @@ class AgnesVideoAPI:
     async def wait_for_video(self, video_id: str, progress_callback=None,
                              max_poll_duration: int = 1800,
                              interval: Optional[float] = None) -> VideoOutput:
-        if self._rewind_api is not None and video_id.startswith("rewind:"):
-            self._rewind_api.max_poll_duration = max_poll_duration
-            if interval is not None:
-                self._rewind_api.poll_interval = interval
-            return await self._rewind_api.wait_for_video(video_id[len("rewind:"):], progress_callback)
-
-        # Intervalle de polling : défaut = poll_interval du constructeur
-        # (3 s pour les utilisateurs, 15 s pour les bots → préserve le rate limiter global)
-        poll_interval = interval if interval is not None else self.poll_interval
+        # Intervalle de polling protégé : 8 s minimum pour éviter le HTTP 429.
+        # Les réponses 429 appliquent ensuite un backoff progressif jusqu’à 60 s.
+        poll_interval = max(interval if interval is not None else self.poll_interval, 8.0)
         try:
             final = await self._poll_task(
                 video_id,

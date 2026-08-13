@@ -267,7 +267,22 @@
     nav.header-nav .nav-hide-sm { display:none; }
   }
   @media (max-width: 560px) {
-    header.app-header { height: 56px; padding: 0 12px; }
+    html, body { max-width: 100%; overflow-x: hidden; }
+    header.app-header {
+      height: 56px; padding: 0 10px; gap: 6px; overflow: hidden;
+    }
+    header.app-header .logo { flex: 0 0 auto; min-width: 0; gap: 7px; font-size: 16px; }
+    header.app-header .logo-badge { width: 30px; height: 30px; }
+    nav.header-nav {
+      min-width: 0; flex: 1 1 auto; justify-content: flex-end; gap: 0; overflow: hidden;
+    }
+    nav.header-nav a {
+      flex: 0 0 auto; white-space: nowrap; font-size: 12px; padding: 7px 7px;
+    }
+    nav.header-nav a[data-nav="gallery"] { max-width: 62px; overflow: hidden; text-overflow: ellipsis; }
+    nav.header-nav a#pseudo-btn { padding-left: 7px !important; padding-right: 7px !important; }
+    nav.header-nav a#pseudo-btn #pseudo-display { display: block; max-width: 22px !important; }
+    .header-right { display: none; }
     .fy-grid { grid-template-columns:repeat(auto-fill, minmax(130px,1fr)); gap:9px; }
   }
   @media (max-width: 480px) {
@@ -2955,7 +2970,11 @@ document.addEventListener('DOMContentLoaded', () => {
   try {
     const r = await fetchWithAuth(API_BASE + '/api/config');
     const d = await r.json();
-    if (d.api_key) setApiKeyConfiguredUI(d.source, d.can_clear);
+    // Le backend peut utiliser une clé env/config/fallback masquée. La source
+    // est donc la vérité d’affichage, même si le champ api_key est absent sur
+    // une ancienne version du serveur.
+    if (d.source && d.source !== 'none') setApiKeyConfiguredUI(d.source, d.can_clear);
+    else if (d.api_key) setApiKeyConfiguredUI('config', d.can_clear);
     // v9.2: sélecteur de modèle vidéo — charge le catalogue Agnes et
     // présélectionne le modèle actif (d.models.video).
     currentSelectedModels = d.models || null;

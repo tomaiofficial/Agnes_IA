@@ -904,12 +904,8 @@ async def root_index_html():
 @app.get("/studio")
 @app.get("/studio.html")
 async def studio_page():
-    """Page dédiée « Agnes Studio » : génération IA illimitée via Puter.js
-    (txt2vid / txt2img), côté client, sans clé API ni quota."""
-    studio_path = os.path.join(os.path.dirname(__file__), "static", "studio.html")
-    if os.path.exists(studio_path):
-        return FileResponse(studio_path)
-    return RedirectResponse("/", status_code=307)
+    """Studio temporairement désactivé."""
+    raise HTTPException(status_code=404, detail="Studio temporairement désactivé")
 
 
 @app.head("/index.html")

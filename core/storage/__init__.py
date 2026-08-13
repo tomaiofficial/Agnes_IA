@@ -25,11 +25,34 @@ logger = logging.getLogger(__name__)
 
 _community_store: Optional[CommunityStore] = None
 _task_store: Optional[TaskStore] = None
+# Coupe-circuit de processus : une restriction Supabase (402 avec
+# exceed_cached_egress_quota) ne peut pas être réparée par un retry. Sans ce
+# drapeau, chaque rafraîchissement de la galerie répétait la requête et
+# remplissait les logs. Le stockage local reste disponible pendant ce temps.
+_supabase_disabled = False
+_supabase_disabled_reason = ""
+
+
+def supabase_temporarily_disabled() -> bool:
+    return _supabase_disabled
+
+
+def _disable_supabase(reason: str) -> None:
+    global _supabase_disabled, _supabase_disabled_reason
+    if _supabase_disabled:
+        return
+    _supabase_disabled = True
+    _supabase_disabled_reason = reason[:240]
+    logger.error(
+        "[Storage] Supabase désactivé pour ce processus (%s). "
+        "Le stockage local est utilisé jusqu'au prochain redémarrage.",
+        _supabase_disabled_reason,
+    )
 
 
 def storage_mode() -> str:
-    """'supabase' si le stockage persistant est configuré, sinon 'local'."""
-    return "supabase" if supabase_backend.is_configured() else "local"
+    """'supabase' si disponible, sinon 'local'."""
+    return "local" if _supabase_disabled else ("supabase" if supabase_backend.is_configured() else "local")
 
 
 def is_persistent_storage() -> bool:
@@ -48,21 +71,23 @@ class _FallbackCommunityStore(CommunityStore):
     def __init__(self):
         self._supabase = supabase_backend.SupabaseCommunityStore() if is_persistent_storage() else None
         self._local = local_backend.LocalCommunityStore()
-        self._use_supabase = self._supabase is not None
+        self._use_supabase = self._supabase is not None and not supabase_temporarily_disabled()
         logger.info(f"[Storage] CommunityStore initialisé (mode={'supabase+fallback' if self._use_supabase else 'local'}).")
 
     def _call(self, method_name: str, *args, **kwargs):
-        if not self._use_supabase:
+        if not self._use_supabase or supabase_temporarily_disabled():
             return getattr(self._local, method_name)(*args, **kwargs)
         try:
             return getattr(self._supabase, method_name)(*args, **kwargs)
         except Exception as e:
-            # v10.1: repli local (temporaire) sur TOUTE erreur Supabase
-            # (quota 402/403, projet suspendu, réseau, RLS, etc.). La galerie
-            # reste fonctionnelle tant que Supabase est indisponible, et
-            # récupère automatiquement dès que la couche persistante est
-            # rétablie (sans redémarrage).
-            logger.warning(f"[Storage] Supabase '{method_name}' a échoué ({e}) → repli local (temporaire).")
+            if _is_quota_error(e):
+                _disable_supabase(f"{method_name}: {e}")
+            else:
+                logger.warning(
+                    "[Storage] Supabase '%s' a échoué (%s) → repli local.",
+                    method_name,
+                    e,
+                )
             return getattr(self._local, method_name)(*args, **kwargs)
 
     # Méthodes abstraites (obligatoires pour instancier CommunityStore)
@@ -109,19 +134,23 @@ class _FallbackTaskStore(TaskStore):
     def __init__(self):
         self._supabase = supabase_backend.SupabaseTaskStore() if is_persistent_storage() else None
         self._local = local_backend.LocalTaskStore()
-        self._use_supabase = self._supabase is not None
+        self._use_supabase = self._supabase is not None and not supabase_temporarily_disabled()
         logger.info(f"[Storage] TaskStore initialisé (mode={'supabase+fallback' if self._use_supabase else 'local'}).")
 
     def _call(self, method_name: str, *args, **kwargs):
-        if not self._use_supabase:
+        if not self._use_supabase or supabase_temporarily_disabled():
             return getattr(self._local, method_name)(*args, **kwargs)
         try:
             return getattr(self._supabase, method_name)(*args, **kwargs)
         except Exception as e:
-            # v10.1: repli local temporaire sur TOUTE erreur Supabase (voir
-            # CommunityStore) — réessaie Supabase ensuite pour récupération
-            # automatique dès que la couche persistante est rétablie.
-            logger.warning(f"[Storage] Supabase '{method_name}' a échoué ({e}) → repli local (temporaire).")
+            if _is_quota_error(e):
+                _disable_supabase(f"{method_name}: {e}")
+            else:
+                logger.warning(
+                    "[Storage] Supabase '%s' a échoué (%s) → repli local.",
+                    method_name,
+                    e,
+                )
             return getattr(self._local, method_name)(*args, **kwargs)
 
     # Méthodes abstraites (obligatoires pour instancier TaskStore)

@@ -1,24 +1,22 @@
-name: Keep Alive (Render)
+name: Keep Alive (Hugging Face)
 
 # ════════════════════════════════════════════════════
-# Gardien d'éveil : évite le spin-down de l'instance Render
-# (plan Free : mise en veille après ~15 min sans trafic).
+# Gardien d'éveil : évite le spin-down de l'instance
+# Hugging Face Spaces (plan Free : mise en veille après
+# ~48 h sans trafic).
 #
 # Pourquoi toutes les 3 min (et pas 5) :
 #   Les cron de GitHub Actions peuvent être retardés de plusieurs minutes
-#   en cas de charge. Avec 5 min d'intervalle, un retard cumulé > 15 min
-#   laissait l'instance se mettre en veille puis redémarrer au ping suivant
-#   (cycle visible toutes les ~20-30 min). 3 min donnent une marge ×5.
+#   en cas de charge. 3 min donnent une marge confortable.
 #
 # Pourquoi /api/health et pas / :
 #   `/` renvoie la page HTML (100 Ko) ; /api/health répond un petit JSON
 #   immédiatement. Moins de charge serveur, même effet anti-spin-down.
 #
 # IMPORTANT — pour SUPPRIMER la veille définitivement :
-#   Le plan Free de Render spin-down est inévitable si un retard laisse
-#   passer > 15 min sans requête. La seule solution garantie est un plan
-#   payant (Starter, ~7 $/mois) : l'instance ne se met plus JAMAIS en veille.
-#   Gardien GitHub Actions = solution gratuite best-effort, pas un contrat.
+#   Le plan Free de Hugging Face met le Space en veille après ~48 h sans
+#   trafic. Le gardien GitHub Actions = solution gratuite best-effort,
+#   pas un contrat. Un upgrade CPU (payant) supprime la veille.
 # ════════════════════════════════════════════════════
 
 on:
@@ -33,7 +31,7 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Render /api/health (réveille + maintient éveillé)
+      - name: Ping HF Space /api/health (réveille + maintient éveillé)
         run: |
           curl -sS -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" \
-            https://agnes-ia.onrender.com/api/health --max-time 90
+            https://agnes-ia.hf.space/api/health --max-time 90

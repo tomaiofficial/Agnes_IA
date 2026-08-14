@@ -42,6 +42,9 @@ RUN if [ -n "$PIP_INDEX_URL" ]; then \
 # 拷贝应用代码（resource/fonts 含 CJK 字体，必须随镜像）
 COPY . .
 
+# server.py 内部以 host=0.0.0.0 port=$PORT 启动（PORT env，Hugging Face Spaces
+# fournit 7860, Render/Railway fournissent leur propre PORT）。8765 = défaut local.
+EXPOSE 7860
 EXPOSE 8765
 
 # 声明持久化卷：即使不加 -v 直接 docker run，以下两个目录也会落到 Docker 管理的卷里，

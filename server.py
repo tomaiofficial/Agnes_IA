@@ -893,6 +893,22 @@ async def root():
     return {"message": "Agnes Video Generator API"}
 
 
+@app.get("/image")
+@app.get("/image.html")
+async def image_page():
+    """Page dédiée au générateur d'image.
+
+    Sert le même index.html que `/` : le front détecte le pathname `/image`
+    et affiche directement le formulaire image en haut de page, sans le
+    titre vidéo ni les autres sections (v10 redesign — clic « Image »
+    = vraie navigation, plus de scroll vers un formulaire caché en bas).
+    """
+    index_path = os.path.join(os.path.dirname(__file__), "static", "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"message": "Agnes Video Generator API"}
+
+
 @app.get("/index.html")
 async def root_index_html():
     """Compat : les URL `/index.html` (bookmark, cache-buster `?v=...`) donnaient

@@ -390,10 +390,10 @@
   </a>
 
   <nav class="header-nav">
-    <a onclick="switchMode('video');return false;" data-nav="video">Génération</a>
+    <a href="/" onclick="goMode('video'); return false;" data-nav="video">Génération</a>
     <a href="#vibes" onclick="closeWelcome(); openGalleryFeed(); syncHeaderNav('gallery'); return false;" data-nav="gallery" aria-label="Ouvrir Vibes">For You</a>
-    <a href="#image" onclick="openImageMode(); return false;" data-nav="image" class="nav-hide-sm" aria-label="Ouvrir le générateur d’images">Image</a>
-    <a onclick="switchMode('list');return false;" data-nav="list" class="nav-hide-sm">Tâches</a>
+    <a href="/image" onclick="goMode('image'); return false;" data-nav="image" class="nav-hide-sm" aria-label="Ouvrir le générateur d’images">Image</a>
+    <a href="/?mode=list" onclick="goMode('list'); return false;" data-nav="list" class="nav-hide-sm">Tâches</a>
     <a href="#" onclick="togglePseudoPopover();return false;" id="pseudo-btn" style="padding:8px 12px;background:rgba(255,255,255,0.06);border:1px solid var(--line);">
       <span id="pseudo-display" style="font-size:13px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">👤</span>
     </a>
@@ -473,7 +473,7 @@
     <!-- Annonce génération d’image en accès anticipé -->
     <div id="image-early-access" class="mb-4 rounded-2xl p-4 sm:p-5" style="display:none;background:linear-gradient(135deg,rgba(34,211,238,.10),rgba(124,58,237,.12));border:1px solid rgba(103,232,249,.28);box-shadow:0 12px 35px rgba(34,211,238,.08);">
       <div class="flex items-start justify-between gap-3">
-        <div class="flex gap-3 min-w-0"><div class="text-2xl">🖼️</div><div><strong class="text-sm sm:text-base text-cyan-100">La génération d’image est disponible</strong><p class="mt-1 text-xs sm:text-sm text-gray-400 leading-relaxed">La fonction est accessible dès maintenant. Elle est encore en amélioration et sera bientôt ultra-opérationnelle, mais vous pouvez déjà générer vos images avec Agnes.</p><button type="button" onclick="openImageMode();dismissImageEarlyAccess();" class="btn-k btn-primary-k mt-3">Ouvrir Image →</button></div></div>
+        <div class="flex gap-3 min-w-0"><div class="text-2xl">🖼️</div><div><strong class="text-sm sm:text-base text-cyan-100">La génération d’image est disponible</strong><p class="mt-1 text-xs sm:text-sm text-gray-400 leading-relaxed">La fonction est accessible dès maintenant. Elle est encore en amélioration et sera bientôt ultra-opérationnelle, mais vous pouvez déjà générer vos images avec Agnes.</p>        <button type="button" onclick="goMode('image');dismissImageEarlyAccess();" class="btn-k btn-primary-k mt-3">Ouvrir Image →</button></div></div>
         <button type="button" onclick="dismissImageEarlyAccess()" class="shrink-0 text-gray-500 hover:text-white" aria-label="Fermer l’annonce Image">✕</button>
       </div>
     </div>
@@ -534,10 +534,13 @@
         if (el) el.classList.add('hidden');
         localStorage.setItem('agnes_welcome_seen', '1');
       }
-      if (!localStorage.getItem('agnes_welcome_seen')) setTimeout(() => openWelcome(false), 450);
+      // La page /image a son propre affichage dédié : pas de présentation
+      if (!window.location.pathname.startsWith('/image') && !localStorage.getItem('agnes_welcome_seen')) setTimeout(() => openWelcome(false), 450);
 
       // Scroll vers le formulaire de génération (bouton Generate du header)
       function scrollToGenerate() {
+        // Page image dédiée : le bouton Générer ramène au générateur vidéo
+        if (window.location.pathname.startsWith('/image')) { window.location.href = '/'; return; }
         switchMode('video');
         const el = document.getElementById('s_prompt');
         if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => el.focus(), 400); }
@@ -548,6 +551,63 @@
           a.classList.toggle('active-nav', a.dataset.nav === mode);
         });
       }
+      // Navigation multi-pages : /image = page dédiée, / = générateur vidéo
+      function goMode(mode) {
+        const onImagePage = window.location.pathname.startsWith('/image');
+        closeWelcome();
+        if (mode === 'image') {
+          if (!onImagePage) { window.location.href = '/image'; return; }
+          syncHeaderNav('image');
+          return;
+        }
+        if (mode === 'list') {
+          if (onImagePage) { window.location.href = '/?mode=list'; return; }
+          switchMode('list'); syncHeaderNav('list');
+          return;
+        }
+        if (mode === 'video') {
+          if (onImagePage) { window.location.href = '/'; return; }
+          switchMode('video'); syncHeaderNav('video');
+          return;
+        }
+        switchMode(mode); syncHeaderNav(mode);
+      }
+      // Au chargement sur /?mode=list : ouvre directement le panneau Tâches
+      function applyUrlMode() {
+        try {
+          const q = new URLSearchParams(window.location.search).get('mode');
+          if (q === 'list') { switchMode('list'); syncHeaderNav('list'); }
+          else if (q === 'gallery') { switchMode('gallery'); syncHeaderNav('gallery'); }
+          else if (q === 'i2v') {
+            // Retour depuis la page /image : mode Image → vidéo pré-activé
+            switchMode('video'); syncHeaderNav('video');
+            const sel = document.getElementById('s_mode');
+            if (sel) { sel.value = 'i2v'; onSimpleModeChange(); }
+            restoreGeneratedImageAsReference();
+          }
+        } catch (e) {}
+      }
+      // Télécharge l’image générée sur /image et l’attache au champ référence i2v
+      async function restoreGeneratedImageAsReference() {
+        let url = null;
+        try { url = sessionStorage.getItem('agnes_i2v_url'); } catch (e) {}
+        if (!url) return;
+        try { sessionStorage.removeItem('agnes_i2v_url'); } catch (e) {}
+        try {
+          const r = await fetchWithAuth(url);
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          const blob = await r.blob();
+          const file = new File([blob], 'agnes-image.png', { type: blob.type || 'image/png' });
+          const input = document.getElementById('s_ref_image');
+          if (!input) return;
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          input.files = dt.files;
+          showToast('🖼️ Image générée attachée comme référence', 4000);
+        } catch (e) {
+          showToast('Référence : image introuvable, ajoute-la manuellement.', 4500);
+        }
+      }
     </script>
 
     <!-- Onglets mode -->
@@ -555,7 +615,7 @@
       <button onclick="switchMode('video')" id="tab-video" class="mode-tab bg-blue-600/20 border-blue-500/30 text-blue-300">
         <span class="ico">🎬</span>Vidéo
       </button>
-      <button onclick="openImageMode()" id="tab-image" class="mode-tab bg-gray-800/50 border-gray-700/50 text-gray-400">
+      <button onclick="goMode('image')" id="tab-image" class="mode-tab bg-gray-800/50 border-gray-700/50 text-gray-400">
         <span class="ico">🖼️</span>Image
       </button>
     </div>
@@ -1257,37 +1317,59 @@ function switchMode(mode) {
 }
 
 function openImageMode() {
-  // Chemin direct pour le bouton Image : aucune dépendance au wrapper de navigation.
+  // v10 : la génération d’image vit sur sa propre page (/image).
+  // Ceci redirige (ou confirme l’affichage si on y est déjà).
+  const onImagePage = location.pathname.startsWith('/image');
+  if (!onImagePage) { location.href = '/image'; return; }
   closeWelcome();
-  const ids = ['form-video', 'panel-list', 'panel-gallery'];
-  ids.forEach(id => { const el = document.getElementById(id); if (el) { el.classList.add('hidden'); el.style.display = ''; } });
   const form = document.getElementById('form-image');
-  if (!form) return;
-  form.classList.remove('hidden', 'collapsed');
-  form.classList.add('image-mode-visible');
-  form.style.display = 'block';
-  form.style.visibility = 'visible';
-  form.style.opacity = '1';
+  if (form) {
+    form.classList.remove('hidden', 'collapsed');
+    form.classList.add('image-mode-visible');
+    form.style.display = 'block';
+    form.style.visibility = 'visible';
+    form.style.opacity = '1';
+  }
+  try { syncHeaderNav('image'); } catch (e) {}
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ═══════════════════════════════════════════════════
+// Page dédiée /image (v10) : affiche uniquement le
+// formulaire de génération d’image en haut de page.
+// ═══════════════════════════════════════════════════
+function initImagePage() {
+  // Masquer tout le contenu du générateur vidéo : titre, annonces,
+  // onglets, atelier scènes, formulaire vidéo, tâches, galerie…
+  const hideIds = [
+    'page-title', 'apikey-section', 'model-announcement',
+    'image-early-access', 'wip-banner', 'mode-tabs',
+    'scene-studio', 'form-video', 'tab-list-outer',
+    'panel-list', 'panel-gallery', 'home-feed-section'
+  ];
+  hideIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.add('hidden'); el.style.display = 'none'; }
+  });
+  // Le formulaire image devient la page : visible dès le haut.
+  const form = document.getElementById('form-image');
+  if (form) {
+    form.classList.remove('hidden', 'collapsed');
+    form.classList.add('image-mode-visible');
+    form.style.display = 'block';
+    form.style.visibility = 'visible';
+    form.style.opacity = '1';
+    form.style.marginTop = '6px';
+    // Le wrapper sora-form-collapse peut appliquer un état replié
+    const wrapper = form.closest('.sora-form-collapse');
+    if (wrapper) wrapper.classList.remove('collapsed');
+  }
   const progress = document.getElementById('progress-panel');
   if (progress && !isTaskRunning) progress.classList.add('hidden');
+  // Panneau image : titre + le formulaire à part entière
   currentMode = 'image';
-  document.querySelectorAll('#mode-tabs .mode-tab').forEach(tab => {
-    const active = tab.id === 'tab-image';
-    tab.className = tab.className.replace(/bg-gray-800\/50 border-gray-700\/50 text-gray-400/g, active ? 'bg-blue-600\\/20 border-blue-500\\/30 text-blue-300' : 'bg-gray-800\\/50 border-gray-700\\/50 text-gray-400');
-    if (!active) tab.className = tab.className.replace(/bg-blue-600\/20 border-blue-500\/30 text-blue-300/g, 'bg-gray-800\\/50 border-gray-700\\/50 text-gray-400');
-  });
   try { syncHeaderNav('image'); } catch (e) {}
-  // Le header est fixe : positionner le formulaire juste sous celui-ci,
-  // afin que le titre « Générer une image » soit immédiatement visible.
-  requestAnimationFrame(() => {
-    const top = form.getBoundingClientRect().top + window.scrollY - 74;
-    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
-    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
-  setTimeout(() => {
-    const prompt = document.getElementById('i_prompt');
-    if (prompt) prompt.focus({ preventScroll: true });
-  }, 420);
+  window.scrollTo(0, 0);
 }
 function onSimpleModeChange() {
   const mode = document.getElementById('s_mode').value;
@@ -1704,6 +1786,13 @@ async function submitImage() {
 }
 function useGeneratedImageForVideo() {
   if (!window._lastGeneratedImageUrl) return;
+  // Depuis la page /image : retour au générateur vidéo en mode i2v
+  if (location.pathname.startsWith('/image')) {
+    // La tâche vidéo reprendra l’URL de l’image générée
+    try { sessionStorage.setItem('agnes_i2v_url', window._lastGeneratedImageUrl); } catch (e) {}
+    location.href = '/?mode=i2v';
+    return;
+  }
   switchMode('video'); document.getElementById('s_mode').value = 'i2v'; onSimpleModeChange(); showToast('Image prête : ajoute-la au champ de référence pour lancer la vidéo.', 4000);
 }
 
@@ -3073,6 +3162,15 @@ document.addEventListener('DOMContentLoaded', () => {
 // ═══════════════════════════════════════════════════
 (async function init() {
   try {
+    // v10 : page dédiée /image — le formulaire image est LA page, pas un
+    // panneau caché en bas. La config est quand même chargée en arrière-plan
+    // pour que la génération fonctionne immédiatement.
+    const isImagePage = window.location.pathname.startsWith('/image');
+    if (isImagePage) {
+      initImagePage();
+    } else {
+      applyUrlMode();
+    }
     const r = await fetchWithAuth(API_BASE + '/api/config');
     const d = await r.json();
     // Le backend peut utiliser une clé env/config/fallback masquée. La source

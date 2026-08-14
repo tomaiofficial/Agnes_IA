@@ -1,9 +1,9 @@
-name: Keep Alive (Hugging Face)
+name: Keep Alive (Koyeb)
 
 # ════════════════════════════════════════════════════
-# Gardien d'éveil : évite le spin-down de l'instance
-# Hugging Face Spaces (plan Free : mise en veille après
-# ~48 h sans trafic).
+# Gardien d'éveil : évite le scale-to-zero de l'instance
+# Koyeb (plan Free : service mis en pause après ~1 h sans
+# trafic).
 #
 # Pourquoi toutes les 3 min (et pas 5) :
 #   Les cron de GitHub Actions peuvent être retardés de plusieurs minutes
@@ -11,12 +11,12 @@ name: Keep Alive (Hugging Face)
 #
 # Pourquoi /api/health et pas / :
 #   `/` renvoie la page HTML (100 Ko) ; /api/health répond un petit JSON
-#   immédiatement. Moins de charge serveur, même effet anti-spin-down.
+#   immédiatement. Moins de charge serveur, même effet anti-scale-to-zero.
 #
 # IMPORTANT — pour SUPPRIMER la veille définitivement :
-#   Le plan Free de Hugging Face met le Space en veille après ~48 h sans
-#   trafic. Le gardien GitHub Actions = solution gratuite best-effort,
-#   pas un contrat. Un upgrade CPU (payant) supprime la veille.
+#   Le plan Free de Koyeb met le service en pause après ~1 h sans trafic.
+#   Le gardien GitHub Actions = solution gratuite best-effort, pas un
+#   contrat. Un upgrade payant supprime la pause.
 # ════════════════════════════════════════════════════
 
 on:
@@ -31,7 +31,7 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping HF Space /api/health (réveille + maintient éveillé)
+      - name: Ping Koyeb /api/health (réveille + maintient éveillé)
         run: |
           curl -sS -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" \
-            https://agnes-ia.hf.space/api/health --max-time 90
+            https://agnes-ia.koyeb.app/api/health --max-time 90

@@ -1338,7 +1338,22 @@ function openImageMode() {
 // Page dédiée /image (v10) : affiche uniquement le
 // formulaire de génération d’image en haut de page.
 // ═══════════════════════════════════════════════════
+function fixImageFormPlacement() {
+  // v10.1 : form-image était imbriqué DANS form-video (bug → page /image vide).
+  // On le déplace pour qu'il devienne un frère, juste après form-video.
+  const formImage = document.getElementById('form-image');
+  const formVideo = document.getElementById('form-video');
+  if (!formImage || !formVideo) return;
+  if (formVideo.contains(formImage)) {
+    formVideo.parentNode.insertBefore(formImage, formVideo.nextSibling);
+  }
+}
+
 function initImagePage() {
+  // Bug v10 : form-image était imbriqué DANS form-video → sur la page /image,
+  // masquer le formulaire vidéo masquait aussi le formulaire image (page vide).
+  // On le sort de form-video une fois pour toutes : ils deviennent frères.
+  fixImageFormPlacement();
   // Masquer tout le contenu du générateur vidéo : titre, annonces,
   // onglets, atelier scènes, formulaire vidéo, tâches, galerie…
   const hideIds = [
@@ -3162,6 +3177,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // ═══════════════════════════════════════════════════
 (async function init() {
   try {
+    // v10.1 : form-image est sorti de form-video (bug page /image vide)
+    fixImageFormPlacement();
     // v10 : page dédiée /image — le formulaire image est LA page, pas un
     // panneau caché en bas. La config est quand même chargée en arrière-plan
     // pour que la génération fonctionne immédiatement.

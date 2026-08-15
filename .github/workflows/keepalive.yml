@@ -1,13 +1,16 @@
 name: Keep Alive (Render)
 
 # ════════════════════════════════════════════════════
-# Gardien d'éveil : évite le spin-down de l'instance
+# Gardien d'éveil A : évite le spin-down de l'instance
 # Render (plan Free : mise en veille après ~15 min sans
 # trafic).
 #
-# Pourquoi toutes les 3 min (et pas 5) :
-#   Les cron de GitHub Actions peuvent être retardés de plusieurs minutes
-#   en cas de charge. 3 min donnent une marge confortable.
+# Deux gardiens complémentaires (A = minutes paires,
+# B = minutes impaires) pinguent ~1×/min au total :
+#   - keepalive.yml      : */2 * * * *  (0, 2, 4, ... 58)
+#   - keepalive-b.yml    : 1-59/2 * * * * (1, 3, 5, ... 59)
+# Si un gardien est retardé par GitHub Actions, l'autre
+# couvre le trou → la veille devient quasi impossible.
 #
 # Pourquoi /api/health et pas / :
 #   `/` renvoie la page HTML (100 Ko) ; /api/health répond un petit JSON
@@ -15,14 +18,13 @@ name: Keep Alive (Render)
 #
 # IMPORTANT — pour SUPPRIMER la veille définitivement :
 #   Le plan Free de Render spin-down est inévitable si un retard laisse
-#   passer > 15 min sans requête. La seule solution garantie est un plan
-#   payant (Starter, ~7 $/mois) : l'instance ne se met plus JAMAIS en veille.
-#   Gardien GitHub Actions = solution gratuite best-effort, pas un contrat.
+#   passer > 15 min sans requête. Gardien GitHub = solution gratuite
+#   best-effort. Pour une garantie à 100 % : plan Starter (~7 $/mois).
 # ════════════════════════════════════════════════════
 
 on:
   schedule:
-    - cron: '*/3 * * * *'
+    - cron: '*/2 * * * *'
   workflow_dispatch:
 
 permissions:

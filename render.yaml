@@ -5,9 +5,9 @@
 #   - Plan Free : l'instance se met en veille après ~15 min sans trafic,
 #     puis redémarre à la prochaine requête (cycle visible toutes les
 #     20-30 min). Ce n'est PAS un bug : c'est le comportement du plan Free.
-#   - Gardien d'éveil : .github/workflows/keepalive.yml pinge /api/health
-#     toutes les 3 min pour maintenir l'instance éveillée (gratuit,
-#     best-effort — les cron GitHub peuvent être retardés).
+#   - Gardien d'éveil : deux workflows GitHub Actions pingent /api/health
+#     ~1×/min (keepalive.yml + keepalive-b.yml) pour maintenir l'instance
+#     éveillée (gratuit, best-effort — les cron GitHub peuvent être retardés).
 #   - Solution DÉFINITIVE : passer ce service en plan payant Starter
 #     (~7 $/mois) → plus jamais de veille ni de redémarrage. Mettre
 #     `plan: starter` ci-dessous et cliquer Deploy dans le dashboard Render.

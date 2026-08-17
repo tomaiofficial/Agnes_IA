@@ -2,17 +2,16 @@ name: Keep Alive B (Render)
 
 # ════════════════════════════════════════════════════
 # Gardien d'éveil B — complément de keepalive.yml.
-# Ping aux MINUTES IMPAIRES (1, 3, 5, ... 59) pendant
-# que keepalive.yml couvre les minutes paires (0, 2, ...).
-# Ensemble : ~1 requête par minute → le spin-down Render
-# (~15 min sans trafic) devient quasi impossible.
+# Ping toutes les minutes (même que A) pour une redondance
+# maximale. GitHub Actions peut retarder les crons de 5-10 min,
+# donc deux workflows identiques réduisent le risque de lacune.
 #
 # Plan Free = best-effort. Garantie à 100 % : plan Starter.
 # ════════════════════════════════════════════════════
 
 on:
   schedule:
-    - cron: '1-59/2 * * * *'
+    - cron: '* * * * *'
   workflow_dispatch:
 
 permissions:

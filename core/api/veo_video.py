@@ -1,7 +1,7 @@
 """core.api.veo_video — Google Veo 3.1 API client (Gemini API)
 
-Utilise l'API Gemini de Google pour générer des vidéos avec Veo 3.1.
-Supporte text-to-video et image-to-video avec audio natif.
+Utilise l'API Gemini de Google (predictLongRunning) pour générer des vidéos
+avec Veo 3.1. Supporte text-to-video et image-to-video avec audio natif.
 
 API Reference: https://ai.google.dev/gemini-api/docs/video
 """
@@ -10,6 +10,7 @@ import asyncio
 import base64
 import json
 import logging
+import mimetypes
 import os
 import time
 from typing import Callable, List, Optional
@@ -29,36 +30,29 @@ VEO_MODELS = {
     "veo-3.1-fast": "veo-3.1-fast-generate-preview",
 }
 
-# Durées supportées par Veo 3.1 (en secondes)
 VEO_DURATIONS = [4, 6, 8]
-
-# Résolutions supportées
-VEO_RESOLUTIONS = {
-    "720p": "720p",
-    "1080p": "1080p",
-}
-
-# Ratio d'aspect
-VEO_ASPECT_RATIOS = {
-    "16:9": "16:9",
-    "9:16": "9:16",
-    "1:1": "1:1",
-}
 
 _BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 
 class VeoVideoOutput:
     """Sortie vidéo Veo 3.1."""
-    def __init__(self, fmt: str, ext: str, data: str):
+    def __init__(self, fmt: str, ext: str, data):
         self.fmt = fmt
         self.ext = ext
         self.data = data
 
     def save(self, path: str) -> None:
         if self.fmt == "url":
-            from utils.video import download_video
-            download_video(self.data, path)
+            # Télécharger via URL avec auth header
+            headers = {"x-goog-api-key": self.data.get("api_key", "")}
+            url = self.data["url"]
+            logger.info(f"[VeoVideo] Downloading video from {url[:80]}...")
+            resp = requests.get(url, headers=headers, timeout=120)
+            resp.raise_for_status()
+            with open(path, "wb") as f:
+                f.write(resp.content)
+            logger.info(f"[VeoVideo] Downloaded {len(resp.content)} bytes -> {path}")
         elif self.fmt == "bytes":
             raw = self.data
             if isinstance(raw, str):
@@ -70,11 +64,11 @@ class VeoVideoOutput:
 class VeoVideoAPI:
     """Client API Google Veo 3.1 pour la génération vidéo.
 
-    Utilise l'endpoint Gemini API :
-      POST /v1beta/models/{model}:generateVideos
-      GET  /v1beta/operations/{name}
+    Utilise l'endpoint Gemini API (predictLongRunning) :
+      POST /v1beta/models/{model}:predictLongRunning
+      GET  /v1beta/{operationName}
 
-    Auth: clé API Gemini en paramètre URL.
+    Auth: header x-goog-api-key.
     """
 
     def __init__(
@@ -97,39 +91,40 @@ class VeoVideoAPI:
         self.poll_interval = poll_interval
         self.shutdown_event = None
 
-    def _headers(self) -> dict:
+    def _auth_headers(self) -> dict:
         return {
             "Content-Type": "application/json",
+            "x-goog-api-key": self.api_key,
         }
 
-    def _api_url(self, path: str) -> str:
-        return f"{_BASE_URL}{path}?key={self.api_key}"
-
-    async def _resolve_image_ref(self, ref: str) -> Optional[str]:
-        """Convertit une référence image en URL data: ou https:."""
+    async def _resolve_image_ref(self, ref: str) -> Optional[dict]:
+        """Convertit une référence image en format inlineData pour l'API."""
         if ref.startswith(("http://", "https://")):
-            return ref
-        if ref.startswith("data:"):
-            return ref
+            return {"url": ref}
         if os.path.exists(ref):
-            import mimetypes
             with open(ref, "rb") as f:
                 b64 = base64.b64encode(f.read()).decode("utf-8")
             mime = mimetypes.guess_type(ref)[0] or "image/png"
-            return f"data:{mime};base64,{b64}"
-        return ref
+            return {"inlineData": {"mimeType": mime, "data": b64}}
+        if ref.startswith("data:"):
+            # data:mime;base64,XXX
+            parts = ref.split(",", 1)
+            header = parts[0]  # data:image/png;base64
+            b64 = parts[1] if len(parts) > 1 else ""
+            mime = header.split(":")[1].split(";")[0] if ":" in header else "image/png"
+            return {"inlineData": {"mimeType": mime, "data": b64}}
+        return None
 
-    def _normalize_duration(self, seconds: int) -> int:
-        """Veo 3.1 supporte uniquement 4, 6 ou 8 secondes."""
+    def _normalize_duration(self, seconds: int) -> str:
+        """Veo 3.1 supporte uniquement 4, 6 ou 8 secondes (string)."""
         if seconds <= 4:
-            return 4
+            return "4"
         elif seconds <= 6:
-            return 6
+            return "6"
         else:
-            return 8
+            return "8"
 
     def _normalize_aspect_ratio(self, width: int, height: int) -> str:
-        """Convertit WxH en ratio d'aspect Veo."""
         if height > width:
             return "9:16"
         elif width > height:
@@ -149,58 +144,30 @@ class VeoVideoAPI:
         progress_callback=None,
         **kwargs,
     ) -> VeoVideoOutput:
-        """Génère une vidéo avec Veo 3.1.
-
-        Args:
-            prompt: Description de la vidéo.
-            reference_image_paths: Images de référence (optionnel, pour i2v).
-            duration: Durée en secondes (4, 6, ou 8).
-            width: Largeur souhaitée.
-            height: Hauteur souhaitée.
-            resolution: "720p" ou "1080p".
-            generate_audio: Inclure l'audio natif.
-            progress_callback: Callback de progression.
-
-        Returns:
-            VeoVideoOutput avec l'URL de la vidéo.
-        """
         dur = self._normalize_duration(duration or self.default_duration)
         aspect = self._normalize_aspect_ratio(width, height)
-        veo_res = VEO_RESOLUTIONS.get(resolution, "1080p")
+        veo_res = "720p" if "720" in str(resolution) else "1080p"
 
         # Construire le payload (format predictLongRunning)
+        instance = {"prompt": prompt}
+
+        # Image de référence pour i2v
+        if reference_image_paths:
+            img_data = await self._resolve_image_ref(reference_image_paths[0])
+            if img_data:
+                instance["image"] = img_data
+
         payload = {
-            "instances": [
-                {
-                    "prompt": prompt,
-                }
-            ],
+            "instances": [instance],
             "parameters": {
                 "aspectRatio": aspect,
-                "numberOfVideos": 1,
+                "sampleCount": 1,
                 "durationSeconds": dur,
                 "resolution": veo_res,
                 "personGeneration": "allow_adult",
                 "generateAudio": generate_audio,
             },
         }
-
-        # Image de référence pour i2v
-        if reference_image_paths:
-            ref_url = await self._resolve_image_ref(reference_image_paths[0])
-            if ref_url:
-                if ref_url.startswith("data:"):
-                    b64_data = ref_url.split(",", 1)[1] if "," in ref_url else ref_url
-                    import mimetypes
-                    mime = mimetypes.guess_type("image.png")[0] or "image/png"
-                    payload["instances"][0]["image"] = {
-                        "bytesBase64Encoded": b64_data,
-                        "mimeType": mime,
-                    }
-                elif ref_url.startswith(("http://", "https://")):
-                    payload["instances"][0]["image"] = {
-                        "url": ref_url,
-                    }
 
         mode_desc = "text-to-video" if not reference_image_paths else "image-to-video"
         logger.info(f"[VeoVideo] {mode_desc}: {prompt[:80]}... (model={self.model_name}, {dur}s, {veo_res}, {aspect})")
@@ -217,7 +184,7 @@ class VeoVideoAPI:
             raise RuntimeError(f"[VeoVideo] Pas d'URL de vidéo dans la réponse: {json.dumps(result)[:500]}")
 
         logger.info(f"[VeoVideo] Done: {video_url[:80]}...")
-        return VeoVideoOutput(fmt="url", ext="mp4", data=video_url)
+        return VeoVideoOutput(fmt="url", ext="mp4", data={"url": video_url, "api_key": self.api_key})
 
     async def _submit(self, payload: dict, mode_desc: str) -> str:
         """Soumet une tâche de génération vidéo à l'API Veo 3.1."""
@@ -230,11 +197,12 @@ class VeoVideoAPI:
                 logger.info(f"[VeoVideo] Submitting {mode_desc} (attempt {attempt + 1}/{self.max_retries})...")
                 await asyncio.to_thread(get_rate_limiter().acquire)
 
+                url = f"{_BASE_URL}/models/{self.model_id}:predictLongRunning"
                 resp = await asyncio.wait_for(
                     asyncio.to_thread(
                         requests.post,
-                        self._api_url(f"/models/{self.model_id}:predictLongRunning"),
-                        headers=self._headers(),
+                        url,
+                        headers=self._auth_headers(),
                         json=payload,
                         timeout=(15, 60),
                     ),
@@ -245,9 +213,9 @@ class VeoVideoAPI:
                     result = resp.json()
                     op_name = result.get("name", "")
                     if op_name:
-                        logger.info(f"[VeoVideo] Operation started: {op_name[:40]}...")
+                        logger.info(f"[VeoVideo] Operation started: {op_name[:60]}...")
                         return op_name
-                    raise RuntimeError(f"[VeoVideo] No operation name in response: {resp.text[:300]}")
+                    raise RuntimeError(f"[VeoVideo] No operation name in response: {resp.text[:500]}")
 
                 if resp.status_code == 429:
                     retry_after = 0
@@ -261,9 +229,9 @@ class VeoVideoAPI:
                     logger.warning(f"[VeoVideo] 429 rate limit, retry {attempt + 1}/{self.max_retries} in {delay:.0f}s...")
                     collect_error(
                         "veo", "submit_video",
-                        prompt=payload.get("prompt", ""),
+                        prompt=payload.get("instances", [{}])[0].get("prompt", ""),
                         error_type="RateLimit429",
-                        error_message=f"HTTP 429: rate limited",
+                        error_message="HTTP 429: rate limited",
                         status_code=429,
                         response_body=resp.text,
                         retry_count=attempt + 1,
@@ -276,7 +244,7 @@ class VeoVideoAPI:
                     logger.warning(f"[VeoVideo] {resp.status_code} server error, retry {attempt + 1}/{self.max_retries} in {delay:.0f}s...")
                     collect_error(
                         "veo", "submit_video",
-                        prompt=payload.get("prompt", ""),
+                        prompt=payload.get("instances", [{}])[0].get("prompt", ""),
                         error_type=f"HTTP{resp.status_code}",
                         error_message=f"HTTP {resp.status_code}: server error",
                         status_code=resp.status_code,
@@ -291,7 +259,7 @@ class VeoVideoAPI:
                 logger.error(f"[VeoVideo] HTTP {resp.status_code}: {error_text}")
                 collect_error(
                     "veo", "submit_video",
-                    prompt=payload.get("prompt", ""),
+                    prompt=payload.get("instances", [{}])[0].get("prompt", ""),
                     error_type="HTTPError",
                     error_message=f"HTTP {resp.status_code}: {error_text}",
                     status_code=resp.status_code,
@@ -307,7 +275,7 @@ class VeoVideoAPI:
                 last_exc = e
                 collect_error_from_exception(
                     "veo", "submit_video",
-                    exc=e, prompt=payload.get("prompt", ""),
+                    exc=e, prompt=payload.get("instances", [{}])[0].get("prompt", ""),
                     retry_count=attempt + 1,
                 )
                 if attempt < self.max_retries - 1:
@@ -338,14 +306,15 @@ class VeoVideoAPI:
 
             try:
                 if poll_count % 5 == 0:
-                    logger.info(f"[VeoVideo] Polling operation {operation_name[:40]}... (poll #{poll_count + 1}, elapsed {elapsed:.0f}s)")
+                    logger.info(f"[VeoVideo] Polling {operation_name[:60]}... (poll #{poll_count + 1}, elapsed {elapsed:.0f}s)")
 
                 await asyncio.to_thread(get_rate_limiter().acquire)
+                poll_url = f"{_BASE_URL}/{operation_name}"
                 resp = await asyncio.wait_for(
                     asyncio.to_thread(
                         requests.get,
-                        f"{_BASE_URL}/{operation_name}?key={self.api_key}",
-                        headers=self._headers(),
+                        poll_url,
+                        headers=self._auth_headers(),
                         timeout=15,
                     ),
                     timeout=30,
@@ -399,29 +368,23 @@ class VeoVideoAPI:
         """Extrait l'URL de la vidéo depuis la réponse de l'opération."""
         response = result.get("response", {})
 
-        # Format predictLongRunning : response.generateVideoResponse.generatedSamples[0].video.uri
+        # Format predictLongRunning (Gemini API) :
+        # response.generateVideoResponse.generatedSamples[0].video.uri
         gen_resp = response.get("generateVideoResponse", {})
         samples = gen_resp.get("generatedSamples", [])
         if samples:
             video = samples[0].get("video", {})
             url = video.get("uri")
             if url:
-                if "generativelanguage.googleapis.com" in url and "key=" not in url:
-                    separator = "&" if "?" in url else "?"
-                    url = f"{url}{separator}key={self.api_key}"
                 return url
 
-        # Fallback : format direct generatedVideos
+        # Fallback : format direct generatedVideos (Vertex AI)
         generated = response.get("generatedVideos", [])
         if generated:
             video = generated[0].get("video", {})
             url = video.get("uri") or video.get("url")
             if url:
-                if "generativelanguage.googleapis.com" in url and "key=" not in url:
-                    separator = "&" if "?" in url else "?"
-                    url = f"{url}{separator}key={self.api_key}"
                 return url
 
-        # Debug : logger la structure complète pour diagnostiquer
         logger.warning(f"[VeoVideo] Unexpected response structure: {json.dumps(result)[:800]}")
         return None

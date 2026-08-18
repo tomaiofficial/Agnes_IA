@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 # Veo 3.1 models
 # ═══════════════════════════════════════════════════
 VEO_MODELS = {
-    "veo-3.1": "veo-3.1-generate-preview",
-    "veo-3.1-fast": "veo-3.1-fast-generate-preview",
+    "veo-3.1": "veo-3.1-generate-001",
+    "veo-3.1-fast": "veo-3.1-fast-generate-001",
 }
 
 # Durées supportées par Veo 3.1 (en secondes)

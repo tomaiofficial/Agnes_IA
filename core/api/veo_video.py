@@ -165,7 +165,6 @@ class VeoVideoAPI:
                 "durationSeconds": dur,
                 "resolution": veo_res,
                 "personGeneration": "allow_adult",
-                "generateAudio": generate_audio,
             },
         }
 

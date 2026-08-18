@@ -1603,6 +1603,16 @@ async function submitSimple() {
 }
 
 async function submitSimpleVeo(prompt, model) {
+  // Vérifier si la clé Gemini est configurée
+  try {
+    const r = await fetchWithAuth(API_BASE + '/api/config/gemini');
+    const d = await r.json();
+    if (!d.ok || !d.gemini_key) {
+      showToast('🔑 Configurez d\'abord votre clé API Gemini dans les paramètres ci-dessus.', 6000);
+      return;
+    }
+  } catch(e) { /* on tente quand même, le backend vérifiera */ }
+
   const btn = document.getElementById('btn-simple');
   btn.disabled = true;
   const panel = document.getElementById('progress-panel');
@@ -1646,6 +1656,7 @@ async function submitSimpleVeo(prompt, model) {
 
     const fd = new FormData();
     fd.append('prompt', prompt);
+    fd.append('model', model);
     const dur = parseInt(document.getElementById('s_duration').value, 10) || 6;
     fd.append('duration', dur <= 4 ? 4 : dur <= 6 ? 6 : 8);
     const res = parseResolution(document.getElementById('s_resolution').value);

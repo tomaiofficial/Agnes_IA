@@ -1173,6 +1173,7 @@ async def clear_gemini_config():
 @app.post("/api/veo/generate")
 async def veo_generate(
     prompt: str = Form(...),
+    model: str = Form("veo-3.1"),
     duration: int = Form(6),
     width: int = Form(1280),
     height: int = Form(720),
@@ -1218,7 +1219,7 @@ async def veo_generate(
 
         veo = VeoVideoAPI(
             api_key=gemini_key,
-            model="veo-3.1",
+            model=model,
             default_duration=duration,
         )
 
@@ -1260,7 +1261,7 @@ async def veo_generate(
         )
 
         logger.info(f"[Veo] Task {task_id} completed: {video_path}")
-        return {"ok": True, "task_id": task_id, "dir_name": dir_name, "engine": "veo-3.1"}
+        return {"ok": True, "task_id": task_id, "dir_name": dir_name, "engine": model}
 
     except Exception as e:
         state.status = StepStatus.FAILED

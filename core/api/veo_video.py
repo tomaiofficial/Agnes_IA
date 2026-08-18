@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 # Veo 3.1 models
 # ═══════════════════════════════════════════════════
 VEO_MODELS = {
-    "veo-3.1": "veo-3.1-generate-001",
-    "veo-3.1-fast": "veo-3.1-fast-generate-001",
+    "veo-3.1": "veo-3.1-generate-preview",
+    "veo-3.1-fast": "veo-3.1-fast-generate-preview",
 }
 
 # Durées supportées par Veo 3.1 (en secondes)
@@ -168,10 +168,14 @@ class VeoVideoAPI:
         aspect = self._normalize_aspect_ratio(width, height)
         veo_res = VEO_RESOLUTIONS.get(resolution, "1080p")
 
-        # Construire le payload
+        # Construire le payload (format predictLongRunning)
         payload = {
-            "prompt": prompt,
-            "config": {
+            "instances": [
+                {
+                    "prompt": prompt,
+                }
+            ],
+            "parameters": {
                 "aspectRatio": aspect,
                 "numberOfVideos": 1,
                 "durationSeconds": dur,
@@ -185,16 +189,16 @@ class VeoVideoAPI:
         if reference_image_paths:
             ref_url = await self._resolve_image_ref(reference_image_paths[0])
             if ref_url:
-                # Veo 3.1 accepte une image via l'API generateContent
-                # mais pour generateVideos, on passe l'image dans le body
                 if ref_url.startswith("data:"):
-                    # Extraire le base64
                     b64_data = ref_url.split(",", 1)[1] if "," in ref_url else ref_url
-                    payload["image"] = {
-                        "imageBytes": b64_data,
+                    import mimetypes
+                    mime = mimetypes.guess_type("image.png")[0] or "image/png"
+                    payload["instances"][0]["image"] = {
+                        "bytesBase64Encoded": b64_data,
+                        "mimeType": mime,
                     }
                 elif ref_url.startswith(("http://", "https://")):
-                    payload["image"] = {
+                    payload["instances"][0]["image"] = {
                         "url": ref_url,
                     }
 
@@ -229,7 +233,7 @@ class VeoVideoAPI:
                 resp = await asyncio.wait_for(
                     asyncio.to_thread(
                         requests.post,
-                        self._api_url(f"/models/{self.model_id}:generateVideos"),
+                        self._api_url(f"/models/{self.model_id}:predictLongRunning"),
                         headers=self._headers(),
                         json=payload,
                         timeout=(15, 60),
@@ -340,7 +344,7 @@ class VeoVideoAPI:
                 resp = await asyncio.wait_for(
                     asyncio.to_thread(
                         requests.get,
-                        self._api_url(f"/operations/{operation_name.split('/')[-1]}"),
+                        f"{_BASE_URL}/{operation_name}?key={self.api_key}",
                         headers=self._headers(),
                         timeout=15,
                     ),
@@ -394,15 +398,30 @@ class VeoVideoAPI:
     def _extract_video_url(self, result: dict) -> Optional[str]:
         """Extrait l'URL de la vidéo depuis la réponse de l'opération."""
         response = result.get("response", {})
-        generated = response.get("generatedVideos", [])
-        if generated:
-            video = generated[0].get("video", {})
-            # L'URL peut être dans "uri" ou "url"
-            url = video.get("uri") or video.get("url")
+
+        # Format predictLongRunning : response.generateVideoResponse.generatedSamples[0].video.uri
+        gen_resp = response.get("generateVideoResponse", {})
+        samples = gen_resp.get("generatedSamples", [])
+        if samples:
+            video = samples[0].get("video", {})
+            url = video.get("uri")
             if url:
-                # Ajouter la clé API aux URLs signées si nécessaire
                 if "generativelanguage.googleapis.com" in url and "key=" not in url:
                     separator = "&" if "?" in url else "?"
                     url = f"{url}{separator}key={self.api_key}"
                 return url
+
+        # Fallback : format direct generatedVideos
+        generated = response.get("generatedVideos", [])
+        if generated:
+            video = generated[0].get("video", {})
+            url = video.get("uri") or video.get("url")
+            if url:
+                if "generativelanguage.googleapis.com" in url and "key=" not in url:
+                    separator = "&" if "?" in url else "?"
+                    url = f"{url}{separator}key={self.api_key}"
+                return url
+
+        # Debug : logger la structure complète pour diagnostiquer
+        logger.warning(f"[VeoVideo] Unexpected response structure: {json.dumps(result)[:800]}")
         return None

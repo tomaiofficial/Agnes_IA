@@ -24,6 +24,8 @@ services:
     envVars:
       - key: AGNES_API_KEY
         sync: false
+      - key: GEMINI_API_KEY
+        sync: false
       - key: PORT
         value: 10000
       # Stockage persistant (galerie communautaire + metadonnees de taches)

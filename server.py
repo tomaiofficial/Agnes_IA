@@ -35,7 +35,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Hea
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 
-from core.config import get_api_key, set_api_key, delete_api_key, get_api_key_source, get_working_dir, DURATION_FRAME_MAP, get_workspaces, add_workspace, remove_workspace, set_active_workspace, get_active_workspace, REGRESSION_WORKING_DIR_ENV, get_watermark_config, set_watermark_config, WATERMARK_PROMO_TEXT_ZH, WATERMARK_PROMO_TEXT_EN, get_selected_models, set_selected_models, get_agnes_domain, set_agnes_domain, AGNES_DOMAIN_MAP, get_agnes_api_root, DEFAULT_NEGATIVE_PROMPT
+from core.config import get_api_key, set_api_key, delete_api_key, get_api_key_source, get_working_dir, DURATION_FRAME_MAP, get_workspaces, add_workspace, remove_workspace, set_active_workspace, get_active_workspace, REGRESSION_WORKING_DIR_ENV, get_watermark_config, set_watermark_config, WATERMARK_PROMO_TEXT_ZH, WATERMARK_PROMO_TEXT_EN, get_selected_models, set_selected_models, get_agnes_domain, set_agnes_domain, AGNES_DOMAIN_MAP, get_agnes_api_root, DEFAULT_NEGATIVE_PROMPT, get_gemini_api_key, set_gemini_api_key, delete_gemini_api_key, get_gemini_api_key_source
 from core.path_security import safe_join, safe_workspace_path, UnsafePathError
 from core.audio.voices import (
     get_voice_catalog,
@@ -1128,6 +1128,170 @@ async def save_agnes_domain(domain: str = Form(...)):
         )
     set_agnes_domain(domain)
     return {"ok": True, "agnes_domain": domain}
+
+
+# ═══════════════════════════════════════════════════
+# Google Gemini API Key (Veo 3.1)
+# ═══════════════════════════════════════════════════
+
+
+@app.get("/api/config/gemini")
+async def get_gemini_config():
+    """Retourne l'état de la clé API Gemini (Veo 3.1)."""
+    key = get_gemini_api_key()
+    source = get_gemini_api_key_source()
+    return {
+        "ok": True,
+        "gemini_key": key[:8] + "..." if key else "",
+        "source": source,
+        "can_clear": source == "config",
+    }
+
+
+@app.post("/api/config/gemini")
+async def save_gemini_config(api_key: str = Form(...)):
+    """Sauvegarde la clé API Gemini pour Veo 3.1."""
+    set_gemini_api_key(api_key)
+    return {"ok": True}
+
+
+@app.delete("/api/config/gemini")
+async def clear_gemini_config():
+    """Supprime la clé API Gemini du fichier de config."""
+    source = get_gemini_api_key_source()
+    if source == "env":
+        raise HTTPException(status_code=400, detail="Clé Gemini configurée via variable d'environnement, impossible de la supprimer")
+    delete_gemini_api_key()
+    return {"ok": True}
+
+
+# ═══════════════════════════════════════════════════
+# Veo 3.1 — Génération vidéo directe
+# ═══════════════════════════════════════════════════
+
+
+@app.post("/api/veo/generate")
+async def veo_generate(
+    prompt: str = Form(...),
+    duration: int = Form(6),
+    width: int = Form(1280),
+    height: int = Form(720),
+    resolution: str = Form("1080p"),
+    generate_audio: bool = Form(True),
+    reference_image: UploadFile = File(None),
+):
+    """Génère une vidéo avec Google Veo 3.1 (text-to-video ou image-to-video)."""
+    gemini_key = get_gemini_api_key()
+    if not gemini_key:
+        raise HTTPException(status_code=400, detail="Clé API Gemini non configurée. Allez dans Paramètres > Clés API pour configurer GEMINI_API_KEY.")
+
+    if not prompt.strip():
+        raise HTTPException(status_code=422, detail="Le prompt ne peut pas être vide")
+
+    task_id = uuid.uuid4().hex[:12]
+    dir_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{task_id}"
+
+    state = SimpleVideoTask(
+        task_id=task_id,
+        prompt=prompt.strip(),
+        video_width=width,
+        video_height=height,
+        duration=duration,
+    )
+
+    tm = TaskManager(task_id, dir_name=dir_name)
+    tm.create(state)
+
+    # Sauvegarder l'image de référence si fournie
+    ref_paths = []
+    if reference_image and reference_image.filename:
+        ext = os.path.splitext(reference_image.filename)[1] or ".png"
+        upload_dir = get_upload_dir()
+        os.makedirs(upload_dir, exist_ok=True)
+        ref_path = os.path.join(upload_dir, f"veo_ref_{uuid.uuid4().hex[:8]}{ext}")
+        with open(ref_path, "wb") as f:
+            f.write(await reference_image.read())
+        ref_paths.append(ref_path)
+
+    try:
+        from core.api.veo_video import VeoVideoAPI
+
+        veo = VeoVideoAPI(
+            api_key=gemini_key,
+            model="veo-3.1",
+            default_duration=duration,
+        )
+
+        state.current_step = "step_video_generation"
+        state.current_status = "running"
+        state.current_message = f"Génération Veo 3.1 ({duration}s, {resolution})..."
+        tm.update_state(
+            current_step=state.current_step,
+            current_status=state.current_status,
+            current_message=state.current_message,
+        )
+
+        output = await veo.generate_video(
+            prompt=prompt.strip(),
+            reference_image_paths=ref_paths,
+            duration=duration,
+            width=width,
+            height=height,
+            resolution=resolution,
+            generate_audio=generate_audio,
+        )
+
+        # Sauvegarder la vidéo
+        video_filename = "final_video.mp4"
+        video_path = os.path.join(tm.task_dir, video_filename)
+        output.save(video_path)
+
+        state.status = StepStatus.COMPLETED
+        state.current_step = "step_done"
+        state.current_status = "completed"
+        state.current_message = "Vidéo Veo 3.1 générée avec succès"
+        state.final_video_file = video_path
+        tm.update_state(
+            status=StepStatus.COMPLETED,
+            current_step="step_done",
+            current_status="completed",
+            current_message="Vidéo Veo 3.1 générée avec succès",
+            final_video_file=video_path,
+        )
+
+        logger.info(f"[Veo] Task {task_id} completed: {video_path}")
+        return {"ok": True, "task_id": task_id, "dir_name": dir_name, "engine": "veo-3.1"}
+
+    except Exception as e:
+        state.status = StepStatus.FAILED
+        state.current_status = "failed"
+        state.current_message = str(e)
+        tm.update_state(
+            status=StepStatus.FAILED,
+            current_status="failed",
+            current_message=str(e),
+        )
+        logger.error(f"[Veo] Task {task_id} failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/veo/status/{task_id}")
+async def veo_status(task_id: str):
+    """Vérifie le statut d'une génération Veo 3.1."""
+    dir_name = _find_dir_name(task_id)
+    tm = TaskManager(task_id, dir_name=dir_name)
+    state = tm.load()
+    if not state:
+        raise HTTPException(status_code=404, detail="Tâche non trouvée")
+    return {
+        "ok": True,
+        "task_id": task_id,
+        "status": state.status,
+        "current_step": getattr(state, "current_step", ""),
+        "current_status": getattr(state, "current_status", ""),
+        "current_message": getattr(state, "current_message", ""),
+        "final_video_file": state.final_video_file,
+    }
 
 
 # ═══════════════════════════════════════════════════

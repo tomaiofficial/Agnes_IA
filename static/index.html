@@ -462,6 +462,25 @@
       <p class="k-note mt-2">Obtenez votre clé API gratuite sur <a href="https://platform.agnes-ai.com" target="_blank" style="color:#7ea6ff;text-decoration:underline;">platform.agnes-ai.com</a></p>
     </div>
 
+    <!-- Gemini API Key (Veo 3.1) -->
+    <div id="gemini-section" class="glass-card rounded-2xl mb-4 overflow-hidden" style="padding:14px;border:1px solid rgba(66,133,244,0.2);">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <span style="font-size:16px;">🎬</span>
+          <span class="text-xs sm:text-sm font-medium text-gray-300">Google Veo 3.1 — API Key</span>
+        </div>
+        <span id="gemini-status" class="text-[10px] sm:text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-400 whitespace-nowrap">Non configuré</span>
+      </div>
+      <div class="flex flex-col sm:flex-row gap-2 sm:gap-3">
+        <input id="gemini-input" type="password" placeholder="Entrez votre clé API Gemini (GEMINI_API_KEY)" class="k-field sm:flex-1">
+        <div class="flex gap-2">
+          <button id="gemini-save" class="btn-k btn-primary-k" style="flex:1;background:linear-gradient(135deg,#4285f4,#34a853);">Enregistrer</button>
+          <button id="gemini-clear" class="hidden btn-k" style="flex:1;background:rgba(220,38,38,0.8);">Effacer</button>
+        </div>
+      </div>
+      <p class="k-note mt-2">Pour Veo 3.1 : obtenez une clé sur <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#7ea6ff;text-decoration:underline;">aistudio.google.com/apikey</a> (gratuit). Active la génération vidéo Google Veo 3.1 avec audio natif.</p>
+    </div>
+
     <!-- Annonce nouveaux modèles vidéo -->
     <div id="model-announcement" class="hidden mb-4 rounded-xl p-3 sm:p-4 text-[11px] sm:text-xs" style="background:linear-gradient(135deg,rgba(34,211,238,.08),rgba(124,58,237,.08));border:1px solid rgba(103,232,249,.22);color:#cffafe;">
       <div class="flex items-start justify-between gap-3">
@@ -701,6 +720,8 @@
           </div>
           <select id="s_video_model" onchange="onVideoModelChange()" class="k-field">
             <option value="agnes-video-v2.0">Agnes Video v2.0 — moteur officiel</option>
+            <option value="veo-3.1">Google Veo 3.1 — audio natif</option>
+            <option value="veo-3.1-fast">Google Veo 3.1 Fast — rapide</option>
           </select>
 
         <div class="mb-4 rounded-xl border border-violet-400/20 bg-violet-400/[.05] p-3">
@@ -1452,6 +1473,77 @@ document.getElementById('apikey-clear').onclick = async () => {
 };
 
 // ═══════════════════════════════════════════════════
+// Gemini API Key (Veo 3.1)
+// ═══════════════════════════════════════════════════
+function setGeminiConfiguredUI(source, canClear) {
+  const input = document.getElementById('gemini-input');
+  const saveBtn = document.getElementById('gemini-save');
+  const clearBtn = document.getElementById('gemini-clear');
+  const statusEl = document.getElementById('gemini-status');
+  input.placeholder = 'Configuré (●●●)';
+  input.value = '';
+  input.disabled = true;
+  input.classList.add('opacity-50', 'cursor-not-allowed');
+  saveBtn.disabled = true;
+  saveBtn.classList.add('opacity-50', 'cursor-not-allowed');
+  const label = source === 'env' ? 'Configuré (env)' : 'Configuré';
+  statusEl.textContent = label;
+  statusEl.className = 'text-xs px-2 py-1 rounded-full bg-green-900 text-green-300';
+  if (canClear) {
+    clearBtn.classList.remove('hidden');
+    clearBtn.dataset.source = source;
+  }
+}
+
+function resetGeminiUI() {
+  const input = document.getElementById('gemini-input');
+  const saveBtn = document.getElementById('gemini-save');
+  const clearBtn = document.getElementById('gemini-clear');
+  const statusEl = document.getElementById('gemini-status');
+  input.placeholder = 'Entrez votre clé API Gemini (GEMINI_API_KEY)';
+  input.value = '';
+  input.disabled = false;
+  input.classList.remove('opacity-50', 'cursor-not-allowed');
+  saveBtn.disabled = false;
+  saveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+  statusEl.textContent = 'Non configuré';
+  statusEl.className = 'text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-400';
+  clearBtn.classList.add('hidden');
+}
+
+async function loadGeminiKey() {
+  try {
+    const r = await fetchWithAuth(API_BASE + '/api/config/gemini');
+    const d = await r.json();
+    if (d.ok && d.gemini_key) setGeminiConfiguredUI(d.source, d.can_clear);
+    else resetGeminiUI();
+  } catch(e) { console.warn('load gemini key failed:', e); }
+}
+
+document.getElementById('gemini-save').onclick = async () => {
+  const key = document.getElementById('gemini-input').value.trim();
+  if (!key) return alert('Veuillez entrer votre clé API Gemini');
+  const form = new FormData();
+  form.append('api_key', key);
+  const r = await fetchWithAuth(API_BASE + '/api/config/gemini', { method: 'POST', body: form });
+  if (r.ok) setGeminiConfiguredUI('config', true);
+};
+
+document.getElementById('gemini-clear').onclick = async () => {
+  const s = document.getElementById('gemini-clear').dataset.source;
+  if (s === 'env') {
+    alert('La clé Gemini est définie via variable d\'environnement et ne peut pas être supprimée.');
+    return;
+  }
+  if (!confirm('Voulez-vous vraiment supprimer la clé Gemini ?')) return;
+  try {
+    const r = await fetchWithAuth(API_BASE + '/api/config/gemini', { method: 'DELETE' });
+    if (r.ok) resetGeminiUI();
+    else { const d = await r.json(); alert(d.detail || 'Erreur'); }
+  } catch(e) { alert('Erreur réseau'); }
+};
+
+// ═══════════════════════════════════════════════════
 // Submit Functions
 // ═══════════════════════════════════════════════════
 function setRunning(taskId) {
@@ -1502,7 +1594,102 @@ async function submitSimple() {
   const prompt = document.getElementById('s_prompt').value.trim();
   if (!prompt) return alert('Veuillez décrire la vidéo');
   const selected = document.getElementById('s_video_model')?.value || 'agnes-video-v2.0';
+
+  // Veo 3.1 → endpoint dédié
+  if (selected === 'veo-3.1' || selected === 'veo-3.1-fast') {
+    return submitSimpleVeo(prompt, selected);
+  }
   return submitSimpleAgnes(prompt);
+}
+
+async function submitSimpleVeo(prompt, model) {
+  const btn = document.getElementById('btn-simple');
+  btn.disabled = true;
+  const panel = document.getElementById('progress-panel');
+  panel.classList.remove('hidden');
+  document.querySelectorAll('.sora-form-collapse').forEach(el => el.classList.add('collapsed'));
+  document.getElementById('result-area').classList.add('hidden');
+  document.getElementById('btn-stop').classList.remove('hidden');
+  document.getElementById('progress-bar').style.width = '0%';
+  document.getElementById('progress-pct').textContent = '0%';
+  document.getElementById('progress-elapsed').textContent = '0s écoulé';
+  document.getElementById('progress-remaining').textContent = '~calcul...';
+  document.getElementById('progress-step-name').textContent = 'Préparation Veo 3.1...';
+  document.getElementById('progress-state-label').textContent = 'Google Veo 3.1';
+  document.getElementById('progress-state-dot').className = 'w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse';
+  document.getElementById('progress-ring-icon').textContent = '🎬';
+
+  const steps = [
+    { key: 'submit', label: 'Soumission à Veo 3.1' },
+    { key: 'video_gen', label: 'Génération vidéo IA' },
+    { key: 'download', label: 'Téléchargement' },
+  ];
+  document.getElementById('steps-container').innerHTML = steps.map((s, i) =>
+    `<div class="sora-step flex items-center gap-3 text-sm" data-step="${s.key}" style="animation-delay:${i * 0.1}s;">` +
+    `<span class="sora-step-dot" style="background:rgba(255,255,255,0.08);"></span>` +
+    `<span class="step-label" style="color:rgba(156,163,175,0.4);">${s.label}</span></div>`
+  ).join('');
+  setTimeout(() => document.querySelectorAll('.sora-step').forEach(el => el.style.opacity = '1'), 100);
+
+  const markStep = (key, done) => {
+    const el = document.querySelector(`.sora-step[data-step="${key}"]`);
+    if (!el) return;
+    el.querySelector('.sora-step-dot').style.cssText = done
+      ? 'background: rgba(34,197,94,0.5);'
+      : 'background: #3b82f6; box-shadow: 0 0 8px rgba(59,130,246,0.5);';
+    el.querySelector('.step-label').style.color = done ? 'rgba(34,197,94,0.5)' : '#93c5fc';
+  };
+
+  try {
+    markStep('submit', false);
+    if (document.getElementById('s_generation_style')?.value === 'veo-style') prompt = buildVeoStylePrompt(prompt);
+
+    const fd = new FormData();
+    fd.append('prompt', prompt);
+    const dur = parseInt(document.getElementById('s_duration').value, 10) || 6;
+    fd.append('duration', dur <= 4 ? 4 : dur <= 6 ? 6 : 8);
+    const res = parseResolution(document.getElementById('s_resolution').value);
+    fd.append('width', res.width);
+    fd.append('height', res.height);
+    fd.append('resolution', '1080p');
+    fd.append('generate_audio', 'true');
+    const refFile = document.getElementById('s_ref_image').files[0];
+    if (refFile) fd.append('reference_image', refFile);
+
+    const r = await fetchWithAuth(API_BASE + '/api/veo/generate', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Échec Veo 3.1');
+
+    markStep('submit', true);
+    markStep('video_gen', true);
+    markStep('download', false);
+    document.getElementById('progress-pct').textContent = '90%';
+    document.getElementById('progress-bar').style.width = '90%';
+
+    // Télécharger la vidéo
+    const videoUrl = API_BASE + '/api/video/' + d.task_id;
+    const resultVideo = document.getElementById('result-video');
+    resultVideo.src = videoUrl;
+    resultVideo.load();
+
+    markStep('download', true);
+    document.getElementById('progress-ring-icon').textContent = '✅';
+    document.getElementById('progress-step-name').textContent = 'Terminé !';
+    document.getElementById('progress-state-label').textContent = 'Terminé';
+    document.getElementById('progress-state-dot').className = 'w-1.5 h-1.5 rounded-full bg-green-400';
+    document.getElementById('progress-bar').style.width = '100%';
+    document.getElementById('progress-pct').textContent = '100%';
+    document.getElementById('progress-remaining').textContent = 'Vidéo Veo 3.1 prête ✓';
+    document.getElementById('result-area').classList.remove('hidden');
+    btn.disabled = false;
+    showToast('🎬 Vidéo Veo 3.1 générée !', 4000);
+  } catch(e) {
+    console.warn('[Veo] Échec:', e);
+    showToast('❌ Veo 3.1 : ' + e.message, 6000);
+    panel.classList.add('hidden');
+    document.querySelectorAll('.sora-form-collapse').forEach(el => el.classList.remove('collapsed'));
+    btn.disabled = false;
+  }
 }
 
 async function submitSimpleAgnes(prompt) {
@@ -1597,16 +1784,28 @@ async function loadVideoModels(selectedModel, forceRefresh = false) {
     const videos = [...new Set([...(d.models && d.models.video) || []])]
       .filter(m => m === 'agnes-video-v2.0');
     sel.innerHTML = '';
+    // Agnes officiels
     videos.forEach(m => {
       const opt = document.createElement('option');
       opt.value = m;
       opt.textContent = m === 'agnes-video-v2.0' ? 'Agnes Video v2.0 — moteur officiel' : m;
       sel.appendChild(opt);
     });
-    if (selectedModel && videos.includes(selectedModel)) sel.value = selectedModel;
+    // Veo 3.1 (toujours disponible si GEMINI_API_KEY configuré)
+    const veoOpt1 = document.createElement('option');
+    veoOpt1.value = 'veo-3.1';
+    veoOpt1.textContent = 'Google Veo 3.1 — audio natif, ultra-réaliste';
+    sel.appendChild(veoOpt1);
+    const veoOpt2 = document.createElement('option');
+    veoOpt2.value = 'veo-3.1-fast';
+    veoOpt2.textContent = 'Google Veo 3.1 Fast — rapide, bonne qualité';
+    sel.appendChild(veoOpt2);
+    if (selectedModel && [...videos, 'veo-3.1', 'veo-3.1-fast'].includes(selectedModel)) sel.value = selectedModel;
     else if (videos.length) sel.value = videos[0];
   } catch(e) {
-    sel.innerHTML = '<option value="agnes-video-v2.0">Agnes Video v2.0 — moteur officiel</option>';
+    sel.innerHTML = '<option value="agnes-video-v2.0">Agnes Video v2.0 — moteur officiel</option>'
+      + '<option value="veo-3.1">Google Veo 3.1 — audio natif</option>'
+      + '<option value="veo-3.1-fast">Google Veo 3.1 Fast</option>';
     if (selectedModel) sel.value = selectedModel;
     console.warn('load /api/models failed:', e);
   }
@@ -3199,6 +3398,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // présélectionne le modèle actif (d.models.video).
     currentSelectedModels = d.models || null;
     if (currentSelectedModels) loadVideoModels(currentSelectedModels.video);
+    // Veo 3.1: vérifier la clé Gemini
+    loadGeminiKey();
   } catch(e) {}
   autoReconnectRunningTask();
 })();

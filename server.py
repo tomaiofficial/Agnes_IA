@@ -918,6 +918,14 @@ async def snapgen_page():
     raise HTTPException(status_code=404, detail="SnapGenAI page not found")
 
 
+@app.get("/snapgen-proxy/{path:path}")
+@app.get("/snapgen-proxy")
+async def snapgen_proxy(path: str = "", request: Request = None):
+    """Reverse proxy vers snapgen.ai — injecte CSS/JS pour cacher le pricing."""
+    from core.api.snapgen_proxy import proxy_request
+    return await proxy_request(path, request)
+
+
 @app.get("/index.html")
 async def root_index_html():
     """Compat : les URL `/index.html` (bookmark, cache-buster `?v=...`) donnaient

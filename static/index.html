@@ -722,6 +722,7 @@
             <option value="agnes-video-v2.0">Agnes Video v2.0 — moteur officiel</option>
             <option value="veo-3.1">Google Veo 3.1 — audio natif</option>
             <option value="veo-3.1-fast">Google Veo 3.1 Fast — rapide</option>
+            <option value="snapgen-veo3">SnapGenAI Veo 3.1 — gratuit</option>
           </select>
 
         <div class="mb-4 rounded-xl border border-violet-400/20 bg-violet-400/[.05] p-3">
@@ -1599,6 +1600,11 @@ async function submitSimple() {
   if (selected === 'veo-3.1' || selected === 'veo-3.1-fast') {
     return submitSimpleVeo(prompt, selected);
   }
+
+  // SnapGenAI → ouvre SnapGenAI dans un nouvel onglet
+  if (selected === 'snapgen-veo3') {
+    return submitSnapGen(prompt);
+  }
   return submitSimpleAgnes(prompt);
 }
 
@@ -1701,6 +1707,42 @@ async function submitSimpleVeo(prompt, model) {
     document.querySelectorAll('.sora-form-collapse').forEach(el => el.classList.remove('collapsed'));
     btn.disabled = false;
   }
+}
+
+function submitSnapGen(prompt) {
+  // Ouvre SnapGenAI dans un nouvel onglet avec le prompt pré-rempli
+  const snapgenUrl = 'https://snapgen.ai';
+  showToast('🎬 Ouverture de SnapGenAI...', 3000);
+  // Ouvrir SnapGenAI — l'utilisateur sera redirigé pour se connecter et générer
+  window.open(snapgenUrl, '_blank');
+  // Afficher un message informatif
+  const panel = document.getElementById('progress-panel');
+  panel.classList.remove('hidden');
+  document.querySelectorAll('.sora-form-collapse').forEach(el => el.classList.add('collapsed'));
+  document.getElementById('progress-bar').style.width = '100%';
+  document.getElementById('progress-pct').textContent = '100%';
+  document.getElementById('progress-elapsed').textContent = '';
+  document.getElementById('progress-remaining').textContent = '';
+  document.getElementById('progress-step-name').textContent = 'SnapGenAI ouvert dans un nouvel onglet';
+  document.getElementById('progress-state-label').textContent = 'SnapGenAI';
+  document.getElementById('progress-state-dot').className = 'w-1.5 h-1.5 rounded-full bg-blue-400';
+  document.getElementById('progress-ring-icon').textContent = '🎬';
+  document.getElementById('steps-container').innerHTML = `
+    <div class="sora-step flex items-center gap-3 text-sm" style="opacity:1;">
+      <span class="sora-step-dot" style="background:rgba(59,130,246,0.5);"></span>
+      <span class="step-label" style="color:#93c5fc;">SnapGenAI ouvert dans un nouvel onglet</span>
+    </div>
+    <div class="sora-step flex items-center gap-3 text-sm" style="opacity:1;">
+      <span class="sora-step-dot" style="background:rgba(255,255,255,0.08);"></span>
+      <span class="step-label" style="color:rgba(156,163,175,0.6);">Choisissez Veo 3.1 sur SnapGenAI et collez votre prompt</span>
+    </div>
+    <div class="sora-step flex items-center gap-3 text-sm" style="opacity:1;">
+      <span class="sora-step-dot" style="background:rgba(255,255,255,0.08);"></span>
+      <span class="step-label" style="color:rgba(156,163,175,0.6);">Téléchargez la vidéo générée</span>
+    </div>
+  `;
+  document.getElementById('btn-stop').classList.add('hidden');
+  document.getElementById('result-area').classList.add('hidden');
 }
 
 async function submitSimpleAgnes(prompt) {
@@ -1811,12 +1853,18 @@ async function loadVideoModels(selectedModel, forceRefresh = false) {
     veoOpt2.value = 'veo-3.1-fast';
     veoOpt2.textContent = 'Google Veo 3.1 Fast — rapide, bonne qualité';
     sel.appendChild(veoOpt2);
-    if (selectedModel && [...videos, 'veo-3.1', 'veo-3.1-fast'].includes(selectedModel)) sel.value = selectedModel;
+    // SnapGenAI — gratuit
+    const snapOpt = document.createElement('option');
+    snapOpt.value = 'snapgen-veo3';
+    snapOpt.textContent = 'SnapGenAI Veo 3.1 — gratuit';
+    sel.appendChild(snapOpt);
+    if (selectedModel && [...videos, 'veo-3.1', 'veo-3.1-fast', 'snapgen-veo3'].includes(selectedModel)) sel.value = selectedModel;
     else if (videos.length) sel.value = videos[0];
   } catch(e) {
     sel.innerHTML = '<option value="agnes-video-v2.0">Agnes Video v2.0 — moteur officiel</option>'
       + '<option value="veo-3.1">Google Veo 3.1 — audio natif</option>'
-      + '<option value="veo-3.1-fast">Google Veo 3.1 Fast</option>';
+      + '<option value="veo-3.1-fast">Google Veo 3.1 Fast</option>'
+      + '<option value="snapgen-veo3">SnapGenAI Veo 3.1 — gratuit</option>';
     if (selectedModel) sel.value = selectedModel;
     console.warn('load /api/models failed:', e);
   }

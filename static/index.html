@@ -1710,39 +1710,9 @@ async function submitSimpleVeo(prompt, model) {
 }
 
 function submitSnapGen(prompt) {
-  // Ouvre SnapGenAI dans un nouvel onglet avec le prompt pré-rempli
-  const snapgenUrl = 'https://snapgen.ai';
-  showToast('🎬 Ouverture de SnapGenAI...', 3000);
-  // Ouvrir SnapGenAI — l'utilisateur sera redirigé pour se connecter et générer
-  window.open(snapgenUrl, '_blank');
-  // Afficher un message informatif
-  const panel = document.getElementById('progress-panel');
-  panel.classList.remove('hidden');
-  document.querySelectorAll('.sora-form-collapse').forEach(el => el.classList.add('collapsed'));
-  document.getElementById('progress-bar').style.width = '100%';
-  document.getElementById('progress-pct').textContent = '100%';
-  document.getElementById('progress-elapsed').textContent = '';
-  document.getElementById('progress-remaining').textContent = '';
-  document.getElementById('progress-step-name').textContent = 'SnapGenAI ouvert dans un nouvel onglet';
-  document.getElementById('progress-state-label').textContent = 'SnapGenAI';
-  document.getElementById('progress-state-dot').className = 'w-1.5 h-1.5 rounded-full bg-blue-400';
-  document.getElementById('progress-ring-icon').textContent = '🎬';
-  document.getElementById('steps-container').innerHTML = `
-    <div class="sora-step flex items-center gap-3 text-sm" style="opacity:1;">
-      <span class="sora-step-dot" style="background:rgba(59,130,246,0.5);"></span>
-      <span class="step-label" style="color:#93c5fc;">SnapGenAI ouvert dans un nouvel onglet</span>
-    </div>
-    <div class="sora-step flex items-center gap-3 text-sm" style="opacity:1;">
-      <span class="sora-step-dot" style="background:rgba(255,255,255,0.08);"></span>
-      <span class="step-label" style="color:rgba(156,163,175,0.6);">Choisissez Veo 3.1 sur SnapGenAI et collez votre prompt</span>
-    </div>
-    <div class="sora-step flex items-center gap-3 text-sm" style="opacity:1;">
-      <span class="sora-step-dot" style="background:rgba(255,255,255,0.08);"></span>
-      <span class="step-label" style="color:rgba(156,163,175,0.6);">Téléchargez la vidéo générée</span>
-    </div>
-  `;
-  document.getElementById('btn-stop').classList.add('hidden');
-  document.getElementById('result-area').classList.add('hidden');
+  // Ouvre la page SnapGenAI intégrée dans l'app (même domaine)
+  window.open('/snapgen', '_blank');
+  showToast('🎬 SnapGenAI ouvert dans un nouvel onglet', 3000);
 }
 
 async function submitSimpleAgnes(prompt) {

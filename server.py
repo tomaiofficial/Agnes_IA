@@ -909,6 +909,15 @@ async def image_page():
     return {"message": "Agnes Video Generator API"}
 
 
+@app.get("/snapgen")
+async def snapgen_page():
+    """Page intégrée SnapGenAI — iframe Veo 3.1 gratuit dans l'app Agnes."""
+    snapgen_path = os.path.join(os.path.dirname(__file__), "static", "snapgen.html")
+    if os.path.exists(snapgen_path):
+        return FileResponse(snapgen_path)
+    raise HTTPException(status_code=404, detail="SnapGenAI page not found")
+
+
 @app.get("/index.html")
 async def root_index_html():
     """Compat : les URL `/index.html` (bookmark, cache-buster `?v=...`) donnaient

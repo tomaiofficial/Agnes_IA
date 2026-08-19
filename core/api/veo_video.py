@@ -164,7 +164,6 @@ class VeoVideoAPI:
                 "sampleCount": 1,
                 "durationSeconds": dur,
                 "resolution": veo_res,
-                "personGeneration": "allow_adult",
             },
         }
 

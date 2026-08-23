@@ -1021,6 +1021,40 @@
   </div>
 </footer>
 
+<!-- Alerte maintenance — s'affiche 3 fois max -->
+<div id="maintenance-banner" class="hidden fixed inset-0 z-[200] flex items-center justify-center p-4" style="background:rgba(0,0,0,0.85);">
+  <div style="max-width:400px;width:100%;background:linear-gradient(135deg,#1e1b4b,#172554);border:1px solid rgba(251,191,36,.3);border-radius:20px;padding:32px 28px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.6);">
+    <div style="font-size:40px;margin-bottom:12px;">⚠️</div>
+    <h2 style="color:#fbbf24;font-size:17px;font-weight:700;margin:0 0 8px;">Maintenance prévue</h2>
+    <p style="color:#d1d5db;font-size:13px;line-height:1.6;margin:0 0 6px;">
+      Le site <strong style="color:#fff;">Agnes</strong> sera en maintenance le<br>
+      <strong style="color:#fbbf24;font-size:15px;">mardi 25 août 2026</strong>
+    </p>
+    <p style="color:#9ca3af;font-size:11px;margin:0 0 20px;">Le service sera temporairement indisponible. Merci de votre patience.</p>
+    <button onclick="closeMaintenance()" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:12px;padding:12px 36px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(245,158,11,.3);">
+      Compris
+    </button>
+    <p id="maintenance-count" style="color:#6b7280;font-size:10px;margin-top:12px;"></p>
+  </div>
+</div>
+
+<script>
+function closeMaintenance() {
+  var banner = document.getElementById('maintenance-banner');
+  var count = parseInt(localStorage.getItem('agnes_maint_count') || '0', 10);
+  count++;
+  localStorage.setItem('agnes_maint_count', count);
+  banner.classList.add('hidden');
+}
+(function() {
+  var count = parseInt(localStorage.getItem('agnes_maint_count') || '0', 10);
+  if (count < 3) {
+    document.getElementById('maintenance-banner').classList.remove('hidden');
+    document.getElementById('maintenance-count').textContent = 'Vous avez vu cette notification ' + count + ' fois sur 3.';
+  }
+})();
+</script>
+
 <!-- Scripts additionnels (grille For You accueil) -->
 <script>
   // ── Grille « For You » sur l'accueil : derniers vidéos communautaires ──

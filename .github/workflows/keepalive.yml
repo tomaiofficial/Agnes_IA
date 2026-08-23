@@ -37,4 +37,4 @@ jobs:
       - name: Ping Render /api/health (réveille + maintient éveillé)
         run: |
           curl -sS -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" \
-            https://agnes-ia2.onrender.com/api/health --max-time 90
+            https://agnes-ia.onrender.com/api/health --max-time 90

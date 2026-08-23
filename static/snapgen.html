@@ -10,121 +10,108 @@
       background: #0a0a0f;
       color: #e5e7eb;
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    .topbar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 16px;
-      background: rgba(15, 15, 25, 0.95);
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      flex-shrink: 0;
-      z-index: 100;
-    }
-    .topbar a.back {
-      color: #9ca3af;
-      text-decoration: none;
-      font-size: 14px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: color 0.2s;
-    }
-    .topbar a.back:hover { color: #e5e7eb; }
-    .topbar .title {
-      font-size: 14px;
-      font-weight: 600;
-      color: #d1d5db;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .topbar .title .dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: #22c55e;
-      animation: pulse 2s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-    .topbar .info {
-      margin-left: auto;
-      font-size: 11px;
-      color: #6b7280;
-    }
-    .iframe-wrap {
-      flex: 1;
-      position: relative;
-      overflow: hidden;
-    }
-    .iframe-wrap iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-      background: #0a0a0f;
-    }
-    .loading-overlay {
-      position: absolute;
-      inset: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: #0a0a0f;
-      z-index: 50;
-      transition: opacity 0.4s;
+      min-height: 100vh;
+      text-align: center;
+      padding: 24px;
     }
-    .loading-overlay.hidden { opacity: 0; pointer-events: none; }
-    .loading-overlay .spinner {
-      width: 40px; height: 40px;
-      border: 3px solid rgba(255,255,255,0.08);
-      border-top-color: #3b82f6;
+    .card {
+      max-width: 440px;
+      width: 100%;
+      background: rgba(15, 15, 25, 0.95);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 20px;
+      padding: 40px 32px;
+    }
+    .icon { font-size: 48px; margin-bottom: 16px; }
+    h1 { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+    .sub { font-size: 13px; color: #9ca3af; margin-bottom: 28px; line-height: 1.5; }
+    .btn {
+      display: inline-block;
+      padding: 14px 32px;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      text-decoration: none;
+      color: #fff;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      box-shadow: 0 8px 28px rgba(99,102,241,0.3);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 12px 36px rgba(99,102,241,0.45); }
+    .steps {
+      margin-top: 28px;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 1.4;
+    }
+    .step-num {
+      flex-shrink: 0;
+      width: 22px; height: 22px;
       border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      background: rgba(99,102,241,0.15);
+      color: #818cf8;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .loading-overlay p {
-      margin-top: 16px;
-      color: #6b7280;
+    .back {
+      margin-top: 24px;
       font-size: 13px;
+      color: #6b7280;
+      text-decoration: none;
+      transition: color 0.2s;
     }
+    .back:hover { color: #e5e7eb; }
+    .contact {
+      margin-top: 20px;
+      font-size: 11px;
+      color: #4b5563;
+    }
+    .contact a { color: #6366f1; text-decoration: none; }
+    .contact a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
-  <div class="topbar">
+  <div class="card">
+    <div class="icon">🎬</div>
+    <h1>SnapGenAI — Veo 3</h1>
+    <p class="sub">Générez des vidéos Veo 3 gratuitement via SnapGenAI.<br>Connectez-vous avec Google, choisissez Veo 3 et écrivez votre prompt.</p>
+    <a href="https://snapgen.ai" target="_blank" rel="noopener" class="btn">Ouvrir SnapGenAI</a>
+    <div class="steps">
+      <div class="step">
+        <span class="step-num">1</span>
+        <span>Cliquez sur le bouton ci-dessus pour ouvrir SnapGenAI</span>
+      </div>
+      <div class="step">
+        <span class="step-num">2</span>
+        <span>Connectez-vous avec votre compte Google</span>
+      </div>
+      <div class="step">
+        <span class="step-num">3</span>
+        <span>Sélectionnez le modèle <strong style="color:#c4b5fd;">Veo 3</strong> et écrivez votre prompt</span>
+      </div>
+      <div class="step">
+        <span class="step-num">4</span>
+        <span>Cliquez sur Generate et téléchargez votre vidéo</span>
+      </div>
+    </div>
     <a href="/" class="back">← Retour à Agnes</a>
-    <div class="title">
-      <span class="dot"></span>
-      SnapGenAI Veo 3.1
-    </div>
-    <div class="info">Service tiers — connectez-vous avec Google</div>
+    <p class="contact">Problème ? Contactez-nous : <a href="mailto:guegan_tom@icloud.com">guegan_tom@icloud.com</a></p>
   </div>
-  <div class="iframe-wrap">
-    <div class="loading-overlay" id="loader">
-      <div class="spinner"></div>
-      <p>Chargement de SnapGenAI...</p>
-    </div>
-    <iframe
-      id="snapgen-frame"
-      src="https://snapgen.ai"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-      allowfullscreen
-    ></iframe>
-  </div>
-  <script>
-    const frame = document.getElementById('snapgen-frame');
-    const loader = document.getElementById('loader');
-    frame.addEventListener('load', () => {
-      setTimeout(() => loader.classList.add('hidden'), 500);
-    });
-    // Timeout fallback
-    setTimeout(() => loader.classList.add('hidden'), 8000);
-  </script>
 </body>
 </html>

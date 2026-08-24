@@ -67,7 +67,7 @@
   .desktop-status { display:inline-flex; align-items:center; gap:7px; padding:9px 12px; border:1px solid rgba(34,197,94,.18); background:rgba(34,197,94,.07); border-radius:12px; color:#bbf7d0; font-size:11px; white-space:nowrap; }
   .desktop-status::before { content:''; width:7px; height:7px; border-radius:50%; background:#22c55e; box-shadow:0 0 12px rgba(34,197,94,.8); }
   @media (min-width: 821px) {
-    header.app-header { width:248px; right:auto; height:100dvh; padding:24px 16px 18px; flex-direction:column; align-items:stretch; justify-content:flex-start; gap:0; }
+    header.app-header { width:248px; right:auto; height:100dvh; padding:24px 16px 18px; flex-direction:column; align-items:stretch; justify-content:flex-start; gap:0; margin-top:32px; }
     header.app-header .logo { padding:0 10px; margin-bottom:34px; }
     nav.header-nav { flex-direction:column; align-items:stretch; gap:6px; }
     nav.header-nav a { display:flex; align-items:center; gap:10px; padding:12px 13px; border-radius:12px; }
@@ -78,7 +78,7 @@
     nav.header-nav a#pseudo-btn { margin-top:8px; }
     .header-right { margin-top:auto; flex-direction:column; align-items:stretch; }
     .header-right .btn-k { width:100%; }
-    main { margin-left:248px; }
+    main { margin-left:248px; padding-top:32px; }
   }
 
   .avatar-mini {
@@ -290,14 +290,15 @@
     #page-title { padding:20px 14px 18px; border:1px solid rgba(91,140,255,.20); border-radius:22px; background:linear-gradient(135deg,rgba(20,32,70,.62),rgba(33,18,63,.48)); box-shadow:0 16px 45px rgba(0,0,0,.24); }
     #page-title h1 { font-size:clamp(25px,8vw,34px) !important; }
   }
-  /* ── Compteur à rebours maintenance (mobile only) ── */
+  /* ── Compteur à rebours maintenance (desktop + mobile) ── */
   #maint-countdown-bar {
-    display:none; position:fixed; top:0; left:0; right:0; z-index:210;
+    display:flex; position:fixed; top:0; left:0; right:0; z-index:210;
     background:linear-gradient(90deg,rgba(30,27,75,.95),rgba(23,37,84,.95));
     border-bottom:1px solid rgba(251,191,36,.28);
     padding:5px 14px; text-align:center;
     font-size:11px; color:#d1d5db;
     animation:cdPulse 3s ease-in-out infinite;
+    align-items:center; justify-content:center; gap:0;
   }
   #maint-countdown-bar .cd-warn { color:#fbbf24; font-weight:700; }
   #maint-countdown-bar .cd-time { color:#fff; font-weight:800; font-size:13px; letter-spacing:.4px; }
@@ -327,7 +328,6 @@
   @media (max-width: 560px) {
     html, body { max-width: 100%; overflow-x: hidden; }
     .desktop-status { display:none; }
-    #maint-countdown-bar { display:flex; align-items:center; justify-content:center; gap:0; }
     header.app-header { margin-top:32px; }
     main { padding-top:110px !important; }
     header.app-header {
@@ -1207,8 +1207,8 @@ function closeMaintenance() {
 <!-- Compteur à rebours maintenance (mobile) + lockdown -->
 <script>
 (function() {
-  /* Date cible : mardi 25 août 2026, 00:00 UTC+2 (Paris) */
-  var TARGET = new Date('2026-08-25T00:00:00+02:00').getTime();
+  /* Date cible : mardi 25 août 2026, 23:00 UTC+2 (Paris) */
+  var TARGET = new Date('2026-08-25T23:00:00+02:00').getTime();
   var bar    = document.getElementById('maint-countdown-bar');
   var lock   = document.getElementById('maint-lockdown');
   if (!bar || !lock) return;

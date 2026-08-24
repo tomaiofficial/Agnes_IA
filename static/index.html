@@ -2322,8 +2322,6 @@ async function submitMusic() {
 
 // Vérifier la clé Suno au chargement si l'onglet musique est visible
 document.addEventListener('DOMContentLoaded', () => { setTimeout(checkSunoKey, 2000); });
-  switchMode('video'); document.getElementById('s_mode').value = 'i2v'; onSimpleModeChange(); showToast('Image prête : ajoute-la au champ de référence pour lancer la vidéo.', 4000);
-}
 
 async function showProgress(taskId, dirName) {
   const panel = document.getElementById('progress-panel');

@@ -304,6 +304,26 @@
   #maint-countdown-bar .cd-unit { color:#f59e0b; font-size:8px; text-transform:uppercase; margin-left:1px; }
   #maint-countdown-bar .cd-sep { color:#4b5563; margin:0 3px; font-weight:400; }
   @keyframes cdPulse { 0%,100%{opacity:1} 50%{opacity:.78} }
+
+  /* ── Écran lockdown maintenance (bloque tout l'app) ── */
+  #maint-lockdown {
+    display:none; position:fixed; inset:0; z-index:9999;
+    background:radial-gradient(800px 600px at 50% 30%,rgba(30,27,75,.96),rgba(7,10,18,.99));
+    flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:32px; overflow-y:auto;
+  }
+  #maint-lockdown.show { display:flex; }
+  #maint-lockdown .lock-icon { font-size:56px; margin-bottom:18px; animation:lockPulse 3s ease-in-out infinite; }
+  @keyframes lockPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+  #maint-lockdown h2 { color:#fbbf24; font-size:22px; font-weight:800; margin:0 0 10px; text-shadow:0 0 30px rgba(251,191,36,.3); }
+  #maint-lockdown p { color:#9ca3af; font-size:13px; line-height:1.6; max-width:360px; margin:0 0 8px; }
+  #maint-lockdown p strong { color:#d1d5db; }
+  #maint-lockdown .lock-bar { margin-top:24px; width:200px; height:3px; border-radius:3px; background:rgba(251,191,36,.15); overflow:hidden; }
+  #maint-lockdown .lock-bar-inner { width:40%; height:100%; border-radius:3px; background:#fbbf24; animation:lockSlide 1.8s ease-in-out infinite; }
+  @keyframes lockSlide { 0%{transform:translateX(-100%)} 100%{transform:translateX(350%)} }
+  #maint-lockdown .lock-footer { margin-top:30px; font-size:10px; color:#4b5563; }
+  #maint-lockdown .lock-footer a { color:#6366f1; text-decoration:none; }
+
   @media (max-width: 560px) {
     html, body { max-width: 100%; overflow-x: hidden; }
     .desktop-status { display:none; }
@@ -409,6 +429,24 @@
   <span id="cd-mins" class="cd-time">--</span><span class="cd-unit">m</span>
   <span class="cd-sep">:</span>
   <span id="cd-secs" class="cd-time">--</span><span class="cd-unit">s</span>
+</div>
+
+<!-- Écran lockdown maintenance — se bloque quand le compteur arrive à 0 -->
+<div id="maint-lockdown">
+  <div class="lock-icon">🔧</div>
+  <h2>Agnes est en maintenance</h2>
+  <p>
+    Le site est actuellement indisponible pour une mise à jour majeure :
+    migration des bases de données, optimisation des moteurs vidéo
+    et amélioration de la stabilité.
+  </p>
+  <p><strong>Durée estimée : environ 24h.</strong></p>
+  <p>Merci de votre patience. Le service reviendra automatiquement.</p>
+  <div class="lock-bar"><div class="lock-bar-inner"></div></div>
+  <div class="lock-footer">
+    <p>© 2026 Agnes Video Generator</p>
+    <p>Urgence ? <a href="mailto:guegan_tom@icloud.com">Contactez-nous</a></p>
+  </div>
 </div>
 
 <header class="app-header">
@@ -1088,42 +1126,50 @@ function closeMaintenance() {
 })();
 </script>
 
-<!-- Compteur à rebours maintenance (mobile) -->
+<!-- Compteur à rebours maintenance (mobile) + lockdown -->
 <script>
 (function() {
   /* Date cible : mardi 25 août 2026, 00:00 UTC+2 (Paris) */
   var TARGET = new Date('2026-08-25T00:00:00+02:00').getTime();
   var bar    = document.getElementById('maint-countdown-bar');
-  if (!bar) return;
+  var lock   = document.getElementById('maint-lockdown');
+  if (!bar || !lock) return;
 
-  /* Masquer le compteur si on dépasse la date cible + 24 h (durée maintenance) */
+  /* Fin de maintenance = cible + 24 h */
   var END = TARGET + 24 * 3600 * 1000;
 
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
   function tick() {
-    var now  = Date.now();
-    /* Maintenance terminée → masquer */
-    if (now > END) { bar.style.display = 'none'; return; }
-    /* Avant la maintenance */
-    var diff = TARGET - now;
-    if (diff <= 0) {
-      /* En maintenance */
-      bar.querySelector('.cd-warn').textContent = '🔧 Maintenance en cours';
-      document.getElementById('cd-days').textContent  = '00';
-      document.getElementById('cd-hours').textContent = '00';
-      document.getElementById('cd-mins').textContent  = '00';
-      document.getElementById('cd-secs').textContent  = '00';
-    } else {
-      var s = Math.floor(diff / 1000);
-      var d = Math.floor(s / 86400); s %= 86400;
-      var h = Math.floor(s / 3600);  s %= 3600;
-      var m = Math.floor(s / 60);    s %= 60;
-      document.getElementById('cd-days').textContent  = pad(d);
-      document.getElementById('cd-hours').textContent = pad(h);
-      document.getElementById('cd-mins').textContent  = pad(m);
-      document.getElementById('cd-secs').textContent  = pad(s);
+    var now = Date.now();
+
+    /* 1) Après la maintenance (cible + 24h) → tout masquer, app libre */
+    if (now > END) {
+      bar.style.display  = 'none';
+      lock.classList.remove('show');
+      return;
     }
+
+    /* 2) Pendant la maintenance (après la cible) → lockdown */
+    if (now >= TARGET) {
+      bar.style.display = 'none';          /* masquer le compteur */
+      lock.classList.add('show');           /* bloquer l'app */
+      lock.querySelector('h2').textContent = '🔧 Maintenance en cours';
+      requestAnimationFrame(function() { setTimeout(tick, 2000); });
+      return;
+    }
+
+    /* 3) Avant la maintenance → compteur à rebours */
+    var diff = TARGET - now;
+    var s = Math.floor(diff / 1000);
+    var d = Math.floor(s / 86400); s %= 86400;
+    var h = Math.floor(s / 3600);  s %= 3600;
+    var m = Math.floor(s / 60);    s %= 60;
+    document.getElementById('cd-days').textContent  = pad(d);
+    document.getElementById('cd-hours').textContent = pad(h);
+    document.getElementById('cd-mins').textContent  = pad(m);
+    document.getElementById('cd-secs').textContent  = pad(s);
+
     requestAnimationFrame(function() { setTimeout(tick, 500); });
   }
   tick();

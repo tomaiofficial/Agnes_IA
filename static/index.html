@@ -290,9 +290,26 @@
     #page-title { padding:20px 14px 18px; border:1px solid rgba(91,140,255,.20); border-radius:22px; background:linear-gradient(135deg,rgba(20,32,70,.62),rgba(33,18,63,.48)); box-shadow:0 16px 45px rgba(0,0,0,.24); }
     #page-title h1 { font-size:clamp(25px,8vw,34px) !important; }
   }
+  /* ── Compteur à rebours maintenance (mobile only) ── */
+  #maint-countdown-bar {
+    display:none; position:fixed; top:0; left:0; right:0; z-index:210;
+    background:linear-gradient(90deg,rgba(30,27,75,.95),rgba(23,37,84,.95));
+    border-bottom:1px solid rgba(251,191,36,.28);
+    padding:5px 14px; text-align:center;
+    font-size:11px; color:#d1d5db;
+    animation:cdPulse 3s ease-in-out infinite;
+  }
+  #maint-countdown-bar .cd-warn { color:#fbbf24; font-weight:700; }
+  #maint-countdown-bar .cd-time { color:#fff; font-weight:800; font-size:13px; letter-spacing:.4px; }
+  #maint-countdown-bar .cd-unit { color:#f59e0b; font-size:8px; text-transform:uppercase; margin-left:1px; }
+  #maint-countdown-bar .cd-sep { color:#4b5563; margin:0 3px; font-weight:400; }
+  @keyframes cdPulse { 0%,100%{opacity:1} 50%{opacity:.78} }
   @media (max-width: 560px) {
     html, body { max-width: 100%; overflow-x: hidden; }
     .desktop-status { display:none; }
+    #maint-countdown-bar { display:flex; align-items:center; justify-content:center; gap:0; }
+    header.app-header { margin-top:32px; }
+    main { padding-top:110px !important; }
     header.app-header {
       height: 56px; padding: 0 10px; gap: 6px; overflow: hidden;
     }
@@ -382,6 +399,18 @@
 <body class="text-gray-100 min-h-screen font-sans">
 
 <!-- ═══════════ Header (style Kling) ═══════════ -->
+<!-- Compteur à rebours maintenance — mobile only -->
+<div id="maint-countdown-bar" role="status" aria-label="Temps restant avant maintenance">
+  <span class="cd-warn">⚠ Maintenance dans</span>
+  <span id="cd-days" class="cd-time">--</span><span class="cd-unit">j</span>
+  <span class="cd-sep">:</span>
+  <span id="cd-hours" class="cd-time">--</span><span class="cd-unit">h</span>
+  <span class="cd-sep">:</span>
+  <span id="cd-mins" class="cd-time">--</span><span class="cd-unit">m</span>
+  <span class="cd-sep">:</span>
+  <span id="cd-secs" class="cd-time">--</span><span class="cd-unit">s</span>
+</div>
+
 <header class="app-header">
   <a class="logo" href="/">
     <div class="logo-badge">✦</div>
@@ -1056,6 +1085,48 @@ function closeMaintenance() {
     document.getElementById('maintenance-banner').classList.remove('hidden');
     document.getElementById('maintenance-count').textContent = 'Vous avez vu cette notification ' + count + ' fois sur 3.';
   }
+})();
+</script>
+
+<!-- Compteur à rebours maintenance (mobile) -->
+<script>
+(function() {
+  /* Date cible : mardi 25 août 2026, 00:00 UTC+2 (Paris) */
+  var TARGET = new Date('2026-08-25T00:00:00+02:00').getTime();
+  var bar    = document.getElementById('maint-countdown-bar');
+  if (!bar) return;
+
+  /* Masquer le compteur si on dépasse la date cible + 24 h (durée maintenance) */
+  var END = TARGET + 24 * 3600 * 1000;
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+
+  function tick() {
+    var now  = Date.now();
+    /* Maintenance terminée → masquer */
+    if (now > END) { bar.style.display = 'none'; return; }
+    /* Avant la maintenance */
+    var diff = TARGET - now;
+    if (diff <= 0) {
+      /* En maintenance */
+      bar.querySelector('.cd-warn').textContent = '🔧 Maintenance en cours';
+      document.getElementById('cd-days').textContent  = '00';
+      document.getElementById('cd-hours').textContent = '00';
+      document.getElementById('cd-mins').textContent  = '00';
+      document.getElementById('cd-secs').textContent  = '00';
+    } else {
+      var s = Math.floor(diff / 1000);
+      var d = Math.floor(s / 86400); s %= 86400;
+      var h = Math.floor(s / 3600);  s %= 3600;
+      var m = Math.floor(s / 60);    s %= 60;
+      document.getElementById('cd-days').textContent  = pad(d);
+      document.getElementById('cd-hours').textContent = pad(h);
+      document.getElementById('cd-mins').textContent  = pad(m);
+      document.getElementById('cd-secs').textContent  = pad(s);
+    }
+    requestAnimationFrame(function() { setTimeout(tick, 500); });
+  }
+  tick();
 })();
 </script>
 

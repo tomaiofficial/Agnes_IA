@@ -1135,6 +1135,13 @@ function closeMaintenance() {
   var lock   = document.getElementById('maint-lockdown');
   if (!bar || !lock) return;
 
+  /* ══ DEV BYPASS : ?dev=1 dans l'URL désactive le lockdown ══ */
+  var isDev = /[?&]dev=1/.test(window.location.search);
+  if (isDev) {
+    bar.style.display = 'none';   /* cacher le compteur aussi */
+    return;                        /* ne rien bloquer */
+  }
+
   /* Fin de maintenance = cible + 24 h */
   var END = TARGET + 24 * 3600 * 1000;
 

@@ -1172,13 +1172,12 @@
     <div style="font-size:40px;margin-bottom:12px;">⚠️</div>
     <h2 style="color:#fbbf24;font-size:17px;font-weight:700;margin:0 0 8px;">Maintenance prévue</h2>
     <p style="color:#d1d5db;font-size:13px;line-height:1.6;margin:0 0 6px;">
-      Le site <strong style="color:#fff;">Agnes</strong> sera en maintenance le<br>
-      <strong style="color:#fbbf24;font-size:15px;">mardi 25 août 2026</strong>
+      Le site <strong style="color:#fff;">Agnes</strong> sera en maintenance <strong style="color:#fbbf24;">ce soir à 23:00</strong>
     </p>
     <p style="color:#9ca3af;font-size:11px;line-height:1.5;margin:0 0 20px;">
       Mise à jour majeure du serveur et de l'infrastructure : migration des bases de données,
       optimisation des moteurs de génération vidéo et amélioration de la stabilité.
-      Durée estimée : <strong style="color:#d1d5db;">environ 24h</strong>. Merci de votre patience.
+      Durée estimée : <strong style="color:#d1d5db;">environ 24h</strong>. Le site sera <strong style="color:#f87171;">inaccessible</strong> pendant cette période. Merci de votre patience.
     </p>
     <button onclick="closeMaintenance()" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:12px;padding:12px 36px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(245,158,11,.3);">
       Compris
@@ -1201,6 +1200,51 @@ function closeMaintenance() {
     document.getElementById('maintenance-banner').classList.remove('hidden');
     document.getElementById('maintenance-count').textContent = 'Vous avez vu cette notification ' + count + ' fois sur 3.';
   }
+})();
+</script>
+
+<!-- Notifications programmées maintenance (20:30, 21:00, 21:30) -->
+<script>
+(function() {
+  var NOTIF_TIMES = ['20:30', '21:00', '21:30'];
+  var shown = JSON.parse(localStorage.getItem('agnes_maint_notif_shown') || '[]');
+  var now = new Date();
+  var today = now.toISOString().split('T')[0];
+  var key = 'agnes_maint_notif_' + today;
+
+  function showNotif(timeStr) {
+    var banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:9999;max-width:420px;width:90%;background:linear-gradient(135deg,#1e1b4b,#172554);border:1px solid rgba(251,191,36,.4);border-radius:16px;padding:20px 24px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.7);animation:slideDown .4s ease;';
+    banner.innerHTML = 
+      '<div style="font-size:28px;margin-bottom:8px;">⚠️</div>' +
+      '<h3 style="color:#fbbf24;font-size:15px;font-weight:700;margin:0 0 6px;">Maintenance ce soir à 23:00</h3>' +
+      '<p style="color:#d1d5db;font-size:12px;line-height:1.5;margin:0 0 10px;">' +
+        'Le site <strong style="color:#fff;">Agnes</strong> sera en maintenance <strong style="color:#fbbf24;">ce soir à 23:00</strong> (heure Paris).<br>' +
+        'Durée : <strong style="color:#d1d5db;">~24h</strong>. Mise à jour majeure : migration BDD, optimisation moteurs vidéo, stabilité.<br>' +
+        'Le site sera <strong style="color:#f87171;">inaccessible</strong> pendant cette période.'
+      '</p>' +
+      '<p style="color:#9ca3af;font-size:10px;margin:10px 0 0;border-top:1px solid rgba(251,191,36,.15);padding-top:10px;">' +
+        '— <strong style="color:#6366f1;">tom.ai.official</strong> · Cordialement,<br>L\'équipe Agnes Video'
+      '</p>' +
+      '<button onclick="this.parentElement.remove()" style="margin-top:14px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:10px;padding:10px 28px;font-size:12px;font-weight:700;cursor:pointer;">Fermer</button>';
+    document.body.appendChild(banner);
+    setTimeout(function() { if (banner.parentElement) banner.remove(); }, 30000);
+  }
+
+  function check() {
+    var now = new Date();
+    var hh = String(now.getHours()).padStart(2,'0');
+    var mm = String(now.getMinutes()).padStart(2,'0');
+    var current = hh + ':' + mm;
+    if (NOTIF_TIMES.includes(current) && !shown.includes(current)) {
+      shown.push(current);
+      localStorage.setItem(key, JSON.stringify(shown));
+      showNotif(current);
+    }
+  }
+
+  check();
+  setInterval(check, 30000);
 })();
 </script>
 

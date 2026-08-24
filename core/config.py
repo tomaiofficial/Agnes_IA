@@ -253,6 +253,58 @@ def get_gemini_api_key_source() -> str:
 
 
 # ═══════════════════════════════════════════════════
+# Suno AI API Key (musique)
+# ═══════════════════════════════════════════════════
+
+def get_suno_api_key() -> str:
+    """Retourne la clé API Suno AI (musique).
+
+    Priorité :
+    1. Variable d'environnement SUNO_API_KEY
+    2. Fichier de config (clé 'suno_api_key')
+    3. Chaîne vide (non configuré)
+    """
+    env_key = os.environ.get("SUNO_API_KEY", "")
+    if env_key:
+        return env_key
+    config = load_config()
+    return config.get("suno_api_key", "")
+
+
+def set_suno_api_key(key: str):
+    """Sauvegarde la clé API Suno dans le fichier de config."""
+    config = load_config()
+    config["suno_api_key"] = key
+    save_config(config)
+
+
+def delete_suno_api_key() -> bool:
+    """Supprime la clé API Suno du fichier de config."""
+    config = load_config()
+    if "suno_api_key" in config:
+        del config["suno_api_key"]
+        save_config(config)
+        return True
+    return False
+
+
+def get_suno_api_key_source() -> str:
+    """Retourne la source de la clé Suno actuelle.
+
+    Returns:
+        'env' si depuis SUNO_API_KEY,
+        'config' si depuis le fichier de config,
+        'none' si non configuré.
+    """
+    if os.environ.get("SUNO_API_KEY", ""):
+        return "env"
+    config = load_config()
+    if config.get("suno_api_key"):
+        return "config"
+    return "none"
+
+
+# ═══════════════════════════════════════════════════
 # 工作目录管理（多工作目录，同时仅一个 active）
 # ═══════════════════════════════════════════════════
 

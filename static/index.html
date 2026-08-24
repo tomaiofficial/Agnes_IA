@@ -703,6 +703,9 @@
       <button onclick="goMode('image')" id="tab-image" class="mode-tab bg-gray-800/50 border-gray-700/50 text-gray-400">
         <span class="ico">🖼️</span>Image
       </button>
+      <button onclick="switchMode('music')" id="tab-music" class="mode-tab bg-gray-800/50 border-gray-700/50 text-gray-400">
+        <span class="ico">🎵</span>Musique
+      </button>
     </div>
 
     <!-- ═══════ Formulaire Vidéo (style Kling) ═══════ -->
@@ -926,6 +929,81 @@
         <label class="k-label mt-3">Negative prompt (optionnel)</label><input id="i_negative" class="k-field" placeholder="flou, déformation, texte, watermark…">
         <button id="btn-image" type="button" onclick="submitImage()" class="gen-btn mt-4">✦ Générer l’image</button>
         <div id="image-result" class="hidden mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-center"><img id="image-result-img" class="max-h-[440px] w-auto mx-auto rounded-lg" alt="Image générée Agnes"><div class="flex flex-wrap justify-center gap-2 mt-3"><button type="button" class="btn-k btn-ghost-k text-xs" onclick="useGeneratedImageForVideo()">🎬 Utiliser pour une vidéo</button><a id="image-download" class="btn-k btn-ghost-k text-xs" download="agnes-image.png">Télécharger</a></div></div>
+      </div>
+    </div>
+
+    <!-- ═══════ Formulaire Musique (Suno AI) ═══════ -->
+    <div id="form-music" class="hidden sora-form-collapse">
+      <div class="k-card p-4 sm:p-6 mb-4">
+        <div class="flex items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 class="text-base sm:text-lg font-semibold text-gray-200">🎵 Générer de la musique</h3>
+            <p class="text-xs text-gray-500 mt-1">Créez une musique IA avec Suno. Vocals, instruments, lyrics — tout est possible.</p>
+          </div>
+          <span class="k-chip" style="background:rgba(168,85,247,.15);color:#c084fc;">Suno AI</span>
+        </div>
+
+        <!-- Clé API status -->
+        <div id="suno-key-status" class="hidden mb-3 p-2 rounded-lg text-xs" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#fca5a5;">
+          ⚠️ Clé API Suno non configurée. <a href="#" onclick="showSunoKeyModal();return false;" style="color:#c084fc;text-decoration:underline;">Ajouter une clé</a>
+        </div>
+
+        <!-- Prompt -->
+        <label class="k-label">Description de la musique <span style="color:#f87171;">*</span></label>
+        <textarea id="m_prompt" rows="3" class="k-field resize-y" placeholder="Ex : upbeat lofi hip hop with mellow piano and vinyl crackle, late-night coding vibes…"></textarea>
+
+        <!-- Options -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+          <div>
+            <label class="k-label">Style / Genre</label>
+            <input id="m_style" class="k-field" placeholder="Ex : synthwave, lofi, pop, jazz…">
+          </div>
+          <div>
+            <label class="k-label">Titre du morceau</label>
+            <input id="m_title" class="k-field" placeholder="Ex : Midnight Drive">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+          <div>
+            <label class="k-label">Modèle</label>
+            <select id="m_model" class="k-field">
+              <option value="suno-v5.5">Suno V5.5 (meilleur)</option>
+              <option value="suno-v5">Suno V5</option>
+              <option value="suno-v4.5">Suno V4.5+</option>
+            </select>
+          </div>
+          <div>
+            <label class="k-label">Vocals</label>
+            <select id="m_vocal_gender" class="k-field">
+              <option value="">Automatique</option>
+              <option value="m">Masculin</option>
+              <option value="f">Féminin</option>
+            </select>
+          </div>
+          <div class="flex items-end gap-3">
+            <label class="k-label flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="m_instrumental" class="rounded">
+              <span>Instrumental</span>
+            </label>
+            <label class="k-label flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="m_custom_mode" class="rounded">
+              <span>Lyrics custom</span>
+            </label>
+          </div>
+        </div>
+
+        <label class="k-label mt-3">Styles à éviter (optionnel)</label>
+        <input id="m_negative" class="k-field" placeholder="Ex : heavy metal, upbeat drums…">
+
+        <button id="btn-music" type="button" onclick="submitMusic()" class="gen-btn mt-4" style="background:linear-gradient(135deg,#a855f7,#6366f1);box-shadow:0 6px 24px rgba(168,85,247,.3);">
+          🎵 Générer la musique
+        </button>
+
+        <!-- Résultat -->
+        <div id="music-result" class="hidden mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+          <div id="music-tracks"></div>
+        </div>
       </div>
     </div>
 
@@ -1420,8 +1498,21 @@ function switchMode(mode) {
   currentMode = mode;
   document.getElementById('form-video').classList.toggle('hidden', mode !== 'video');
   document.getElementById('form-image').classList.toggle('hidden', mode !== 'image');
+  document.getElementById('form-music').classList.toggle('hidden', mode !== 'music');
   document.getElementById('panel-list').classList.toggle('hidden', mode !== 'list');
   document.getElementById('panel-gallery').classList.toggle('hidden', mode !== 'gallery');
+
+  // Mise à jour des onglets mode
+  const tabs = {video:'tab-video', image:'tab-image', music:'tab-music'};
+  Object.entries(tabs).forEach(([m, id]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (m === mode) {
+      el.className = 'mode-tab bg-blue-600/20 border-blue-500/30 text-blue-300';
+    } else {
+      el.className = 'mode-tab bg-gray-800/50 border-gray-700/50 text-gray-400';
+    }
+  });
   // Bug refresh : le panneau était rendu visible par ce toggle sans aucune tâche
   // suivie → après F5 il restait figé sur son état par défaut (0%, "Préparation...").
   // Il ne doit apparaître QUE via showProgress (tâche reprise ou soumise).
@@ -2144,11 +2235,93 @@ function useGeneratedImageForVideo() {
   if (!window._lastGeneratedImageUrl) return;
   // Depuis la page /image : retour au générateur vidéo en mode i2v
   if (location.pathname.startsWith('/image')) {
-    // La tâche vidéo reprendra l’URL de l’image générée
+    // La tâche vidéo reprendra l'URL de l'image générée
     try { sessionStorage.setItem('agnes_i2v_url', window._lastGeneratedImageUrl); } catch (e) {}
     location.href = '/?mode=i2v';
     return;
   }
+  switchMode('video'); document.getElementById('s_mode').value = 'i2v'; onSimpleModeChange(); showToast('Image prête : ajoute-la au champ de référence pour lancer la vidéo.', 4000);
+}
+
+// ═══════════════════════════════════════════════════
+// Suno AI — Génération musicale
+// ═══════════════════════════════════════════════════
+
+async function checkSunoKey() {
+  try {
+    const r = await fetchWithAuth(API_BASE + '/api/config/suno');
+    const d = await r.json();
+    const status = document.getElementById('suno-key-status');
+    if (status) status.classList.toggle('hidden', d.configured);
+  } catch (e) {}
+}
+
+function showSunoKeyModal() {
+  const key = prompt('Entrez votre clé API Suno (Apiframe) :\n\nObtenez-la sur https://apiframe.ai/app/keys');
+  if (!key) return;
+  fetch(API_BASE + '/api/config/suno', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({api_key: key})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) { showToast('✅ Clé API Suno configurée !', 3000); checkSunoKey(); }
+    else { showToast('❌ Erreur: ' + (d.detail || 'inconnue'), 4000); }
+  }).catch(e => showToast('❌ Erreur réseau', 3000));
+}
+
+async function submitMusic() {
+  const prompt = (document.getElementById('m_prompt')?.value || '').trim();
+  const btn = document.getElementById('btn-music');
+  if (!prompt) { showToast('Décris la musique à générer.', 3000); document.getElementById('m_prompt')?.focus(); return; }
+  if (btn) { btn.disabled = true; btn.textContent = '🎵 Génération en cours…'; }
+
+  const resultDiv = document.getElementById('music-result');
+  const tracksDiv = document.getElementById('music-tracks');
+  resultDiv?.classList.add('hidden');
+
+  try {
+    const fd = new FormData();
+    fd.append('prompt', prompt);
+    fd.append('style', document.getElementById('m_style')?.value || '');
+    fd.append('title', document.getElementById('m_title')?.value || '');
+    fd.append('model', document.getElementById('m_model')?.value || 'suno-v5.5');
+    fd.append('instrumental', document.getElementById('m_instrumental')?.checked || false);
+    fd.append('custom_mode', document.getElementById('m_custom_mode')?.checked || false);
+    fd.append('vocal_gender', document.getElementById('m_vocal_gender')?.value || '');
+    fd.append('negative_tags', document.getElementById('m_negative')?.value || '');
+
+    showToast('🎵 Génération en cours… ça prend 1-3 minutes.', 5000);
+
+    const r = await fetchWithAuth(API_BASE + '/api/suno/generate', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.detail || 'Génération musicale impossible');
+
+    const tracks = d.tracks?.tracks || [];
+    if (tracks.length === 0) throw new Error('Aucun track généré');
+
+    tracksDiv.innerHTML = tracks.map((t, i) => `
+      <div class="flex items-center gap-3 p-3 rounded-lg mb-2" style="background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.15);">
+        <div class="text-2xl">${i === 0 ? '🎶' : '🎵'}</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium text-gray-200 truncate">${t.title || 'Track ' + (i+1)}</div>
+          <div class="text-xs text-gray-500">${t.tags || t.model_name || ''} ${t.duration ? '· ' + Math.round(t.duration) + 's' : ''}</div>
+        </div>
+        <audio controls class="h-8 max-w-[200px]" src="${API_BASE}/api/suno/proxy?url=${encodeURIComponent(t.audio_url)}"></audio>
+        <a href="${t.audio_url}" download class="btn-k btn-ghost-k text-xs px-2 py-1">⬇</a>
+      </div>
+    `).join('');
+
+    resultDiv?.classList.remove('hidden');
+    showToast('✅ Musique générée avec succès !', 4000);
+  } catch (e) {
+    showToast('🎵 ' + e.message, 5000);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🎵 Générer la musique'; }
+  }
+}
+
+// Vérifier la clé Suno au chargement si l'onglet musique est visible
+document.addEventListener('DOMContentLoaded', () => { setTimeout(checkSunoKey, 2000); });
   switchMode('video'); document.getElementById('s_mode').value = 'i2v'; onSimpleModeChange(); showToast('Image prête : ajoute-la au champ de référence pour lancer la vidéo.', 4000);
 }
 

@@ -35,7 +35,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Hea
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 
-from core.config import get_api_key, set_api_key, delete_api_key, get_api_key_source, get_working_dir, DURATION_FRAME_MAP, get_workspaces, add_workspace, remove_workspace, set_active_workspace, get_active_workspace, REGRESSION_WORKING_DIR_ENV, get_watermark_config, set_watermark_config, WATERMARK_PROMO_TEXT_ZH, WATERMARK_PROMO_TEXT_EN, get_selected_models, set_selected_models, get_agnes_domain, set_agnes_domain, AGNES_DOMAIN_MAP, get_agnes_api_root, DEFAULT_NEGATIVE_PROMPT, get_gemini_api_key, set_gemini_api_key, delete_gemini_api_key, get_gemini_api_key_source, get_suno_api_key, set_suno_api_key, delete_suno_api_key, get_suno_api_key_source
+from core.config import get_api_key, set_api_key, delete_api_key, get_api_key_source, get_working_dir, DURATION_FRAME_MAP, get_workspaces, add_workspace, remove_workspace, set_active_workspace, get_active_workspace, REGRESSION_WORKING_DIR_ENV, get_watermark_config, set_watermark_config, WATERMARK_PROMO_TEXT_ZH, WATERMARK_PROMO_TEXT_EN, get_selected_models, set_selected_models, get_agnes_domain, set_agnes_domain, AGNES_DOMAIN_MAP, get_agnes_api_root, DEFAULT_NEGATIVE_PROMPT, get_gemini_api_key, set_gemini_api_key, delete_gemini_api_key, get_gemini_api_key_source
 from core.path_security import safe_join, safe_workspace_path, UnsafePathError
 from core.audio.voices import (
     get_voice_catalog,
@@ -1310,116 +1310,6 @@ async def veo_status(task_id: str):
         "current_message": getattr(state, "current_message", ""),
         "final_video_file": state.final_video_file,
     }
-
-
-# ═══════════════════════════════════════════════════
-# Suno AI — Génération musicale
-# ═══════════════════════════════════════════════════
-
-@app.get("/api/config/suno")
-async def suno_config_get():
-    """Retourne le statut de la clé API Suno."""
-    key = get_suno_api_key()
-    source = get_suno_api_key_source()
-    return {
-        "ok": True,
-        "configured": bool(key),
-        "source": source,
-        "key_preview": f"{key[:8]}...{key[-4:]}" if len(key) > 12 else "",
-    }
-
-
-@app.post("/api/config/suno")
-async def suno_config_set(request: Request):
-    """Configure la clé API Suno."""
-    body = await request.json()
-    key = body.get("api_key", "").strip()
-    if not key:
-        raise HTTPException(status_code=400, detail="Clé API requise")
-    set_suno_api_key(key)
-    return {"ok": True, "message": "Clé API Suno configurée"}
-
-
-@app.delete("/api/config/suno")
-async def suno_config_delete():
-    """Supprime la clé API Suno."""
-    source = get_suno_api_key_source()
-    if source == "env":
-        raise HTTPException(status_code=400, detail="Impossible de supprimer une clé définie par variable d'environnement")
-    deleted = delete_suno_api_key()
-    return {"ok": deleted, "message": "Clé supprimée" if deleted else "Aucune clé à supprimer"}
-
-
-@app.post("/api/suno/generate")
-async def suno_generate(
-    prompt: str = Form(...),
-    style: str = Form(""),
-    title: str = Form(""),
-    instrumental: bool = Form(False),
-    custom_mode: bool = Form(False),
-    vocal_gender: str = Form(""),
-    negative_tags: str = Form(""),
-    model: str = Form("suno-v5.5"),
-):
-    """Génère de la musique avec Suno AI."""
-    api_key = get_suno_api_key()
-    if not api_key:
-        raise HTTPException(status_code=400, detail="Clé API Suno non configurée. Ajoutez-la via /api/config/suno")
-
-    from core.api.suno_api import SunoAPI
-
-    suno = SunoAPI(
-        api_key=api_key,
-        model=model,
-    )
-
-    try:
-        output = await suno.generate(
-            prompt=prompt,
-            style=style,
-            title=title,
-            instrumental=instrumental,
-            custom_mode=custom_mode,
-            vocal_gender=vocal_gender,
-            negative_tags=negative_tags,
-        )
-        return {
-            "ok": True,
-            "tracks": output.to_dict(),
-        }
-    except Exception as e:
-        logger.error(f"[Suno] Erreur génération: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur génération musicale: {str(e)}")
-
-
-@app.get("/api/suno/models")
-async def suno_models():
-    """Retourne les modèles Suno disponibles."""
-    from core.api.suno_api import SUNO_MODELS
-    return {
-        "ok": True,
-        "models": [
-            {"id": k, "name": k, "version": v}
-            for k, v in SUNO_MODELS.items()
-        ],
-    }
-
-
-@app.get("/api/suno/proxy")
-async def suno_proxy(url: str):
-    """Proxy pour les audio Suno (évite les problèmes CORS)."""
-    import requests as _req
-    try:
-        resp = _req.get(url, timeout=30, stream=True)
-        resp.raise_for_status()
-        content_type = resp.headers.get("content-type", "audio/mpeg")
-        return StreamingResponse(
-            resp.iter_content(chunk_size=8192),
-            media_type=content_type,
-            headers={"Accept-Ranges": "bytes"},
-        )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Erreur proxy Suno: {str(e)}")
 
 
 # ═══════════════════════════════════════════════════

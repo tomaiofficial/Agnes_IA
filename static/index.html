@@ -770,12 +770,17 @@
         <div class="mb-4 rounded-xl border border-violet-400/20 bg-violet-400/[.05] p-3">
           <div class="flex items-center justify-between gap-2 mb-2"><label class="k-label" style="margin-bottom:0;">✦ Style de génération</label><span class="k-chip" style="color:#c4b5fd;border-color:rgba(167,139,250,.25);">Gratuit</span></div>
           <select id="s_generation_style" class="k-field" onchange="onGenerationStyleChange()">
-            <option value="veo-style" selected>Agnes Cinéma — moteur officiel</option>
-            <option value="natural">Réaliste naturel</option>
-            <option value="social">Clip social dynamique</option>
+            <option value="veo-style" selected>🎬 Cinématique Pro — réaliste 4K</option>
+            <option value="realistic">📸 Ultra Réaliste — photo-like</option>
+            <option value="dramatic">🎭 Dramatique — ombres profondes</option>
+            <option value="nature">🌿 Naturel — lumière douce</option>
+            <option value="viral">🔥 Viral Social — accrocheur</option>
+            <option value="horror">👻 Horreur — sombre, frisson</option>
+            <option value="dream">✨ Onirique — doux, flou artistique</option>
+            <option value="documentary">🎥 Documentaire — brut, vrai</option>
           </select>
-          <p class="k-note mt-1.5">Le mode Agnes Cinéma améliore automatiquement la caméra, la lumière, le mouvement, la profondeur et la continuité. Il s’agit du style créatif officiel d’Agnes.</p>
-          <button type="button" class="btn-k btn-ghost-k text-xs mt-2" onclick="applyVeoStylePrompt()">✦ Améliorer mon prompt avec Agnes Cinéma</button>
+          <p class="k-note mt-1.5">Choisissez un style pour enrichir automatiquement votre prompt avec caméra, lumière, textures et ambiance adaptés.</p>
+          <button type="button" class="btn-k btn-ghost-k text-xs mt-2" onclick="applyVeoStylePrompt()">✦ Enrichir mon prompt automatiquement</button>
         </div>
 
         <!-- Image de référence (i2v) -->
@@ -1744,20 +1749,34 @@ function buildVeoStylePrompt(raw){
   const idea = (raw || '').trim();
   if (!idea) return '';
   const style = document.getElementById('s_generation_style')?.value || 'veo-style';
-  if (style === 'natural') return `${idea}. Réalisme naturel, lumière cohérente, mouvement physique crédible, caméra stable, textures détaillées, continuité du sujet, sans déformation ni flicker.`;
-  if (style === 'social') return `${idea}. Clip social très accrocheur, composition verticale lisible, mouvement de caméra fluide, rythme dynamique, sujet central net, couleurs premium, sans texte ni logo.`;
-  return `${idea}. Style cinématographique ultra-réaliste inspiré des productions haut de gamme : caméra 35mm, travelling fluide et mouvement physique naturel, lumière volumétrique cohérente, profondeur de champ réaliste, textures détaillées, reflets et ombres crédibles, composition cinématographique, continuité stricte du visage, des vêtements et des proportions, audio d’ambiance préparé séparément, sans texte, sans logo, sans déformation, sans morphing, sans flicker, sans jitter.`;
+  
+  if (style === 'realistic') return `${idea}. Ultra réaliste photo-like, lumière naturelle柔 Ray traced, textures peau pores visibles, cheveux fibres réalistes, reflets ombres cohérents, caméra Hasselblad 50MP, profondeur de champ f/1.4, ISO bas, sans artefact, sans déformation, sans flicker, sans logo, sans texte.`;
+  
+  if (style === 'dramatic') return `${idea}. Style dramatique cinématographique, éclairage chiaroscuro à trois points, ombres profondes contrastées, lumière directionnelle dorée, brume atmosphérique, caméra à l'épaule, mouvement lent et intense, textures peau granuleuses, ambiance thriller, sans artefact, sans flicker.`;
+  
+  if (style === 'nature') return `${idea}. Lumière naturelle douce golden hour, rayons de soleil filtres, couleurs chaudes et douces, caméra stable tripod, mouvement organique, textures bois pierre tissu réalistes, bruit de fond ambient, sans filtre, sans artefact, sans flicker.`;
+  
+  if (style === 'viral') return `${idea}. Clip viral très accrocheur, composition verticale lisible, mouvement de caméra fluide dynamique, rythme rapide, sujet central net, couleurs saturées premium, transition magnétique, sans texte, sans logo, sans artefact.`;
+  
+  if (style === 'horror') return `${idea}. Style horreur réaliste sombre, éclairage minimal ténébreux, ombres mouvantes, brume froide, caméra POV instable, mouvement lent anxiogène, textures humides granuleuses, sons ambient inquiétants, sans gore gratuit, sans artefact, sans flicker.`;
+  
+  if (style === 'dream') return `${idea}. Onirique doux et poétique, flou artistique léger, lumière diffusée pastel, couleurs desaturées, mouvement flottant, textures soyeuses, bokeh prononcé, caméra panoramique lente, sans netteté dure, sans artefact, sans flicker.`;
+  
+  if (style === 'documentary') return `${idea}. Style documentaire brutauthentique, lumière naturelle non modifiée, caméra portée légère tremblante, mouvements organiques, textures crues et vraies, ambiance sonore réelle, sans filtre, sans retouche, sans artefact, sans flicker.`;
+  
+  // veo-style (défaut) — Cinématique Pro
+  return `${idea}. Ultra-réaliste cinématique 4K, caméra Sony FX6 35mm, travelling fluide mouvement physique naturel, lumière volumétrique cohérente à trois points, profondeur de champ réaliste, textures peau pores visibles, textures tissu fibres, reflets ombres crédibles, composition cinématographique règles des tiers, continuité stricte du visage des vêtements et des proportions, audio d'ambiance préparé séparément, sans texte sans logo sans déformation sans morphing sans flicker sans jitter.`;
 }
 function applyVeoStylePrompt(){
   const field = document.getElementById('s_prompt');
   if (!field || !field.value.trim()) return alert('Écrivez d’abord une idée de scène.');
   field.value = buildVeoStylePrompt(field.value);
   field.dispatchEvent(new Event('input', {bubbles:true}));
-  if (typeof showToast === 'function') showToast('✦ Prompt Agnes Cinéma appliqué', 3500);
+  if (typeof showToast === 'function') showToast('✦ Prompt enrichi avec le style sélectionné', 3500);
 }
 function onGenerationStyleChange(){
   const field=document.getElementById('s_prompt');
-  if (field && field.value.trim() && document.getElementById('s_generation_style')?.value === 'veo-style') applyVeoStylePrompt();
+  if (field && field.value.trim()) applyVeoStylePrompt();
 }
 
 async function submitSimple() {
@@ -1827,7 +1846,7 @@ async function submitSimpleVeo(prompt, model) {
 
   try {
     markStep('submit', false);
-    if (document.getElementById('s_generation_style')?.value === 'veo-style') prompt = buildVeoStylePrompt(prompt);
+    if (document.getElementById('s_generation_style')?.value !== 'none') prompt = buildVeoStylePrompt(prompt);
 
     const fd = new FormData();
     fd.append('prompt', prompt);
@@ -1886,7 +1905,7 @@ function submitSnapGen(prompt) {
 
 async function submitSimpleAgnes(prompt) {
   const btn = document.getElementById('btn-simple');
-  if (document.getElementById('s_generation_style')?.value === 'veo-style') prompt = buildVeoStylePrompt(prompt);
+  if (document.getElementById('s_generation_style')?.value !== 'none') prompt = buildVeoStylePrompt(prompt);
   btn.disabled = true;
 
   const form = new FormData();

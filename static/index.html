@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -217,8 +217,8 @@
   .sora-dot-2 { animation-delay:.15s; }
   .sora-dot-3 { animation-delay:.3s; }
   .sora-status-text { animation:status-fade-in .4s cubic-bezier(.4,0,.2,1) both; }
-  .sora-progress-bar { height:3px; background:linear-gradient(90deg,#5b8cff,#8b5cf6,#5b8cff); background-size:200% 100%; animation:shimmer-fast 2s linear infinite; transition:width .6s cubic-bezier(.4,0,.2,1); border-radius:2px; }
-  .sora-progress-track { background:rgba(255,255,255,0.06); border-radius:2px; height:3px; overflow:hidden; }
+  .sora-progress-bar { height:6px; background:linear-gradient(90deg,#5b8cff,#8b5cf6,#5b8cff); background-size:200% 100%; animation:shimmer-fast 2s linear infinite; transition:width .6s cubic-bezier(.4,0,.2,1); border-radius:4px; box-shadow:0 0 12px rgba(91,140,255,0.4); }
+  .sora-progress-track { background:rgba(255,255,255,0.06); border-radius:4px; height:6px; overflow:hidden; }
   .sora-result { animation:result-reveal .8s cubic-bezier(.4,0,.2,1) both; }
   .sora-count-up { animation:count-up .5s cubic-bezier(.4,0,.2,1) both; }
   .sora-check { animation:complete-check .5s cubic-bezier(.4,0,.2,1) both; }
@@ -1091,6 +1091,26 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3"><div><label class="k-label">Format</label><select id="i_size" class="k-field"><option value="1024x1024">Carré 1:1</option><option value="768x1152">Portrait 2:3</option><option value="1152x768">Paysage 3:2</option><option value="1024x1792">Portrait vertical</option><option value="1792x1024">Paysage cinéma</option></select></div><div><label class="k-label">Image de référence (optionnel)</label><input id="i_reference" type="file" accept="image/*" class="k-field text-xs file:mr-2 file:py-2 file:px-2 file:rounded-lg file:border-0 file:bg-white/10 file:text-gray-300"></div></div>
         <label class="k-label mt-3">Negative prompt (optionnel)</label><input id="i_negative" class="k-field" placeholder="flou, déformation, texte, watermark…">
         <button id="btn-image" type="button" onclick="submitImage()" class="gen-btn mt-4">✦ Générer l’image</button>
+        <!-- Image progress overlay -->
+        <div id="image-progress" class="hidden mt-4 relative overflow-hidden rounded-2xl p-6 text-center" style="background:rgba(18,18,18,0.9);backdrop-filter:blur(20px);border:1px solid rgba(99,102,241,0.25);box-shadow:0 0 40px rgba(99,102,241,0.1);">
+          <div class="flex flex-col items-center gap-4">
+            <div style="width:72px;height:72px;border-radius:50%;position:relative;">
+              <svg width="72" height="72" viewBox="0 0 72 72" style="transform:rotate(-90deg);">
+                <circle cx="36" cy="36" r="32" fill="none" stroke="rgba(99,102,241,0.12)" stroke-width="4"/>
+                <circle id="image-progress-ring" cx="36" cy="36" r="32" fill="none" stroke="url(#imgGrad)" stroke-width="4" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="201" style="transition:stroke-dashoffset 0.6s ease;"/>
+                <defs><linearGradient id="imgGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#a855f7"/></linearGradient></defs>
+              </svg>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:22px;">🖼️</div>
+            </div>
+            <div>
+              <div id="image-progress-text" class="text-lg font-bold" style="background:linear-gradient(135deg,#818cf8,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">0%</div>
+              <div id="image-progress-label" class="text-xs mt-1" style="color:rgba(156,163,175,0.7);">Préparation de l'image…</div>
+            </div>
+            <div style="width:100%;max-width:300px;height:4px;border-radius:2px;background:rgba(99,102,241,0.12);overflow:hidden;">
+              <div id="image-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#6366f1,#a855f7);border-radius:2px;transition:width 0.6s ease;"></div>
+            </div>
+          </div>
+        </div>
         <div id="image-result" class="hidden mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-center"><img id="image-result-img" class="max-h-[440px] w-auto mx-auto rounded-lg" alt="Image générée Agnes"><div class="flex flex-wrap justify-center gap-2 mt-3"><button type="button" class="btn-k btn-ghost-k text-xs" onclick="useGeneratedImageForVideo()">🎬 Utiliser pour une vidéo</button><a id="image-download" class="btn-k btn-ghost-k text-xs" download="agnes-image.png">Télécharger</a></div></div>
       </div>
     </div>
@@ -1107,7 +1127,7 @@
             </div>
           </div>
           <div class="flex items-center gap-2 sm:gap-3">
-            <span id="progress-pct" class="text-base sm:text-lg font-mono font-bold tabular-nums" style="background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">0%</span>
+            <span id="progress-pct" class="text-xl sm:text-2xl font-mono font-bold tabular-nums" style="background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">0%</span>
             <button id="btn-stop" onclick="stopTask()" class="hidden text-xs px-3 py-2 sm:py-1.5 rounded-lg transition font-medium min-h-[36px]" style="background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.2);">Arrêter</button>
           </div>
         </div>
@@ -1118,7 +1138,7 @@
             <div class="sora-ring-inner-2"></div>
             <div class="sora-ring-icon"><span id="progress-ring-icon">🎬</span></div>
           </div>
-          <div id="progress-step-name" class="text-xs sm:text-sm font-medium text-gray-200 mb-1.5 text-center">Initialisation...</div>
+          <div id="progress-step-name" class="text-sm sm:text-base font-semibold text-gray-200 mb-1.5 text-center">Initialisation...</div>
           <div class="flex gap-1.5 items-center h-4">
             <span class="w-1 h-1 rounded-full bg-blue-400 sora-dot-1" style="animation:dots-pulse 1.4s ease-in-out infinite;"></span>
             <span class="w-1 h-1 rounded-full bg-purple-400 sora-dot-2" style="animation:dots-pulse 1.4s ease-in-out 0.15s infinite;"></span>
@@ -1972,6 +1992,7 @@ async function submitSimpleVeo(prompt, model) {
   btn.disabled = true;
   const panel = document.getElementById('progress-panel');
   panel.classList.remove('hidden');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   document.querySelectorAll('.sora-form-collapse').forEach(el => el.classList.add('collapsed'));
   document.getElementById('result-area').classList.add('hidden');
   document.getElementById('btn-stop').classList.remove('hidden');
@@ -2363,18 +2384,46 @@ async function submitSimplePuter(prompt) {
 async function submitImage() {
   const prompt = (document.getElementById('i_prompt')?.value || '').trim();
   const btn = document.getElementById('btn-image');
-  if (!prompt) { showToast('Décris l’image à générer.', 3000); document.getElementById('i_prompt')?.focus(); return; }
+  if (!prompt) { showToast('Décris l\'image à générer.', 3000); document.getElementById('i_prompt')?.focus(); return; }
+  const progPanel = document.getElementById('image-progress');
+  const progBar = document.getElementById('image-progress-bar');
+  const progRing = document.getElementById('image-progress-ring');
+  const progText = document.getElementById('image-progress-text');
+  const progLabel = document.getElementById('image-progress-label');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Génération en cours…'; }
+  if (progPanel) progPanel.classList.remove('hidden');
+  document.getElementById('image-result')?.classList.add('hidden');
+  // Animate progress
+  let pct = 0;
+  const progTimer = setInterval(() => {
+    pct = Math.min(pct + Math.random() * 8 + 2, 92);
+    if (progBar) progBar.style.width = pct + '%';
+    if (progRing) progRing.style.strokeDashoffset = 201 - (201 * pct / 100);
+    if (progText) progText.textContent = Math.round(pct) + '%';
+    if (pct < 30 && progLabel) progLabel.textContent = 'Envoi du prompt à Agnes…';
+    else if (pct < 60 && progLabel) progLabel.textContent = 'Génération de l\'image IA…';
+    else if (progLabel) progLabel.textContent = 'Finalisation…';
+  }, 800);
   try {
     const fd = new FormData(); fd.append('prompt', prompt); fd.append('size', document.getElementById('i_size')?.value || '1024x1024'); fd.append('negative_prompt', document.getElementById('i_negative')?.value || '');
     const ref = document.getElementById('i_reference')?.files?.[0]; if (ref) fd.append('reference_image', ref);
     const r = await fetchWithAuth(API_BASE + '/api/image/generate', { method: 'POST', body: fd }); const d = await r.json();
-    if (!r.ok || !d.ok) throw new Error(d.detail || 'Génération d’image impossible');
+    if (!r.ok || !d.ok) throw new Error(d.detail || 'Génération d\'image impossible');
+    clearInterval(progTimer);
+    if (progBar) progBar.style.width = '100%';
+    if (progRing) progRing.style.strokeDashoffset = '0';
+    if (progText) progText.textContent = '100%';
+    if (progLabel) progLabel.textContent = 'Image prête !';
+    setTimeout(() => { if (progPanel) progPanel.classList.add('hidden'); }, 1200);
     const url = API_BASE + '/api/image/' + encodeURIComponent(d.task_id); const img = document.getElementById('image-result-img'); const result = document.getElementById('image-result'); const download = document.getElementById('image-download');
     if (img) { await setMediaSrc('image-result-img', url); result?.classList.remove('hidden'); }
     if (download) { download.href = url; download.setAttribute('data-auth-url', url); }
     window._lastGeneratedImageUrl = url; window._lastGeneratedImageTask = d.task_id; showToast('✅ Image générée avec succès.', 4000);
-  } catch (e) { showToast('Image : ' + e.message, 5000); } finally { if (btn) { btn.disabled = false; btn.textContent = '✦ Générer l’image'; } }
+  } catch (e) {
+    clearInterval(progTimer);
+    if (progPanel) progPanel.classList.add('hidden');
+    showToast('Image : ' + e.message, 5000);
+  } finally { if (btn) { btn.disabled = false; btn.textContent = '✦ Générer l\'image'; } }
 }
 function useGeneratedImageForVideo() {
   if (!window._lastGeneratedImageUrl) return;
@@ -2391,6 +2440,7 @@ function useGeneratedImageForVideo() {
 async function showProgress(taskId, dirName) {
   const panel = document.getElementById('progress-panel');
   panel.classList.remove('hidden');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   // Collapse form with animation
   document.querySelectorAll('.sora-form-collapse').forEach(el => el.classList.add('collapsed'));
   document.getElementById('result-area').classList.add('hidden');

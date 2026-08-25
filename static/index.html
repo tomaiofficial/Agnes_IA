@@ -414,9 +414,170 @@
     #page-title .hero-subline { font-size:13px; }
     .k-card { border-radius:17px; }
   }
+
+  /* ═══════════ Animated Background FX ═══════════ */
+  .bg-fx-container {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+  }
+  .bg-orb {
+    position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0;
+    animation: orbFloat 12s ease-in-out infinite;
+  }
+  .bg-orb-1 {
+    width: 400px; height: 400px; top: -10%; left: 15%;
+    background: radial-gradient(circle, rgba(99,102,241,0.22) 0%, rgba(139,92,246,0.10) 50%, transparent 70%);
+    animation-duration: 14s; animation-delay: 0s;
+  }
+  .bg-orb-2 {
+    width: 350px; height: 350px; top: 30%; right: -8%;
+    background: radial-gradient(circle, rgba(14,165,233,0.18) 0%, rgba(56,189,248,0.08) 50%, transparent 70%);
+    animation-duration: 18s; animation-delay: 2s;
+  }
+  .bg-orb-3 {
+    width: 300px; height: 300px; bottom: 5%; left: 30%;
+    background: radial-gradient(circle, rgba(168,85,247,0.18) 0%, rgba(236,72,153,0.08) 50%, transparent 70%);
+    animation-duration: 16s; animation-delay: 4s;
+  }
+  .bg-orb-4 {
+    width: 250px; height: 250px; top: 60%; left: 5%;
+    background: radial-gradient(circle, rgba(34,211,238,0.15) 0%, rgba(96,165,250,0.06) 50%, transparent 70%);
+    animation-duration: 20s; animation-delay: 1s;
+  }
+  .bg-orb-5 {
+    width: 220px; height: 220px; top: 10%; right: 20%;
+    background: radial-gradient(circle, rgba(251,146,60,0.12) 0%, rgba(249,115,22,0.05) 50%, transparent 70%);
+    animation-duration: 22s; animation-delay: 3s;
+  }
+  @keyframes orbFloat {
+    0% { opacity: 0; transform: translate(0, 0) scale(1); }
+    15% { opacity: 1; }
+    50% { transform: translate(40px, -30px) scale(1.15); opacity: 0.7; }
+    85% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-20px, 20px) scale(0.95); }
+  }
+  .bg-particles { position: absolute; inset: 0; }
+  .bg-particle {
+    position: absolute; border-radius: 50%; pointer-events: none;
+    animation: particleDrift linear infinite;
+  }
+  @keyframes particleDrift {
+    0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+    10% { opacity: 0.8; }
+    90% { opacity: 0.8; }
+    100% { transform: translateY(-10vh) rotate(360deg); opacity: 0; }
+  }
+  .bg-grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(99,102,241,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99,102,241,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    animation: gridPulse 8s ease-in-out infinite;
+  }
+  @keyframes gridPulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.7; }
+  }
+  .bg-aurora {
+    position: absolute; top: -20%; left: -10%; right: -10%; height: 45%;
+    background: linear-gradient(135deg,
+      rgba(99,102,241,0.07) 0%,
+      rgba(139,92,246,0.09) 25%,
+      rgba(14,165,233,0.07) 50%,
+      rgba(168,85,247,0.08) 75%,
+      rgba(99,102,241,0.06) 100%);
+    filter: blur(60px);
+    animation: auroraShift 20s ease-in-out infinite;
+  }
+  @keyframes auroraShift {
+    0% { transform: translateX(-5%) skewX(-2deg); opacity: 0.4; }
+    33% { transform: translateX(3%) skewX(1deg); opacity: 0.7; }
+    66% { transform: translateX(-2%) skewX(-1deg); opacity: 0.5; }
+    100% { transform: translateX(-5%) skewX(-2deg); opacity: 0.4; }
+  }
+  .bg-noise {
+    position: absolute; inset: 0; opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    background-repeat: repeat; background-size: 256px 256px;
+  }
+  .glow-card { position: relative; }
+  .glow-card::after {
+    content: ''; position: absolute; inset: -2px; border-radius: inherit;
+    background: linear-gradient(135deg, rgba(99,102,241,0.18), rgba(168,85,247,0.12), rgba(14,165,233,0.18));
+    opacity: 0; transition: opacity 0.5s ease; z-index: -1;
+    filter: blur(12px);
+  }
+  .glow-card:hover::after { opacity: 1; }
+  .bg-sparkle {
+    position: absolute; width: 3px; height: 3px; border-radius: 50%;
+    background: rgba(255,255,255,0.7);
+    animation: sparkleFloat 6s ease-in-out infinite;
+  }
+  @keyframes sparkleFloat {
+    0%, 100% { opacity: 0; transform: translateY(0) scale(0.5); }
+    50% { opacity: 1; transform: translateY(-30px) scale(1); }
+  }
+  .bg-hex-grid {
+    position: absolute; inset: 0; opacity: 0.015;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='52'%3E%3Cpath d='M30 0L60 15v22L30 52 0 37V15z' fill='none' stroke='%236366f1' stroke-width='0.5'/%3E%3C/svg%3E");
+    background-size: 60px 52px;
+    animation: gridPulse 12s ease-in-out infinite;
+  }
 </style>
 </head>
 <body class="text-gray-100 min-h-screen font-sans">
+
+<!-- ═══════════ Animated Background FX ═══════════ -->
+<div class="bg-fx-container" id="bg-fx">
+  <div class="bg-aurora"></div>
+  <div class="bg-grid"></div>
+  <div class="bg-hex-grid"></div>
+  <div class="bg-orb bg-orb-1"></div>
+  <div class="bg-orb bg-orb-2"></div>
+  <div class="bg-orb bg-orb-3"></div>
+  <div class="bg-orb bg-orb-4"></div>
+  <div class="bg-orb bg-orb-5"></div>
+  <div class="bg-particles" id="bg-particles"></div>
+  <div class="bg-sparkle" style="top:15%;left:20%;animation-delay:0s;"></div>
+  <div class="bg-sparkle" style="top:35%;left:70%;animation-delay:1.5s;"></div>
+  <div class="bg-sparkle" style="top:55%;left:40%;animation-delay:3s;"></div>
+  <div class="bg-sparkle" style="top:75%;left:80%;animation-delay:0.8s;"></div>
+  <div class="bg-sparkle" style="top:20%;left:55%;animation-delay:2.2s;"></div>
+  <div class="bg-sparkle" style="top:65%;left:15%;animation-delay:4s;"></div>
+  <div class="bg-sparkle" style="top:85%;left:50%;animation-delay:1s;"></div>
+  <div class="bg-sparkle" style="top:10%;left:85%;animation-delay:3.5s;"></div>
+  <div class="bg-noise"></div>
+</div>
+<script>
+(function(){
+  // Generate floating particles
+  const container = document.getElementById('bg-particles');
+  if (!container) return;
+  const colors = ['rgba(99,102,241,0.4)','rgba(139,92,246,0.35)','rgba(14,165,233,0.35)','rgba(168,85,247,0.3)','rgba(34,211,238,0.3)'];
+  for (let i = 0; i < 35; i++) {
+    const p = document.createElement('div');
+    p.className = 'bg-particle';
+    const size = Math.random() * 3 + 1.5;
+    p.style.width = size + 'px';
+    p.style.height = size + 'px';
+    p.style.left = Math.random() * 100 + '%';
+    p.style.background = colors[Math.floor(Math.random() * colors.length)];
+    p.style.animationDuration = (Math.random() * 15 + 12) + 's';
+    p.style.animationDelay = (Math.random() * 15) + 's';
+    p.style.boxShadow = '0 0 ' + (size * 3) + 'px ' + p.style.background;
+    container.appendChild(p);
+  }
+  // Mouse parallax on orbs
+  document.addEventListener('mousemove', function(e) {
+    const x = (e.clientX / window.innerWidth - 0.5) * 2;
+    const y = (e.clientY / window.innerHeight - 0.5) * 2;
+    document.querySelectorAll('.bg-orb').forEach(function(orb, i) {
+      const factor = (i + 1) * 6;
+      orb.style.transform = 'translate(' + (x * factor) + 'px, ' + (y * factor) + 'px)';
+    });
+  });
+})();
+</script>
 
 <!-- ═══════════ Header (style Kling) ═══════════ -->
 <!-- Compteur à rebours maintenance — mobile only -->
@@ -707,7 +868,7 @@
 
     <!-- ═══════ Formulaire Vidéo (style Kling) ═══════ -->
     <div id="form-video" class="sora-form-collapse">
-      <div class="k-card p-4 sm:p-6 mb-4" id="gen-card">
+      <div class="k-card p-4 sm:p-6 mb-4 glow-card" id="gen-card">
         <!-- Prompt -->
         <div style="margin-bottom:16px;">
           <label class="k-label">Description vidéo (prompt) <span style="color:#f87171;">*</span></label>

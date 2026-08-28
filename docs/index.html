@@ -1,4 +1,4 @@
-﻿﻿<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -8,6 +8,7 @@
 <link rel="icon" type="image/png" sizes="1024x1024" href="/static/icon.png">
 <link rel="apple-touch-icon" href="/static/icon.png">
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="config.js"></script>
 <style>
   /* ═══════════════════════════════════════════════════════════
      Agnes Studio — Clipcup-Inspired Premium Dark Theme
@@ -425,33 +426,6 @@
   .welcome-features > div { border-radius:16px; border:1px solid var(--border); background:rgba(255,255,255,0.03); padding:16px; }
   .welcome-footer { display:flex; align-items:center; justify-content:space-between; margin-top:24px; gap:12px; flex-wrap:wrap; }
 
-  /* ═══ MAINTENANCE ══════════════════════════════ */
-  #maint-countdown-bar {
-    position:fixed; top:64px; left:0; right:0; z-index:35;
-    display:none; align-items:center; justify-content:center; gap:6px;
-    padding:6px 16px; background:rgba(251,191,36,0.08); border-bottom:1px solid rgba(251,191,36,0.2);
-    font-size:12px; color:var(--warning); font-weight:500;
-  }
-  #maint-countdown-bar.visible { display:flex; }
-  .cd-warn { margin-right:4px; }
-  .cd-time { font-weight:700; font-variant-numeric:tabular-nums; min-width:18px; text-align:center; }
-  .cd-unit { font-size:10px; opacity:0.7; }
-  .cd-sep { opacity:0.5; }
-  #maint-lockdown {
-    display:none; position:fixed; inset:0; z-index:9999;
-    background:var(--bg); flex-direction:column; align-items:center; justify-content:center;
-    text-align:center; padding:40px;
-  }
-  #maint-lockdown.visible { display:flex; }
-  #maint-lockdown .lock-icon { font-size:60px; margin-bottom:20px; }
-  #maint-lockdown h2 { font-size:24px; font-weight:800; color:var(--text1); margin:0 0 12px; }
-  #maint-lockdown p { font-size:14px; color:var(--text2); margin:0 0 8px; max-width:400px; line-height:1.6; }
-  #maint-lockdown .lock-bar { width:200px; height:4px; background:var(--bg4); border-radius:2px; margin:20px auto; overflow:hidden; }
-  #maint-lockdown .lock-bar-inner { width:60%; height:100%; background:var(--accent); border-radius:2px; animation:lockPulse 2s ease-in-out infinite; }
-  @keyframes lockPulse { 0%,100%{width:20%} 50%{width:80%} }
-  .lock-footer { margin-top:24px; font-size:12px; color:var(--text3); }
-  .lock-footer a { color:var(--accent); text-decoration:none; }
-
   /* ═══ WIP BANNER ═══════════════════════════════ */
   #wip-banner {
     display:none; border-radius:12px; padding:12px 16px;
@@ -721,36 +695,6 @@
 </script>
 
 <!-- ═══════════ Header (style Kling) ═══════════ -->
-<!-- Compteur à rebours maintenance — mobile only -->
-<div id="maint-countdown-bar" role="status" aria-label="Temps restant avant maintenance">
-  <span class="cd-warn">⚠ Maintenance dans</span>
-  <span id="cd-days" class="cd-time">--</span><span class="cd-unit">j</span>
-  <span class="cd-sep">:</span>
-  <span id="cd-hours" class="cd-time">--</span><span class="cd-unit">h</span>
-  <span class="cd-sep">:</span>
-  <span id="cd-mins" class="cd-time">--</span><span class="cd-unit">m</span>
-  <span class="cd-sep">:</span>
-  <span id="cd-secs" class="cd-time">--</span><span class="cd-unit">s</span>
-</div>
-
-<!-- Écran lockdown maintenance — se bloque quand le compteur arrive à 0 -->
-<div id="maint-lockdown">
-  <div class="lock-icon">🔧</div>
-  <h2>Agnes est en maintenance</h2>
-  <p>
-    Le site est actuellement indisponible pour une mise à jour majeure :
-    migration des bases de données, optimisation des moteurs vidéo
-    et amélioration de la stabilité.
-  </p>
-  <p><strong>Durée estimée : environ 24h.</strong></p>
-  <p>Revenez demain pour retrouver le service.</p>
-  <div class="lock-bar"><div class="lock-bar-inner"></div></div>
-  <div class="lock-footer">
-    <p>— <strong style="color:#6366f1;">tom.ai.official</strong> · Cordialement</p>
-    <p style="margin-top:6px;">Urgence ? <a href="mailto:guegan_tom@icloud.com">Contactez-nous</a></p>
-  </div>
-</div>
-
 <header class="app-header" style="padding:0 24px;height:64px;">
   <a class="logo" href="/" style="text-decoration:none;">
     <div class="logo-badge" style="width:32px;height:32px;font-size:14px;">✦</div>
@@ -1405,145 +1349,6 @@
   </div>
 </footer>
 
-<!-- Alerte maintenance — s'affiche 3 fois max -->
-<div id="maintenance-banner" class="hidden fixed inset-0 z-[200] flex items-center justify-center p-4" style="background:rgba(0,0,0,0.85);">
-  <div style="max-width:400px;width:100%;background:linear-gradient(135deg,#1e1b4b,#172554);border:1px solid rgba(251,191,36,.3);border-radius:20px;padding:32px 28px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.6);">
-    <div style="font-size:40px;margin-bottom:12px;">⚠️</div>
-    <h2 style="color:#fbbf24;font-size:17px;font-weight:700;margin:0 0 8px;">Maintenance prévue</h2>
-    <p style="color:#d1d5db;font-size:13px;line-height:1.6;margin:0 0 6px;">
-      Le site <strong style="color:#fff;">Agnes</strong> sera en maintenance <strong style="color:#fbbf24;">ce soir à 23:00</strong>
-    </p>
-    <p style="color:#9ca3af;font-size:11px;line-height:1.5;margin:0 0 20px;">
-      Mise à jour majeure du serveur et de l'infrastructure : migration des bases de données,
-      optimisation des moteurs de génération vidéo et amélioration de la stabilité.
-      Durée estimée : <strong style="color:#d1d5db;">environ 24h</strong>. Le site sera <strong style="color:#f87171;">inaccessible</strong> pendant cette période. Merci de votre patience.
-    </p>
-    <button onclick="closeMaintenance()" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:12px;padding:12px 36px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(245,158,11,.3);">
-      Compris
-    </button>
-    <p id="maintenance-count" style="color:#6b7280;font-size:10px;margin-top:12px;"></p>
-  </div>
-</div>
-
-<script>
-function closeMaintenance() {
-  var banner = document.getElementById('maintenance-banner');
-  var count = parseInt(localStorage.getItem('agnes_maint_count') || '0', 10);
-  count++;
-  localStorage.setItem('agnes_maint_count', count);
-  banner.classList.add('hidden');
-}
-(function() {
-  var count = parseInt(localStorage.getItem('agnes_maint_count') || '0', 10);
-  if (count < 3) {
-    document.getElementById('maintenance-banner').classList.remove('hidden');
-    document.getElementById('maintenance-count').textContent = 'Vous avez vu cette notification ' + count + ' fois sur 3.';
-  }
-})();
-</script>
-
-<!-- Notifications programmées maintenance (20:30, 21:00, 21:30) -->
-<script>
-(function() {
-  var NOTIF_TIMES = ['20:30', '21:00', '21:30'];
-  var shown = JSON.parse(localStorage.getItem('agnes_maint_notif_shown') || '[]');
-  var now = new Date();
-  var today = now.toISOString().split('T')[0];
-  var key = 'agnes_maint_notif_' + today;
-
-  function showNotif(timeStr) {
-    var banner = document.createElement('div');
-    banner.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:9999;max-width:420px;width:90%;background:linear-gradient(135deg,#1e1b4b,#172554);border:1px solid rgba(251,191,36,.4);border-radius:16px;padding:20px 24px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.7);animation:slideDown .4s ease;';
-    banner.innerHTML = 
-      '<div style="font-size:28px;margin-bottom:8px;">⚠️</div>' +
-      '<h3 style="color:#fbbf24;font-size:15px;font-weight:700;margin:0 0 6px;">Maintenance ce soir à 23:00</h3>' +
-      '<p style="color:#d1d5db;font-size:12px;line-height:1.5;margin:0 0 10px;">' +
-        'Le site <strong style="color:#fff;">Agnes</strong> sera en maintenance <strong style="color:#fbbf24;">ce soir à 23:00</strong> (heure Paris).<br>' +
-        'Durée : <strong style="color:#d1d5db;">~24h</strong>. Mise à jour majeure : migration BDD, optimisation moteurs vidéo, stabilité.<br>' +
-        'Le site sera <strong style="color:#f87171;">inaccessible</strong> pendant cette période.'
-      '</p>' +
-      '<p style="color:#9ca3af;font-size:10px;margin:10px 0 0;border-top:1px solid rgba(251,191,36,.15);padding-top:10px;">' +
-        '— <strong style="color:#6366f1;">tom.ai.official</strong> · Cordialement,<br>L\'équipe Agnes Video'
-      '</p>' +
-      '<button onclick="this.parentElement.remove()" style="margin-top:14px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:10px;padding:10px 28px;font-size:12px;font-weight:700;cursor:pointer;">Fermer</button>';
-    document.body.appendChild(banner);
-    setTimeout(function() { if (banner.parentElement) banner.remove(); }, 30000);
-  }
-
-  function check() {
-    var now = new Date();
-    var hh = String(now.getHours()).padStart(2,'0');
-    var mm = String(now.getMinutes()).padStart(2,'0');
-    var current = hh + ':' + mm;
-    if (NOTIF_TIMES.includes(current) && !shown.includes(current)) {
-      shown.push(current);
-      localStorage.setItem(key, JSON.stringify(shown));
-      showNotif(current);
-    }
-  }
-
-  check();
-  setInterval(check, 30000);
-})();
-</script>
-
-<!-- Compteur à rebours maintenance (mobile) + lockdown -->
-<script>
-(function() {
-  /* Date cible : lundi 24 août 2026, 23:00 UTC+2 (Paris) */
-  var TARGET = new Date('2026-08-24T23:00:00+02:00').getTime();
-  var bar    = document.getElementById('maint-countdown-bar');
-  var lock   = document.getElementById('maint-lockdown');
-  if (!bar || !lock) return;
-
-  /* ══ DEV BYPASS : ?dev=1 dans l'URL désactive le lockdown ══ */
-  var isDev = /[?&]dev=1/.test(window.location.search);
-  if (isDev) {
-    bar.style.display = 'none';   /* cacher le compteur aussi */
-    return;                        /* ne rien bloquer */
-  }
-
-  /* Fin de maintenance = cible + 24 h */
-  var END = TARGET + 24 * 3600 * 1000;
-
-  function pad(n) { return n < 10 ? '0' + n : '' + n; }
-
-  function tick() {
-    var now = Date.now();
-
-    /* 1) Après la maintenance (cible + 24h) → tout masquer, app libre */
-    if (now > END) {
-      bar.style.display  = 'none';
-      lock.classList.remove('show');
-      return;
-    }
-
-    /* 2) Pendant la maintenance (après la cible) → lockdown */
-    if (now >= TARGET) {
-      bar.style.display = 'none';          /* masquer le compteur */
-      lock.classList.add('show');           /* bloquer l'app */
-      lock.querySelector('h2').textContent = '🔧 Maintenance en cours';
-      requestAnimationFrame(function() { setTimeout(tick, 2000); });
-      return;
-    }
-
-    /* 3) Avant la maintenance → compteur à rebours */
-    var diff = TARGET - now;
-    var s = Math.floor(diff / 1000);
-    var d = Math.floor(s / 86400); s %= 86400;
-    var h = Math.floor(s / 3600);  s %= 3600;
-    var m = Math.floor(s / 60);    s %= 60;
-    document.getElementById('cd-days').textContent  = pad(d);
-    document.getElementById('cd-hours').textContent = pad(h);
-    document.getElementById('cd-mins').textContent  = pad(m);
-    document.getElementById('cd-secs').textContent  = pad(s);
-
-    requestAnimationFrame(function() { setTimeout(tick, 500); });
-  }
-  tick();
-})();
-</script>
-
 <!-- Scripts additionnels (grille For You accueil) -->
 <script>
   // ── Grille « For You » sur l'accueil : derniers vidéos communautaires ──
@@ -1651,7 +1456,7 @@ function showComingSoon(mode) {
 // En production (GitHub Pages), l'API est sur Render
 // ═══════════════════════════════════════════════════
 const API_BASE = window.location.hostname.endsWith('github.io')
-  ? 'https://agnes-ia.onrender.com'
+  ? 'https://agnes-ia2.onrender.com'
   : '';
 
 // ═══════════════════════════════════════════════════
@@ -3959,7 +3764,30 @@ document.addEventListener('DOMContentLoaded', () => {
     if (currentSelectedModels) loadVideoModels(currentSelectedModels.video);
     // Veo 3.1: vérifier la clé Gemini
     loadGeminiKey();
-  } catch(e) {}
+  } catch(e) {
+    // ══ FALLBACK : backend indisponible (Render suspendu) ══
+    // On pré-remplit les champs avec les clés embarquées (config.js)
+    // pour que l'app reste utilisable en mode direct.
+    if (window.AGNES_CONFIG) {
+      const cfg = window.AGNES_CONFIG;
+      const aInput = document.getElementById('apikey-input');
+      const gInput = document.getElementById('gemini-input');
+      if (aInput && cfg.agnesApiKey) {
+        aInput.value = cfg.agnesApiKey;
+        aInput.disabled = false;
+        aInput.classList.remove('opacity-50', 'cursor-not-allowed');
+        const st = document.getElementById('apikey-status');
+        if (st) { st.textContent = 'Intégré (local)'; st.className = 'text-xs px-2 py-1 rounded-full bg-green-900 text-green-300'; }
+      }
+      if (gInput && cfg.geminiApiKey) {
+        gInput.value = cfg.geminiApiKey;
+        gInput.disabled = false;
+        gInput.classList.remove('opacity-50', 'cursor-not-allowed');
+        const st = document.getElementById('gemini-status');
+        if (st) { st.textContent = 'Intégré (local)'; st.className = 'text-xs px-2 py-1 rounded-full bg-green-900 text-green-300'; }
+      }
+    }
+  }
   autoReconnectRunningTask();
 })();
 </script>

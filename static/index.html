@@ -1874,12 +1874,13 @@ async function submitSimpleTo(form, btn, endpoint) {
     showToast('Tâche soumise, veuillez patienter', 5000);
   } catch(e) {
     // v11: Fallback direct Agnes — si le backend Render est injoignable
-    // (suspendu / 503 / réseau), on appelle l'API Agnes directement depuis
-    // le navigateur avec la clé intégrée dans config.js. Rend l'app
-    // indépendante de Render.
-    const isNetworkError = (e instanceof TypeError) || /NetworkError|Failed to fetch|503|502|504/i.test(String(e && e.message));
-    if (isNetworkError && window.AGNES_CONFIG && window.AGNES_CONFIG.agnesApiKey) {
-      console.warn('[Fallback] Backend injoignable, bascule sur l\'API Agnes directe.');
+    // (suspendu / 503 / réseau / JSON invalide), on appelle l'API Agnes
+    // directement depuis le navigateur avec la clé intégrée dans config.js.
+    // Rend l'app indépendante de Render. On bascule sur TOUTE erreur du
+    // backend (Render suspendu renvoie 503 avec un corps HTML → r.json()
+    // lève une SyntaxError, pas un TypeError).
+    if (window.AGNES_CONFIG && window.AGNES_CONFIG.agnesApiKey) {
+      console.warn('[Fallback] Backend injoignable, bascule sur l\'API Agnes directe :', e && e.message);
       try {
         await submitSimpleAgnesDirect(form, btn);
         return;
@@ -2335,10 +2336,80 @@ async function submitImage() {
     if (download) { download.href = url; download.setAttribute('data-auth-url', url); }
     window._lastGeneratedImageUrl = url; window._lastGeneratedImageTask = d.task_id; showToast('✅ Image générée avec succès.', 4000);
   } catch (e) {
+    // v11: Fallback direct Agnes image — si le backend Render est injoignable
+    // (suspendu / 503 / réseau), on appelle l'API Agnes directement depuis le
+    // navigateur avec la clé intégrée dans config.js.
+    if (window.AGNES_CONFIG && window.AGNES_CONFIG.agnesApiKey) {
+      console.warn('[Fallback] Backend injoignable, bascule sur l\'API Agnes image directe :', e && e.message);
+      try {
+        await submitImageDirect(prompt, progTimer, progPanel, progBar, progRing, progText, progLabel);
+        return;
+      } catch (fallbackErr) {
+        clearInterval(progTimer);
+        if (progPanel) progPanel.classList.add('hidden');
+        showToast('Image : ' + fallbackErr.message, 5000);
+        return;
+      }
+    }
     clearInterval(progTimer);
     if (progPanel) progPanel.classList.add('hidden');
     showToast('Image : ' + e.message, 5000);
   } finally { if (btn) { btn.disabled = false; btn.textContent = '✦ Générer l\'image'; } }
+}
+
+// ═══════════════════════════════════════════════════
+// v11: Fallback direct Agnes image (sans backend Render)
+// Appelle l'API Agnes images (apihub.agnes-ai.com) directement depuis le
+// navigateur quand le backend est indisponible.
+// ═══════════════════════════════════════════════════
+async function submitImageDirect(prompt, progTimer, progPanel, progBar, progRing, progText, progLabel) {
+  const key = window.AGNES_CONFIG.agnesApiKey;
+  const size = document.getElementById('i_size')?.value || '1024x1024';
+  const negative = document.getElementById('i_negative')?.value || '';
+  const refFile = document.getElementById('i_reference')?.files?.[0];
+
+  const payload = {
+    model: 'agnes-image-2.1-flash',
+    prompt: prompt,
+    size: size,
+    n: 1,
+  };
+  if (negative) payload.negative_prompt = negative;
+  if (refFile && refFile.size) {
+    const b64 = await fileToBase64(refFile);
+    payload.extra_body = { response_format: 'url', image: [b64] };
+  }
+
+  const resp = await fetch(AGNES_DIRECT_BASE + '/v1/images/generations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+    body: JSON.stringify(payload),
+  });
+  if (!resp.ok) {
+    const txt = await resp.text().catch(() => '');
+    throw new Error('API Agnes image HTTP ' + resp.status + (txt ? ' — ' + txt.slice(0, 200) : ''));
+  }
+  const data = await resp.json();
+  if (data.error) throw new Error('Erreur API Agnes image : ' + (data.error.message || JSON.stringify(data.error)));
+  const list = data.data || [];
+  if (!list.length) throw new Error('Agnes image : aucune donnée retournée');
+  const url = list[0].url || '';
+  if (!url) throw new Error('Agnes image : URL introuvable dans la réponse');
+
+  clearInterval(progTimer);
+  if (progBar) progBar.style.width = '100%';
+  if (progRing) progRing.style.strokeDashoffset = '0';
+  if (progText) progText.textContent = '100%';
+  if (progLabel) progLabel.textContent = 'Image prête !';
+  setTimeout(() => { if (progPanel) progPanel.classList.add('hidden'); }, 1200);
+
+  const img = document.getElementById('image-result-img');
+  const result = document.getElementById('image-result');
+  const download = document.getElementById('image-download');
+  if (img) { img.src = url; result?.classList.remove('hidden'); }
+  if (download) { download.href = url; download.removeAttribute('data-auth-url'); }
+  window._lastGeneratedImageUrl = url; window._lastGeneratedImageTask = 'direct-' + Date.now();
+  showToast('✅ Image générée (mode direct Agnes).', 4000);
 }
 function useGeneratedImageForVideo() {
   if (!window._lastGeneratedImageUrl) return;

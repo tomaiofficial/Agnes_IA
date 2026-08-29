@@ -1873,9 +1873,213 @@ async function submitSimpleTo(form, btn, endpoint) {
     await startPolling(d.task_id);
     showToast('Tâche soumise, veuillez patienter', 5000);
   } catch(e) {
+    // v11: Fallback direct Agnes — si le backend Render est injoignable
+    // (suspendu / 503 / réseau), on appelle l'API Agnes directement depuis
+    // le navigateur avec la clé intégrée dans config.js. Rend l'app
+    // indépendante de Render.
+    const isNetworkError = (e instanceof TypeError) || /NetworkError|Failed to fetch|503|502|504/i.test(String(e && e.message));
+    if (isNetworkError && window.AGNES_CONFIG && window.AGNES_CONFIG.agnesApiKey) {
+      console.warn('[Fallback] Backend injoignable, bascule sur l\'API Agnes directe.');
+      try {
+        await submitSimpleAgnesDirect(form, btn);
+        return;
+      } catch (fallbackErr) {
+        alert('Échec (backend + fallback direct) : ' + fallbackErr.message);
+        btn.disabled = false;
+        return;
+      }
+    }
     alert('Échec : ' + e.message);
     btn.disabled = false;
   }
+}
+
+// ═══════════════════════════════════════════════════
+// v11: Fallback direct Agnes (sans backend Render)
+// Appelle l'API Agnes (apihub.agnes-ai.com) directement depuis le
+// navigateur quand le backend est indisponible. Utilise la clé intégrée
+// dans config.js (window.AGNES_CONFIG.agnesApiKey).
+// ═══════════════════════════════════════════════════
+const AGNES_DIRECT_BASE = 'https://apihub.agnes-ai.com';
+
+// Presets durée → (num_frames, frame_rate) — identiques au backend
+const AGNES_DURATION_PRESETS = {
+  5: [73, 15],
+  7: [105, 15],
+  10: [153, 15],
+  12: [177, 15],
+  15: [225, 15],
+};
+
+function agnesMaxFrames(width, height) {
+  const pixels = width * height;
+  if (pixels > 1280 * 720) return 169;   // 1080p tier
+  else if (pixels > 854 * 480) return 409; // 720p tier
+  else return 961;                        // 480p tier
+}
+
+function agnesFrameConfig(duration, width, height) {
+  const d = duration || 5;
+  const maxNf = agnesMaxFrames(width, height);
+  const preset = AGNES_DURATION_PRESETS[d];
+  if (preset) {
+    const [nf, fr] = preset;
+    if (nf <= maxNf) return { num_frames: nf, frame_rate: fr };
+    return { num_frames: maxNf, frame_rate: fr };
+  }
+  // durée non standard : itère 8n+1
+  let best = null;
+  for (let nf = 9; nf <= Math.min(410, maxNf); nf += 8) {
+    const fr = Math.round(nf / d);
+    if (fr >= 1 && fr <= 60) best = { num_frames: nf, frame_rate: fr };
+  }
+  if (best) return best;
+  return { num_frames: maxNf, frame_rate: Math.round(maxNf / d) || 15 };
+}
+
+async function submitSimpleAgnesDirect(form, btn) {
+  const key = window.AGNES_CONFIG.agnesApiKey;
+  const prompt = form.get('prompt') || '';
+  const mode = form.get('mode') || 't2v';
+  const duration = parseInt(form.get('duration') || '5', 10);
+  const width = parseInt(form.get('video_width') || '1152', 10);
+  const height = parseInt(form.get('video_height') || '768', 10);
+  const seed = form.get('seed');
+  const negative = form.get('negative_prompt');
+
+  const { num_frames, frame_rate } = agnesFrameConfig(duration, width, height);
+
+  const payload = {
+    model: 'agnes-video-v2.0',
+    prompt: prompt,
+    width: width,
+    height: height,
+    num_frames: num_frames,
+    frame_rate: frame_rate,
+  };
+  if (seed) payload.seed = parseInt(seed, 10);
+  if (negative) payload.negative_prompt = negative;
+
+  // Image de référence (i2v / ti2vid) : on l'envoie en base64 si présente
+  const refFile = form.get('reference_image');
+  if (refFile && refFile.size) {
+    const b64 = await fileToBase64(refFile);
+    payload.image = b64;
+    payload.mode = 'ti2vid';
+  }
+
+  // Affiche le panneau de progression
+  setRunning('direct-' + Date.now());
+  const panel = document.getElementById('progress-panel');
+  if (panel) panel.classList.remove('hidden');
+  document.getElementById('progress-state-label').textContent = 'Génération directe Agnes';
+  document.getElementById('progress-message').innerHTML =
+    `<div class="sora-status-text" style="color:rgba(156,163,175,0.6); font-size:13px;">Mode direct (backend indisponible) — soumission à l'API Agnes…</div>`;
+  document.getElementById('progress-ring-icon').textContent = '🎬';
+
+  // Soumission
+  let videoId;
+  try {
+    const resp = await fetch(AGNES_DIRECT_BASE + '/v1/videos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      throw new Error('API Agnes HTTP ' + resp.status + (txt ? ' — ' + txt.slice(0, 200) : ''));
+    }
+    const data = await resp.json();
+    videoId = data.video_id || data.task_id || data.id;
+    if (!videoId) throw new Error('Réponse Agnes sans video_id : ' + JSON.stringify(data).slice(0, 200));
+  } catch (e) {
+    throw new Error('Soumission Agnes directe : ' + e.message);
+  }
+
+  // Polling
+  const start = Date.now();
+  const maxWait = 30 * 60 * 1000; // 30 min max
+  let lastStatus = '';
+  while (Date.now() - start < maxWait) {
+    await new Promise(r => setTimeout(r, 8000)); // 8s intervalle (évite 429)
+    let result;
+    try {
+      const pr = await fetch(AGNES_DIRECT_BASE + '/agnesapi?video_id=' + encodeURIComponent(videoId), {
+        headers: { 'Authorization': 'Bearer ' + key },
+      });
+      if (!pr.ok) {
+        if (pr.status === 429) continue; // rate limit : on attend et on reprend
+        throw new Error('Polling HTTP ' + pr.status);
+      }
+      result = await pr.json();
+    } catch (e) {
+      if (/429|rate/i.test(String(e.message))) continue;
+      console.warn('[Fallback] Erreur polling (transitoire) :', e.message);
+      continue;
+    }
+
+    const status = result.status || '';
+    const progress = result.progress || 0;
+
+    // Erreur API au niveau du polling (HTTP 200 avec {"error": {...}} et pas de status)
+    const errObj = result.error;
+    if (errObj && !status) {
+      const code = (errObj && errObj.code) || 'unknown';
+      const msg = (errObj && errObj.message) || JSON.stringify(errObj);
+      throw new Error('Erreur API Agnes : ' + code + ' — ' + msg);
+    }
+
+    if (status !== lastStatus) {
+      lastStatus = status;
+      document.getElementById('progress-message').innerHTML =
+        `<div class="sora-status-text" style="color:rgba(156,163,175,0.6); font-size:13px;">Génération directe Agnes — ${status} (${Math.round(progress)}%)</div>`;
+    }
+    document.getElementById('progress-bar').style.width = Math.min(100, Math.round(progress)) + '%';
+    document.getElementById('progress-pct').textContent = Math.min(100, Math.round(progress)) + '%';
+
+    if (status === 'completed' || status === 'COMPLETED') {
+      const videoUrl = result.remixed_from_video_id || result.video_url || result.url ||
+        (result.data && (result.data.video_url || result.data.url));
+      if (!videoUrl) throw new Error('Vidéo terminée mais URL introuvable');
+      showDirectResult(videoUrl);
+      clearRunning();
+      return;
+    }
+    if (status === 'failed' || status === 'FAILED') {
+      const err = (result.error && (result.error.message || JSON.stringify(result.error))) || 'erreur inconnue';
+      throw new Error('Génération Agnes échouée : ' + err);
+    }
+  }
+  throw new Error('Délai dépassé (30 min) pour la génération directe Agnes');
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Lecture du fichier impossible'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function showDirectResult(videoUrl) {
+  const area = document.getElementById('result-area');
+  if (area) area.classList.remove('hidden');
+  const video = document.getElementById('result-video');
+  if (video) {
+    video.src = videoUrl;
+    video.load();
+  }
+  document.getElementById('progress-ring-icon').textContent = '✅';
+  document.getElementById('progress-step-name').textContent = 'Terminé !';
+  document.getElementById('progress-state-label').textContent = 'Terminé';
+  document.getElementById('progress-state-dot').className = 'w-1.5 h-1.5 rounded-full bg-green-400';
+  document.getElementById('progress-bar').style.width = '100%';
+  document.getElementById('progress-pct').textContent = '100%';
+  document.getElementById('progress-remaining').textContent = 'Terminé ✓';
+  const pub = document.getElementById('btn-publish');
+  if (pub) pub.classList.remove('hidden');
+  showToast('✅ Vidéo générée (mode direct Agnes)', 4000);
 }
 
 // ═══════════════════════════════════════════════════
